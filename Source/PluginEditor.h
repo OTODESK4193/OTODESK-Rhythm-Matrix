@@ -14,24 +14,25 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
 
+    void mouseDown(const juce::MouseEvent& e) override;
+
     void timerCallback() override;
 
 private:
     AIDrumMachineAudioProcessor& audioProcessor;
 
-    juce::TextButton generateButton{ "Generate 4-Bars" };
+    juce::TextButton generateButton{ "Generate" };
+    juce::ComboBox styleMenu;
     juce::Label statusLabel;
 
-    // ページネーション用のタブボタンと変数
     juce::TextButton tabButton1{ "Bar 1" };
     juce::TextButton tabButton2{ "Bar 2" };
     juce::TextButton tabButton3{ "Bar 3" };
     juce::TextButton tabButton4{ "Bar 4" };
-    int currentViewBar = 0; // 0=Bar1, 1=Bar2, 2=Bar3, 3=Bar4
+    int currentViewBar = 0;
 
-    // ヘルパー関数
     void updateTabColors();
-    bool needsPagination() const; // ★追加：タブ表示（ページネーション）が必要か判定する
+    bool needsPagination() const;
 
     GeminiClient gemini;
 
