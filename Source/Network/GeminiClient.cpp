@@ -1,122 +1,85 @@
 #include "GeminiClient.h"
-#include <stdexcept>
 
-GeminiClient::GeminiClient() : juce::Thread("GeminiNetworkThread")
-{
-}
-
-GeminiClient::~GeminiClient()
-{
-    // スレッドが動作中の場合は安全に停止させる
-    stopThread(4000);
-}
+GeminiClient::GeminiClient() : juce::Thread("GeminiNetworkThread") {}
+GeminiClient::~GeminiClient() { stopThread(4000); }
 
 void GeminiClient::fetchDrumPattern(const juce::String& userPrompt, const juce::String& apiKey)
 {
-    if (isThreadRunning())
-        return;
-
+    if (isThreadRunning()) return;
+    currentApiKey = apiKey.trim();
     currentPrompt = userPrompt;
-    currentApiKey = apiKey;
-
     startThread();
 }
 
 void GeminiClient::run()
 {
-    // 1. エンドポイントの構築
-    juce::String urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + currentApiKey;
+    juce::String urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=" + currentApiKey;
     juce::URL url(urlString);
 
-    // 2. システムプロンプト
-    juce::String systemInstruction =
-        "Generate a drum pattern JSON. Output ONLY a valid JSON object. "
-        "Format: {\"tracks\": [{\"id\":0, \"division\":16, \"pattern\":[1,0,1,0]}]}";
-
-    // 3. 送信用JSON（ペイロード）の構築
     juce::DynamicObject::Ptr rootObj = new juce::DynamicObject();
     juce::Array<juce::var> contents;
     juce::DynamicObject::Ptr contentObj = new juce::DynamicObject();
     juce::Array<juce::var> parts;
     juce::DynamicObject::Ptr partObj = new juce::DynamicObject();
 
-    partObj->setProperty("text", systemInstruction + "\nRequest: " + currentPrompt);
+    // ★ここを厳格に修正しました：AIが勝手なフォーマットで返さないように「絶対にこの形（tracksとpattern）で返せ」と強く命令します。
+    juce::String strictPrompt = "Output ONLY a valid JSON object. It MUST strictly follow this exact format: {\"tracks\": [{\"pattern\":[1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0]}]}. Generate 8 tracks of 16 steps (1 or 0). No markdown, no other text. Request: " + currentPrompt;
+    partObj->setProperty("text", strictPrompt);
+
     parts.add(juce::var(partObj.get()));
     contentObj->setProperty("parts", parts);
     contents.add(juce::var(contentObj.get()));
     rootObj->setProperty("contents", contents);
 
     juce::String jsonRequest = juce::JSON::toString(juce::var(rootObj.get()));
+    url = url.withPOSTData(jsonRequest);
 
-    // POST用データの準備
-    juce::MemoryBlock postData;
-    postData.append(jsonRequest.toRawUTF8(), jsonRequest.getNumBytesAsUTF8());
-
-    // 4. HTTPリクエストの設定 (JUCE 8 修正版)
-    // Constructor で inPostData を指定し、メソッド名 .withPostData を使用
-    auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inPostData)
+    auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
         .withExtraHeaders("Content-Type: application/json")
-        .withConnectionTimeoutMs(10000)
-        .withPostData(postData);
+        .withConnectionTimeoutMs(10000);
 
     std::unique_ptr<juce::InputStream> stream(url.createInputStream(options));
 
-    if (stream == nullptr)
-    {
-        juce::MessageManager::callAsync([this] {
-            if (onError) onError("Failed to connect. Check internet or API key.");
-            });
+    if (stream == nullptr) {
+        juce::MessageManager::callAsync([this] { if (onError) onError("Network Stream Failed"); });
         return;
     }
 
     juce::String response = stream->readEntireStreamAsString();
-
-    // 5. 応答の解析
     juce::var parsedJson = juce::JSON::parse(response);
 
-    if (parsedJson.isVoid())
-    {
-        juce::MessageManager::callAsync([this] {
-            if (onError) onError("Empty response from Gemini API.");
-            });
+    if (parsedJson.hasProperty("error")) {
+        juce::String googleMsg = parsedJson["error"]["message"].toString();
+        juce::MessageManager::callAsync([this, googleMsg] { if (onError) onError(googleMsg); });
         return;
     }
 
     try {
-        // AIのレスポンスからテキスト部分を取り出す
-        juce::String rawText = parsedJson["candidates"][0]["content"]["parts"][0]["text"].toString();
+        auto* candidates = parsedJson["candidates"].getArray();
+        if (candidates != nullptr && candidates->size() > 0) {
+            juce::String text = (*candidates)[0]["content"]["parts"][0]["text"].toString();
+            juce::var drumData = juce::JSON::parse(sanitizeJsonResponse(text));
 
-        // Markdown等を除去して再パース
-        juce::String cleanJsonText = sanitizeJsonResponse(rawText);
-        juce::var drumData = juce::JSON::parse(cleanJsonText);
+            if (!drumData.isVoid()) {
+                // ★追加：AIが実際にどんなJSON（目印）を返してきたか、Visual Studioの出力ログに全て書き出します。
+                juce::Logger::writeToLog("--- AI JSON Result ---");
+                juce::Logger::writeToLog(juce::JSON::toString(drumData));
 
-        if (!drumData.isVoid())
-        {
-            // 結果をGUIスレッドへ通知
-            juce::MessageManager::callAsync([this, drumData] {
-                if (onSuccess) onSuccess(drumData);
-                });
-        }
-        else
-        {
-            throw std::runtime_error("JSON cleaning failed");
+                juce::MessageManager::callAsync([this, drumData] { if (onSuccess) onSuccess(drumData); });
+                return;
+            }
         }
     }
-    catch (...) {
-        juce::MessageManager::callAsync([this] {
-            if (onError) onError("Failed to parse AI pattern data.");
-            });
-    }
+    catch (...) {}
+
+    juce::MessageManager::callAsync([this] { if (onError) onError("AI Response Format Error"); });
 }
 
 juce::String GeminiClient::sanitizeJsonResponse(const juce::String& response)
 {
     juce::String s = response.trim();
-
-    // Markdownのバッククォート囲み（```json ... ```）を剥ぎ取る
     if (s.startsWith("```json")) s = s.substring(7);
-    if (s.startsWith("```"))     s = s.substring(3);
-    if (s.endsWith("```"))       s = s.dropLastCharacters(3);
-
+    else if (s.startsWith("```")) s = s.substring(3);
+    if (s.endsWith("```")) s = s.dropLastCharacters(3);
     return s.trim();
 }
