@@ -32,10 +32,11 @@ void AIDrumMachineAudioProcessor::changeProgramName(int index, const juce::Strin
 
 void AIDrumMachineAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    currentStep = 0;
-    samplesSinceLastStep = 0;
+    samplesInLoop = 0;
     for (int i = 0; i < 8; ++i) {
+        trackCurrentStep[i] = 0;
         trackEnv[i] = 0.0f;
+        trackPitchEnv[i] = 0.0f;
         trackPhase[i] = 0.0f;
     }
 }
@@ -65,32 +66,46 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     float sampleRate = (float)getSampleRate();
     if (sampleRate <= 0.0f) sampleRate = 44100.0f;
 
-    // テンポ120BPMの16分音符の長さ
-    int samplesPerStep = (int)(sampleRate * 0.125f);
+    // テンポ120BPMの1小節の長さと、4小節ループの長さ
+    int samplesPerBar = (int)(sampleRate * (60.0f / 120.0f) * 4.0f);
+    int samplesPerLoop = samplesPerBar * 4;
+    float pi2 = juce::MathConstants<float>::twoPi;
 
     auto* leftChannel = buffer.getWritePointer(0);
     auto* rightChannel = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
 
     for (int i = 0; i < numSamples; ++i)
     {
-        // 1. シーケンサー（再生ヘッドを進める）
-        samplesSinceLastStep++;
-        if (samplesSinceLastStep >= samplesPerStep)
-        {
-            samplesSinceLastStep = 0;
-            currentStep = (currentStep + 1) % 16;
+        // 1. 4小節シーケンサー
+        samplesInLoop++;
+        if (samplesInLoop >= samplesPerLoop) {
+            samplesInLoop = 0;
+        }
 
-            // ステップが切り替わった瞬間、1が立っているトラックを鳴らす
-            for (int trk = 0; trk < 8; ++trk)
+        for (int trk = 0; trk < 8; ++trk)
+        {
+            int div = trackDivisions[trk];
+            if (div < 1) div = 1;
+            int totalStepsInLoop = div * 4; // 4小節トータルのステップ数
+
+            // ループ全体の中で、今どのステップにいるかを計算
+            int currentStepForTrack = (samplesInLoop * totalStepsInLoop) / samplesPerLoop;
+
+            // ステップが切り替わった瞬間、トリガーを引く
+            if (currentStepForTrack != trackCurrentStep[trk])
             {
-                if (drumPattern[trk][currentStep] > 0)
+                trackCurrentStep[trk] = currentStepForTrack;
+
+                int velocity = drumPattern[trk][trackCurrentStep[trk]];
+                if (velocity > 0)
                 {
-                    trackEnv[trk] = 1.0f;
+                    trackEnv[trk] = velocity / 100.0f;
+                    trackPitchEnv[trk] = 1.0f;
                 }
             }
         }
 
-        // 2. シンセサイザー（音を作る）
+        // 2. シンセサイザー（既存の8系統そのまま）
         float mixOut = 0.0f;
         for (int trk = 0; trk < 8; ++trk)
         {
@@ -99,47 +114,56 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                 float osc = 0.0f;
 
                 if (trk == 0) {
-                    // キック（低音ドン！）
-                    float freq = 60.0f;
-                    trackPhase[trk] += juce::MathConstants<float>::twoPi * freq / sampleRate;
-                    if (trackPhase[trk] > juce::MathConstants<float>::twoPi) trackPhase[trk] -= juce::MathConstants<float>::twoPi;
+                    float freq = 50.0f + 200.0f * trackPitchEnv[trk];
+                    trackPhase[trk] += pi2 * freq / sampleRate;
+                    if (trackPhase[trk] > pi2) trackPhase[trk] -= pi2;
                     osc = std::sin(trackPhase[trk]) * trackEnv[trk];
+                    trackPitchEnv[trk] *= 0.995f;
                     trackEnv[trk] *= 0.9995f;
                 }
                 else if (trk == 1) {
-                    // スネア（タン！）
-                    float noise = random.nextFloat() * 2.0f - 1.0f;
-                    osc = noise * trackEnv[trk];
-                    trackEnv[trk] *= 0.999f;
+                    float freq = 180.0f + 50.0f * trackPitchEnv[trk];
+                    trackPhase[trk] += pi2 * freq / sampleRate;
+                    if (trackPhase[trk] > pi2) trackPhase[trk] -= pi2;
+                    float body = std::sin(trackPhase[trk]) * trackEnv[trk];
+                    float noise = (random.nextFloat() * 2.0f - 1.0f) * (trackEnv[trk] * trackEnv[trk]);
+                    osc = (body * 0.5f + noise * 0.6f);
+                    trackPitchEnv[trk] *= 0.99f;
+                    trackEnv[trk] *= 0.998f;
                 }
                 else if (trk == 2) {
-                    // ハイハット（チッ！）
                     float noise = random.nextFloat() * 2.0f - 1.0f;
-                    osc = noise * trackEnv[trk];
-                    trackEnv[trk] *= 0.995f;
+                    osc = noise * trackEnv[trk] * 0.4f;
+                    trackEnv[trk] *= 0.992f;
                 }
-                else {
-                    // その他のピコピコ音
-                    float freq = 300.0f + (trk * 200.0f);
-                    trackPhase[trk] += juce::MathConstants<float>::twoPi * freq / sampleRate;
-                    if (trackPhase[trk] > juce::MathConstants<float>::twoPi) trackPhase[trk] -= juce::MathConstants<float>::twoPi;
-                    osc = std::sin(trackPhase[trk]) * trackEnv[trk];
+                else if (trk == 3) {
+                    float noise = random.nextFloat() * 2.0f - 1.0f;
+                    osc = noise * trackEnv[trk] * 0.4f;
                     trackEnv[trk] *= 0.999f;
                 }
-
-                // ★音量を大きくしました (0.2f -> 0.6f)
+                else if (trk == 4) {
+                    float noise = random.nextFloat() * 2.0f - 1.0f;
+                    osc = noise * trackEnv[trk] * 0.5f;
+                    trackEnv[trk] *= 0.996f;
+                }
+                else if (trk >= 5 && trk <= 7) {
+                    float baseFreq = 100.0f + (trk - 5) * 50.0f;
+                    float freq = baseFreq + 100.0f * trackPitchEnv[trk];
+                    trackPhase[trk] += pi2 * freq / sampleRate;
+                    if (trackPhase[trk] > pi2) trackPhase[trk] -= pi2;
+                    osc = std::sin(trackPhase[trk]) * trackEnv[trk];
+                    trackPitchEnv[trk] *= 0.996f;
+                    trackEnv[trk] *= 0.999f;
+                }
                 mixOut += osc * 0.6f;
             }
         }
 
-        // 出力が大きすぎたときのためにリミッター（音割れ防止）をかける
         if (mixOut > 1.0f) mixOut = 1.0f;
         if (mixOut < -1.0f) mixOut = -1.0f;
 
-        // 3. スピーカーへ出力
         leftChannel[i] = mixOut;
-        if (rightChannel != nullptr)
-            rightChannel[i] = mixOut;
+        if (rightChannel != nullptr) rightChannel[i] = mixOut;
     }
 }
 

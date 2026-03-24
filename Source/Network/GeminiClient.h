@@ -9,7 +9,7 @@
 #include <functional>
 
 /**
- * Gemini APIと通信し、ドラムパターンを取得するクラス。
+ * Gemini APIと通信し、ポリリズム・ドラムパターンを取得するクラス。
  * JUCE 8 のスレッドおよび通信プロトコルに準拠した実装です。
  */
 class GeminiClient : private juce::Thread
@@ -20,7 +20,7 @@ public:
 
     /**
      * AIへのリクエストを開始します。
-     * @param userPrompt ユーザーのリクエスト（例: "BPM120, Techno"）
+     * @param userPrompt ユーザーのリクエスト
      * @param apiKey APIキー
      */
     void fetchDrumPattern(const juce::String& userPrompt, const juce::String& apiKey);

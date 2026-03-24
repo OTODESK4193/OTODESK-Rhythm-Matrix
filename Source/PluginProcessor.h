@@ -36,20 +36,25 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    // AIから受け取るリズムデータ
-    int drumPattern[8][16] = { {0} };
+    // 4小節対応（1小節最大9分割 × 4 = 36）
+    int drumPattern[8][36] = { {0} };
+    int trackDivisions[8] = { 4, 4, 4, 4, 4, 4, 4, 4 }; // 各トラックの1小節あたりの分割数
 
-    // ★追加：画面（Editor）が「今どこを再生しているか」を知るための関数
-    int getCurrentStep() const { return currentStep; }
+    // 画面（Editor）が「今どこを再生しているか（0〜35）」を知るための関数
+    int getTrackCurrentStep(int trackIndex) const {
+        if (trackIndex >= 0 && trackIndex < 8) return trackCurrentStep[trackIndex];
+        return 0;
+    }
 
 private:
-    // シーケンサーと音作り用の変数
-    int currentStep = 0;
-    int samplesSinceLastStep = 0;
-    float trackEnv[8] = { 0.0f };
-    float trackPhase[8] = { 0.0f };
+    // ★修正: 4小節（ループ全体）の絶対同期用タイマー
+    int samplesInLoop = 0;
+    int trackCurrentStep[8] = { 0 }; // 各トラックの現在のステップ位置（0〜35）
 
-    // ★追加：スネアやハイハットのノイズを作るための乱数発生器
+    float trackEnv[8] = { 0.0f };      // 音量（アンプ）エンベロープ
+    float trackPitchEnv[8] = { 0.0f }; // ピッチ（アタック感）エンベロープ
+    float trackPhase[8] = { 0.0f };    // オシレーターの位相
+
     juce::Random random;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AIDrumMachineAudioProcessor)

@@ -5,7 +5,6 @@
 #include "PluginProcessor.h"
 #include "Network/GeminiClient.h"
 
-// ★追加：public juce::Timer を追加して、アニメーションできるようにする
 class AIDrumMachineAudioProcessorEditor : public juce::AudioProcessorEditor, public juce::Timer
 {
 public:
@@ -15,17 +14,25 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
 
-    // ★追加：タイマーが呼ばれるたびに実行される関数
     void timerCallback() override;
 
 private:
     AIDrumMachineAudioProcessor& audioProcessor;
 
-    juce::TextButton generateButton{ "Generate Rhythm" };
+    juce::TextButton generateButton{ "Generate 4-Bars" };
     juce::Label statusLabel;
 
+    // ★追加: ページネーション用のタブボタンと変数
+    juce::TextButton tabButton1{ "Bar 1" };
+    juce::TextButton tabButton2{ "Bar 2" };
+    juce::TextButton tabButton3{ "Bar 3" };
+    juce::TextButton tabButton4{ "Bar 4" };
+    int currentViewBar = 0; // 0=Bar1, 1=Bar2, 2=Bar3, 3=Bar4
+
+    // タブの色を更新するヘルパー関数
+    void updateTabColors();
+
     GeminiClient gemini;
-    int drumPattern[8][16] = { {0} };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AIDrumMachineAudioProcessorEditor)
 };
