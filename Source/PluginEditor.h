@@ -22,15 +22,16 @@ private:
     juce::TextButton generateButton{ "Generate 4-Bars" };
     juce::Label statusLabel;
 
-    // ★追加: ページネーション用のタブボタンと変数
+    // ページネーション用のタブボタンと変数
     juce::TextButton tabButton1{ "Bar 1" };
     juce::TextButton tabButton2{ "Bar 2" };
     juce::TextButton tabButton3{ "Bar 3" };
     juce::TextButton tabButton4{ "Bar 4" };
     int currentViewBar = 0; // 0=Bar1, 1=Bar2, 2=Bar3, 3=Bar4
 
-    // タブの色を更新するヘルパー関数
+    // ヘルパー関数
     void updateTabColors();
+    bool needsPagination() const; // ★追加：タブ表示（ページネーション）が必要か判定する
 
     GeminiClient gemini;
 

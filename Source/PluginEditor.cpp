@@ -18,7 +18,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     statusLabel.setJustificationType(juce::Justification::centredLeft);
     statusLabel.setText("Click to generate 4-Bar Polyrhythm", juce::dontSendNotification);
 
-    // タブクリック時の動作（表示ページの切り替え）
     auto tabClick = [this](int barIndex) {
         currentViewBar = barIndex;
         updateTabColors();
@@ -29,7 +28,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     tabButton3.onClick = [tabClick] { tabClick(2); };
     tabButton4.onClick = [tabClick] { tabClick(3); };
 
-    updateTabColors(); // 初期のタブ色を設定
+    updateTabColors();
 
     juce::Component::SafePointer<AIDrumMachineAudioProcessorEditor> safeThis(this);
 
@@ -38,7 +37,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             if (safeThis == nullptr) return;
             statusLabel.setText("Requesting Gemini (4 Bars)...", juce::dontSendNotification);
 
-            // ★ここに成功したAPIキーを再度貼り付けてください
+            // ★注意：再度ご自身のAPIキーに書き換えてください！
             juce::String myKey = "AIzaSyBT2vQXyacUMdmNOF2OjkYYQ_OPtJgORtQ";
 
             gemini.fetchDrumPattern("Generate a chaotic and evolving polyrhythmic techno beat for 4 bars. Use divisions like 5 or 7 for hi-hats.", myKey);
@@ -70,7 +69,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
                         auto* patternArray = trackObj[patKey].getArray();
                         if (patternArray != nullptr)
                         {
-                            int totalSteps = div * 4; // 4小節分の総ステップ数
+                            int totalSteps = div * 4;
                             for (int j = 0; j < 36; ++j)
                             {
                                 if (j < totalSteps && j < patternArray->size()) {
@@ -85,6 +84,12 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
                     }
                 }
             }
+
+            // ★追加：データ受信後、分割数に応じてレイアウトを再計算し、画面を更新
+            safeThis->currentViewBar = 0;
+            safeThis->updateTabColors();
+            safeThis->resized();
+            safeThis->repaint();
         };
 
     gemini.onError = [safeThis](const juce::String& err)
@@ -99,6 +104,17 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 AIDrumMachineAudioProcessorEditor::~AIDrumMachineAudioProcessorEditor()
 {
     stopTimer();
+}
+
+// ★追加：全トラックの中に「5分割以上」のものが1つでもあるか判定
+bool AIDrumMachineAudioProcessorEditor::needsPagination() const
+{
+    for (int i = 0; i < 8; ++i) {
+        if (audioProcessor.trackDivisions[i] >= 5) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void AIDrumMachineAudioProcessorEditor::updateTabColors()
@@ -119,11 +135,13 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
     g.fillAll(juce::Colours::darkgrey);
 
     auto area = getLocalBounds().reduced(20);
-    // 上部のボタンやタブエリアを避けてグリッド領域を確保
     auto gridArea = area.removeFromBottom(250);
 
     int rows = 8;
     float cellH = static_cast<float>(gridArea.getHeight()) / rows;
+
+    // 現在の表示モードを判定
+    bool paginate = needsPagination();
 
     for (int row = 0; row < rows; ++row)
     {
@@ -131,17 +149,19 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
         int div = audioProcessor.trackDivisions[trackIndex];
         if (div < 1) div = 1;
 
-        float cellW = static_cast<float>(gridArea.getWidth()) / div;
+        // ページネーション時は1小節分(div)、一括表示時は4小節分(div*4)の列を描画
+        int colsToDraw = paginate ? div : (div * 4);
+        float cellW = static_cast<float>(gridArea.getWidth()) / colsToDraw;
 
-        for (int col = 0; col < div; ++col)
+        for (int col = 0; col < colsToDraw; ++col)
         {
             juce::Rectangle<float> cell(gridArea.getX() + col * cellW,
                 gridArea.getY() + row * cellH,
                 cellW - 2.0f,
                 cellH - 2.0f);
 
-            // ★修正: 現在見ているタブ(小節)に応じたデータ配列の位置を計算
-            int globalStep = (currentViewBar * div) + col;
+            // モードに応じて配列から取り出すインデックスを計算
+            int globalStep = paginate ? ((currentViewBar * div) + col) : col;
             int velocity = audioProcessor.drumPattern[trackIndex][globalStep];
 
             if (velocity > 0)
@@ -157,24 +177,36 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
             g.fillRoundedRectangle(cell, 4.0f);
         }
 
-        // --- ポリリズム用プレイヘッド（現在選択中のタブにいる時だけ描画） ---
+        // --- プレイヘッド（再生位置）の描画 ---
         int currentStep = audioProcessor.getTrackCurrentStep(trackIndex);
 
-        // プレイヘッドが現在見ているBarの範囲内にあるかチェック
-        int startStepOfThisBar = currentViewBar * div;
-        int endStepOfThisBar = startStepOfThisBar + div;
-
-        if (currentStep >= startStepOfThisBar && currentStep < endStepOfThisBar)
+        if (paginate)
         {
-            int localStep = currentStep - startStepOfThisBar; // タブ内での相対位置
-            float playheadX = gridArea.getX() + localStep * cellW;
-            juce::Rectangle<float> playheadRect(playheadX,
-                gridArea.getY() + row * cellH,
-                cellW - 2.0f,
-                cellH - 2.0f);
+            // ページネーションモード：現在見ている小節にいる時だけ描画
+            int startStepOfThisBar = currentViewBar * div;
+            int endStepOfThisBar = startStepOfThisBar + div;
 
-            g.setColour(juce::Colours::white.withAlpha(0.4f));
-            g.fillRoundedRectangle(playheadRect, 4.0f);
+            if (currentStep >= startStepOfThisBar && currentStep < endStepOfThisBar)
+            {
+                int localStep = currentStep - startStepOfThisBar;
+                float playheadX = gridArea.getX() + localStep * cellW;
+                juce::Rectangle<float> playheadRect(playheadX, gridArea.getY() + row * cellH, cellW - 2.0f, cellH - 2.0f);
+
+                g.setColour(juce::Colours::white.withAlpha(0.4f));
+                g.fillRoundedRectangle(playheadRect, 4.0f);
+            }
+        }
+        else
+        {
+            // 一括表示モード：全幅を貫通して進むように描画
+            if (currentStep < colsToDraw)
+            {
+                float playheadX = gridArea.getX() + currentStep * cellW;
+                juce::Rectangle<float> playheadRect(playheadX, gridArea.getY() + row * cellH, cellW - 2.0f, cellH - 2.0f);
+
+                g.setColour(juce::Colours::white.withAlpha(0.4f));
+                g.fillRoundedRectangle(playheadRect, 4.0f);
+            }
         }
     }
 }
@@ -183,16 +215,26 @@ void AIDrumMachineAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced(20);
 
-    // 上部コントロール（Generateボタンとラベル）
+    // 上部コントロール
     auto topControls = area.removeFromTop(40);
     generateButton.setBounds(topControls.removeFromLeft(180));
     statusLabel.setBounds(topControls.removeFromRight(200));
 
-    // タブボタンのレイアウト
-    auto tabArea = area.removeFromTop(40).withTrimmedTop(10);
-    int tabW = tabArea.getWidth() / 4;
-    tabButton1.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
-    tabButton2.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
-    tabButton3.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
-    tabButton4.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
+    // ★追加：状態に応じてタブボタンの表示/非表示を切り替える
+    bool paginate = needsPagination();
+
+    tabButton1.setVisible(paginate);
+    tabButton2.setVisible(paginate);
+    tabButton3.setVisible(paginate);
+    tabButton4.setVisible(paginate);
+
+    if (paginate)
+    {
+        auto tabArea = area.removeFromTop(40).withTrimmedTop(10);
+        int tabW = tabArea.getWidth() / 4;
+        tabButton1.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
+        tabButton2.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
+        tabButton3.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
+        tabButton4.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
+    }
 }
