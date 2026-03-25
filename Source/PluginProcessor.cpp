@@ -4,7 +4,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-// ★ プレビュー最適化版＋Arp専用Pluck
+// ★ 59種類のパッチ定義
 static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = { {
         // wave, freq, pDec, pAmt, aAtt, aDec, noise, fTyp, fFreq, fRes, drive, vol
         /* K_909 */      {0, 48.0f,  10.0f,  5.0f, 1.0f, 40.0f,  0.05f, 0, 2000.0f, 1.0f, 1.5f, 1.1f},
@@ -239,11 +239,11 @@ void AIDrumMachineAudioProcessor::clearTrack(int trk) {
 void AIDrumMachineAudioProcessor::generateAllTracks() {
     int genre = currentGenre.load();
     const auto& def = getGenreDef(genre);
-    bool isArp = arpMode.load();
     bool isAlgorithmMode = (genre >= 22);
     bool isSpecialEnsemble = (genre == 14 || genre == 21);
 
     int fillBar = fillBarTarget.load();
+    bool isArp = arpMode.load();
     bool isMono = arpMono.load();
     int curScale = arpScale.load();
 
@@ -267,252 +267,267 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     int maxDiv = (den == 16) ? 2 : ((den == 8) ? 4 : 8);
     int bars = globalBarCount.load();
 
-    // ★ Arp Mode 音楽理論（度数・オクターブの割り当て）
+    // ★ Arp Mode 音楽理論・専用ジェネレーター（独立ロジック）
     if (isArp) {
         int arpPreset = currentGenre.load(); // 0〜9
+
+        // 全消去とDivの初期化
         for (int trk = 0; trk < 8; ++trk) {
+            for (int j = 0; j < 1024; ++j) drumPatternUI[trk][j] = 0;
+            if (!trackDivLocked[trk]) trackDivisionsUI[trk] = (arpPreset == 7) ? ((trk % 4) + 2) : 4;
+
             if (!trackLocked[trk]) {
                 switch (arpPreset) {
-                case 0: // Basic Up (3rds)
-                    trackDegreeUI[trk] = (trk * 2) % scaleLengths[curScale];
-                    trackOctaveUI[trk] = (trk < 4) ? -1 : 0;
-                    break;
-                case 1: // Basic Down (4ths)
-                    trackDegreeUI[trk] = ((7 - trk) * 3) % scaleLengths[curScale];
-                    trackOctaveUI[trk] = (trk < 4) ? 0 : -1;
-                    break;
-                case 2: // Poly Triads
-                    trackDegreeUI[trk] = (trk % 3) * 2;
-                    trackOctaveUI[trk] = (trk / 3) - 1;
-                    break;
-                case 3: // Poly 7ths
-                    trackDegreeUI[trk] = (trk % 4) * 2;
-                    trackOctaveUI[trk] = (trk / 4) - 1;
-                    break;
-                case 4: // 5th Cascades
-                    trackDegreeUI[trk] = (trk * 4) % scaleLengths[curScale];
-                    trackOctaveUI[trk] = (trk % 2 == 0) ? -1 : 0;
-                    break;
-                case 5: // 6th Leaps
-                    trackDegreeUI[trk] = (trk * 5) % scaleLengths[curScale];
-                    trackOctaveUI[trk] = (trk % 2 == 0) ? -1 : 1;
-                    break;
-                case 6: // Quartal Harmony
-                    trackDegreeUI[trk] = (trk * 3) % scaleLengths[curScale];
-                    trackOctaveUI[trk] = (trk / 3) - 1;
-                    break;
-                case 7: // Polyrhythm Plucks
-                case 8: // Euclidean Arp
-                case 9: // Chaos
-                default:
-                    trackDegreeUI[trk] = random.nextInt(scaleLengths[curScale]);
-                    trackOctaveUI[trk] = random.nextInt(3) - 1; // -1, 0, 1
-                    break;
+                case 0: trackDegreeUI[trk] = (trk * 2) % scaleLengths[curScale]; trackOctaveUI[trk] = (trk < 4) ? -1 : 0; break;
+                case 1: trackDegreeUI[trk] = ((7 - trk) * 3) % scaleLengths[curScale]; trackOctaveUI[trk] = (trk < 4) ? 0 : -1; break;
+                case 2: trackDegreeUI[trk] = (trk % 3) * 2; trackOctaveUI[trk] = (trk / 3) - 1; break;
+                case 3: trackDegreeUI[trk] = (trk % 4) * 2; trackOctaveUI[trk] = (trk / 4) - 1; break;
+                case 4: trackDegreeUI[trk] = (trk * 4) % scaleLengths[curScale]; trackOctaveUI[trk] = (trk % 2 == 0) ? -1 : 0; break;
+                case 5: trackDegreeUI[trk] = (trk * 5) % scaleLengths[curScale]; trackOctaveUI[trk] = (trk % 2 == 0) ? -1 : 1; break;
+                case 6: trackDegreeUI[trk] = (trk * 3) % scaleLengths[curScale]; trackOctaveUI[trk] = (trk / 3) - 1; break;
+                default: trackDegreeUI[trk] = random.nextInt(scaleLengths[curScale]); trackOctaveUI[trk] = random.nextInt(3) - 1; break;
+                }
+            }
+        }
+
+        int baseDiv = 4;
+        int n = baseDiv * num * bars;
+        int currentTrk = 0;
+        int currentChordBase = 0;
+        bool stepOccupied[1024] = { false };
+
+        for (int j = 0; j < 1024; ++j) {
+            if (j >= n) break;
+
+            int currentBarOfStep = j / (baseDiv * num);
+            int beatInBar = (j % (baseDiv * num)) / baseDiv;
+            bool isFillPortion = (fillBar > 0) && (currentBarOfStep == (fillBar - 1)) && (beatInBar >= num - 2);
+
+            // 1Dリズム（発音するかどうか）の生成
+            bool stepActive = false;
+            if (arpPreset == 8) { // Euclidean
+                int k = (n * 50) / 100;
+                stepActive = ((j * k) % n < k);
+            }
+            else {
+                stepActive = (random.nextInt(100) < 70);
+            }
+
+            // Fill時の密度変化
+            if (isFillPortion) stepActive = (arpPreset % 2 == 0) ? true : false;
+            if (!stepActive) continue;
+
+            int vel = 70 + random.nextInt(30);
+            std::vector<int> tracksToHit;
+
+            // フレーズ・和声の進行
+            switch (arpPreset) {
+            case 0: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 1) % 8; break; // Basic Up
+            case 1: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 7) % 8; break; // Basic Down
+            case 2: tracksToHit.push_back(currentChordBase % 8); tracksToHit.push_back((currentChordBase + 2) % 8); tracksToHit.push_back((currentChordBase + 4) % 8); currentChordBase = (currentChordBase + 1) % 8; break; // Triads
+            case 3: tracksToHit.push_back(currentChordBase % 8); tracksToHit.push_back((currentChordBase + 2) % 8); tracksToHit.push_back((currentChordBase + 4) % 8); tracksToHit.push_back((currentChordBase + 6) % 8); currentChordBase = (currentChordBase + 1) % 8; break; // 7ths
+            case 4: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 4) % 8; break; // 5ths
+            case 5: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 5) % 8; break; // 6ths
+            case 6: tracksToHit.push_back(currentChordBase % 8); tracksToHit.push_back((currentChordBase + 3) % 8); tracksToHit.push_back((currentChordBase + 6) % 8); currentChordBase = (currentChordBase + 1) % 8; break; // Quartal
+            case 7: break; // Polyrhythmは後で個別処理
+            case 8: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 1) % 8; break; // Euc Arp
+            default:
+                int nextTrk = random.nextInt(8);
+                while (nextTrk == currentTrk) nextTrk = random.nextInt(8); // 連続発音禁止
+                currentTrk = nextTrk;
+                tracksToHit.push_back(currentTrk);
+                break;
+            }
+
+            if (arpPreset != 7) {
+                if (isMono && tracksToHit.size() > 0) {
+                    if (!stepOccupied[j]) { drumPatternUI[tracksToHit[0]][j] = vel; stepOccupied[j] = true; }
+                }
+                else {
+                    for (int t : tracksToHit) drumPatternUI[t][j] = vel;
+                }
+            }
+        }
+
+        // Polyrhythm (7) 個別処理
+        if (arpPreset == 7) {
+            for (int trk = 0; trk < 8; ++trk) {
+                int tDiv = trackDivisionsUI[trk];
+                for (int j = 0; j < tDiv * num * bars; ++j) {
+                    if (j % tDiv == 0 && random.nextInt(100) < 60) drumPatternUI[trk][j] = 70 + random.nextInt(30);
                 }
             }
         }
     }
+    // ★ ドラムマシンの通常アルゴリズム
+    else {
+        for (int trk = 0; trk < 8; ++trk) {
+            if (trackLocked[trk]) continue;
 
-    bool stepOccupied[1024] = { false };
-
-    for (int trk = 0; trk < 8; ++trk) {
-        if (trackLocked[trk]) continue;
-
-        if (isAlgorithmMode || isSpecialEnsemble || isArp) {
-            trackCmplxLocked[trk] = false;
-            trackComplexity[trk] = (isAlgorithmMode || isArp) ? 50 : (10 + random.nextInt(15));
-        }
-
-        if (!trackDivLocked[trk]) {
-            int newDiv = 4;
-            if (isArp) {
-                int arpPreset = currentGenre.load();
-                if (arpPreset == 7) newDiv = (trk % 4) + 2; // Polyrhythm
-                else if (arpPreset == 8) newDiv = random.nextBool() ? 3 : 4; // Euclidean
-                else newDiv = 4;
+            if (isAlgorithmMode || isSpecialEnsemble) {
+                trackCmplxLocked[trk] = false;
+                trackComplexity[trk] = (isAlgorithmMode) ? 50 : (10 + random.nextInt(15));
             }
-            else {
+
+            if (!trackDivLocked[trk]) {
                 std::vector<int> candidates;
                 for (int i = 0; i < 4; ++i) {
                     if (def.allowedDivs[trk][i] > 0) candidates.push_back(def.allowedDivs[trk][i]);
                 }
+                int newDiv = 4;
                 if (!candidates.empty()) newDiv = candidates[random.nextInt(candidates.size())];
-            }
 
-            if (fillBar > 0 && !isAlgorithmMode && !isSpecialEnsemble && !isArp) {
-                if ((genre == 4 || genre == 7) && trk == 2) newDiv = maxDiv;
-                if ((genre == 0 || genre == 1) && (trk == 1 || trk == 4)) newDiv = maxDiv;
-            }
-
-            if (newDiv > maxDiv) newDiv = maxDiv;
-            trackDivisionsUI[trk] = newDiv;
-
-            if (!isAlgorithmMode && !isSpecialEnsemble && !isArp && !trackCmplxLocked[trk]) {
-                trackComplexity[trk] = 20 + random.nextInt(30);
-            }
-        }
-
-        if (!trackEntrpLocked[trk]) {
-            trackEntropy[trk] = (isAlgorithmMode || isArp) ? 50 : random.nextInt(juce::Range<int>(0, 20));
-        }
-        if (!trackShiftLocked[trk]) {
-            trackShiftUI[trk] = random.nextInt(juce::Range<int>(def.shiftMin[trk], def.shiftMax[trk] + 1));
-        }
-
-        int div = trackDivisionsUI[trk];
-        int n = div * num * bars;
-        int offset = random.nextInt(juce::Range<int>(0, juce::jmax(1, n)));
-
-        for (int j = 0; j < 1024; ++j) {
-            if (j >= n) { drumPatternUI[trk][j] = 0; continue; }
-
-            int currentBarOfStep = j / (div * num);
-            int beatInBar = (j % (div * num)) / div;
-            int stepInBar = j % (div * num);
-
-            bool isFillActiveBar = (fillBar > 0) && (currentBarOfStep == (fillBar - 1));
-            bool isFillPortion = isFillActiveBar && (beatInBar >= num - 2);
-
-            bool isAnchor = false;
-            bool isNegativeAnchor = false;
-            int anchorVel = 100;
-            int cmplx = trackComplexity[trk];
-            int entrp = trackEntropy[trk];
-
-            // ★ Arp Mode Anchors
-            if (isArp) {
-                int arpPreset = currentGenre.load();
-                if (arpPreset == 0 || arpPreset == 1 || arpPreset == 4 || arpPreset == 5) {
-                    if (stepInBar == trk * (div * num / 8)) isAnchor = true;
+                if (fillBar > 0 && !isAlgorithmMode && !isSpecialEnsemble) {
+                    if ((genre == 4 || genre == 7) && trk == 2) newDiv = maxDiv;
+                    if ((genre == 0 || genre == 1) && (trk == 1 || trk == 4)) newDiv = maxDiv;
                 }
-                else if (arpPreset == 2 || arpPreset == 3 || arpPreset == 6) {
-                    if (stepInBar == 0 || stepInBar == div * 2) isAnchor = true;
+
+                if (newDiv > maxDiv) newDiv = maxDiv;
+                trackDivisionsUI[trk] = newDiv;
+
+                if (!isAlgorithmMode && !isSpecialEnsemble && !trackCmplxLocked[trk]) {
+                    trackComplexity[trk] = 20 + random.nextInt(30);
                 }
             }
 
-            if (isFillPortion && !isAlgorithmMode && !isArp) {
-                if (genre == 0 || genre == 1) {
-                    if (trk == 0) { isNegativeAnchor = true; cmplx = 0; }
-                    if (trk == 1 || trk == 4) { isAnchor = true; anchorVel = 50 + (int)(50.0f * ((float)(stepInBar % (div * 2)) / (float)(div * 2))); }
-                }
-                else if (genre == 4 || genre == 7) {
-                    if (trk == 2) { isAnchor = true; anchorVel = 80; }
-                    else if (trk == 1 && beatInBar == num - 1 && (stepInBar % (div / 2) == 0)) { isAnchor = true; }
-                    else if (trk == 0) { isNegativeAnchor = true; cmplx = 0; }
-                }
-                else if (genre == 2 || genre == 5) {
-                    if (trk >= 5) { cmplx = 80; }
-                    if (trk == 0) { isNegativeAnchor = true; cmplx = 0; }
-                }
-                else if (genre == 19 || genre == 20) {
-                    if (trk >= 5) { isAnchor = true; anchorVel = 90; }
-                    if (trk == 0) { isAnchor = true; anchorVel = 100; }
-                    if (trk == 1 || trk == 2) { isNegativeAnchor = true; cmplx = 0; }
-                }
-                else if (genre == 14 || genre == 21) {
-                    if (genre == 14) { isAnchor = (stepInBar % div == 0); cmplx = 0; }
-                    else { isNegativeAnchor = true; cmplx = 0; }
-                }
-                else {
-                    cmplx = 80;
-                    if (trk == 1 || trk == 4) { if (stepInBar % (div / 2) == 0) isAnchor = true; }
-                }
-            }
-            else if (!isAlgorithmMode && !isArp) {
-                switch (genre) {
-                case 0: case 1:
-                    if (trk == 0 && (stepInBar % div == 0)) isAnchor = true;
-                    if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
-                    if (trk == 2 && (stepInBar % div == div / 2)) isAnchor = true;
-                    break;
-                case 2:
-                    if (trk == 0 && (stepInBar == 0 || stepInBar == div + div / 2 || stepInBar == div * 3 + div / 2)) isAnchor = true;
-                    if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
-                    break;
-                case 3:
-                    if (trk == 0 && (stepInBar == 0 || stepInBar == div * 2 + div / 2)) isAnchor = true;
-                    if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
-                    break;
-                case 4: case 7:
-                    if (trk == 0 && (stepInBar == 0 || stepInBar == div + div / 2)) isAnchor = true;
-                    if ((trk == 1 || trk == 4) && stepInBar == div * 2) isAnchor = true;
-                    break;
-                case 8:
-                    if (trk == 0 && (stepInBar == 0 || stepInBar == div + div / 2 || stepInBar == div * 2 || stepInBar == div * 3 + div / 2)) isAnchor = true;
-                    if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
-                    break;
-                case 13:
-                    if (trk == 0 && (stepInBar % div == 0)) isAnchor = true;
-                    if ((trk == 1 || trk == 4) && (stepInBar == div - 1 || stepInBar == div * 2 + div / 2)) isAnchor = true;
-                    break;
-                case 14:
-                    if (trk == 0 && stepInBar == 0) isAnchor = true;
-                    if (trk == 1 && stepInBar == div * 4 && num > 4) isAnchor = true;
-                    if (trk >= 2 && (stepInBar % (div * 2) == 0)) isAnchor = true;
-                    break;
-                case 15: case 18:
-                    if (trk == 0 && (stepInBar == 0 || stepInBar == div * 2 + div / 2)) isAnchor = true;
-                    if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
-                    break;
-                case 19:
-                    if (trk == 0 && (stepInBar == 0 || stepInBar == div * 3)) isAnchor = true;
-                    if ((trk == 1 || trk == 4) && (stepInBar == div * 2)) isAnchor = true;
-                    break;
-                case 20:
-                    if (trk == 0 && (stepInBar == 0 || stepInBar == div * 3 || stepInBar == div * 5)) isAnchor = true;
-                    if ((trk == 1 || trk == 4) && (stepInBar == div * 3 || stepInBar == div * 5)) isAnchor = true;
-                    break;
-                case 21:
-                    if (trk == 0 && (stepInBar % (div * 3) == 0)) isAnchor = true;
-                    if (trk == 1 && ((stepInBar + div) % (div * 3) == 0)) isAnchor = true;
-                    if (trk >= 2 && (stepInBar % 2 == 0)) isAnchor = true;
-                    break;
-                default:
-                    if (trk == 0 && stepInBar == 0) isAnchor = true;
-                    if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3) && num >= 4) isAnchor = true;
-                    break;
-                }
+            if (!trackEntrpLocked[trk]) trackEntropy[trk] = (isAlgorithmMode) ? 50 : random.nextInt(juce::Range<int>(0, 20));
+            if (!trackShiftLocked[trk]) trackShiftUI[trk] = random.nextInt(juce::Range<int>(def.shiftMin[trk], def.shiftMax[trk] + 1));
 
-                if (trk == 0 && !isAnchor && !isNegativeAnchor) {
-                    if (stepInBar % div == div - 1) {
-                        if (random.nextInt(100) < (15 + entrp / 2)) {
-                            drumPatternUI[trk][j] = random.nextInt(juce::Range<int>(40, 75));
-                            continue;
+            int div = trackDivisionsUI[trk];
+            int n = div * num * bars;
+            int offset = random.nextInt(juce::Range<int>(0, juce::jmax(1, n)));
+
+            for (int j = 0; j < 1024; ++j) {
+                if (j >= n) { drumPatternUI[trk][j] = 0; continue; }
+
+                int currentBarOfStep = j / (div * num);
+                int beatInBar = (j % (div * num)) / div;
+                int stepInBar = j % (div * num);
+
+                bool isFillActiveBar = (fillBar > 0) && (currentBarOfStep == (fillBar - 1));
+                bool isFillPortion = isFillActiveBar && (beatInBar >= num - 2);
+
+                bool isAnchor = false;
+                bool isNegativeAnchor = false;
+                int anchorVel = 100;
+                int cmplx = trackComplexity[trk];
+                int entrp = trackEntropy[trk];
+
+                if (isFillPortion && !isAlgorithmMode) {
+                    if (genre == 0 || genre == 1) {
+                        if (trk == 0) { isNegativeAnchor = true; cmplx = 0; }
+                        if (trk == 1 || trk == 4) { isAnchor = true; anchorVel = 50 + (int)(50.0f * ((float)(stepInBar % (div * 2)) / (float)(div * 2))); }
+                    }
+                    else if (genre == 4 || genre == 7) {
+                        if (trk == 2) { isAnchor = true; anchorVel = 80; }
+                        else if (trk == 1 && beatInBar == num - 1 && (stepInBar % (div / 2) == 0)) { isAnchor = true; }
+                        else if (trk == 0) { isNegativeAnchor = true; cmplx = 0; }
+                    }
+                    else if (genre == 2 || genre == 5) {
+                        if (trk >= 5) { cmplx = 80; }
+                        if (trk == 0) { isNegativeAnchor = true; cmplx = 0; }
+                    }
+                    else if (genre == 19 || genre == 20) {
+                        if (trk >= 5) { isAnchor = true; anchorVel = 90; }
+                        if (trk == 0) { isAnchor = true; anchorVel = 100; }
+                        if (trk == 1 || trk == 2) { isNegativeAnchor = true; cmplx = 0; }
+                    }
+                    else if (genre == 14 || genre == 21) {
+                        if (genre == 14) { isAnchor = (stepInBar % div == 0); cmplx = 0; }
+                        else { isNegativeAnchor = true; cmplx = 0; }
+                    }
+                    else {
+                        cmplx = 80;
+                        if (trk == 1 || trk == 4) { if (stepInBar % (div / 2) == 0) isAnchor = true; }
+                    }
+                }
+                else if (!isAlgorithmMode) {
+                    switch (genre) {
+                    case 0: case 1:
+                        if (trk == 0 && (stepInBar % div == 0)) isAnchor = true;
+                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                        if (trk == 2 && (stepInBar % div == div / 2)) isAnchor = true;
+                        break;
+                    case 2:
+                        if (trk == 0 && (stepInBar == 0 || stepInBar == div + div / 2 || stepInBar == div * 3 + div / 2)) isAnchor = true;
+                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                        break;
+                    case 3:
+                        if (trk == 0 && (stepInBar == 0 || stepInBar == div * 2 + div / 2)) isAnchor = true;
+                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                        break;
+                    case 4: case 7:
+                        if (trk == 0 && (stepInBar == 0 || stepInBar == div + div / 2)) isAnchor = true;
+                        if ((trk == 1 || trk == 4) && stepInBar == div * 2) isAnchor = true;
+                        break;
+                    case 8:
+                        if (trk == 0 && (stepInBar == 0 || stepInBar == div + div / 2 || stepInBar == div * 2 || stepInBar == div * 3 + div / 2)) isAnchor = true;
+                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                        break;
+                    case 13:
+                        if (trk == 0 && (stepInBar % div == 0)) isAnchor = true;
+                        if ((trk == 1 || trk == 4) && (stepInBar == div - 1 || stepInBar == div * 2 + div / 2)) isAnchor = true;
+                        break;
+                    case 14:
+                        if (trk == 0 && stepInBar == 0) isAnchor = true;
+                        if (trk == 1 && stepInBar == div * 4 && num > 4) isAnchor = true;
+                        if (trk >= 2 && (stepInBar % (div * 2) == 0)) isAnchor = true;
+                        break;
+                    case 15: case 18:
+                        if (trk == 0 && (stepInBar == 0 || stepInBar == div * 2 + div / 2)) isAnchor = true;
+                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                        break;
+                    case 19:
+                        if (trk == 0 && (stepInBar == 0 || stepInBar == div * 3)) isAnchor = true;
+                        if ((trk == 1 || trk == 4) && (stepInBar == div * 2)) isAnchor = true;
+                        break;
+                    case 20:
+                        if (trk == 0 && (stepInBar == 0 || stepInBar == div * 3 || stepInBar == div * 5)) isAnchor = true;
+                        if ((trk == 1 || trk == 4) && (stepInBar == div * 3 || stepInBar == div * 5)) isAnchor = true;
+                        break;
+                    case 21:
+                        if (trk == 0 && (stepInBar % (div * 3) == 0)) isAnchor = true;
+                        if (trk == 1 && ((stepInBar + div) % (div * 3) == 0)) isAnchor = true;
+                        if (trk >= 2 && (stepInBar % 2 == 0)) isAnchor = true;
+                        break;
+                    default:
+                        if (trk == 0 && stepInBar == 0) isAnchor = true;
+                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3) && num >= 4) isAnchor = true;
+                        break;
+                    }
+
+                    if (trk == 0 && !isAnchor && !isNegativeAnchor) {
+                        if (stepInBar % div == div - 1) {
+                            if (random.nextInt(100) < (15 + entrp / 2)) {
+                                drumPatternUI[trk][j] = random.nextInt(juce::Range<int>(40, 75));
+                                continue;
+                            }
                         }
                     }
                 }
-            }
 
-            int k = juce::jmax(1, (n * cmplx) / 100);
-            int vel = 0;
+                int k = juce::jmax(1, (n * cmplx) / 100);
+                int vel = 0;
 
-            if (isAnchor) {
-                int velJitter = (int)((entrp / 100.0f) * 20.0f);
-                vel = anchorVel - random.nextInt(juce::Range<int>(0, velJitter + 1));
-            }
-            else if (isNegativeAnchor) {
-                vel = 0;
-            }
-            else if (!trackCmplxLocked[trk] && cmplx > 0) {
-                if (genre == 23 && !isSpecialEnsemble && !isArp) {
-                    vel = (random.nextFloat() > (1.0f - cmplx / 100.0f)) ? random.nextInt(juce::Range<int>(40, 101)) : 0;
+                if (isAnchor) {
+                    int velJitter = (int)((entrp / 100.0f) * 20.0f);
+                    vel = anchorVel - random.nextInt(juce::Range<int>(0, velJitter + 1));
                 }
-                else {
-                    bool isHit = (((j + offset) * k) % n) < k;
-                    if (entrp > 0 && random.nextInt(100) < (entrp / 3)) isHit = !isHit;
-                    vel = isHit ? random.nextInt(juce::Range<int>(40, 90 + (entrp / 10))) : 0;
+                else if (isNegativeAnchor) {
+                    vel = 0;
                 }
-            }
-
-            // ★ Arp Mode: Mono/Poly collision check
-            if (isArp) {
-                if (vel > 0) {
-                    if (isMono && stepOccupied[j]) vel = 0;
-                    else stepOccupied[j] = true;
+                else if (!trackCmplxLocked[trk] && cmplx > 0) {
+                    if (genre == 23 && !isSpecialEnsemble) {
+                        vel = (random.nextFloat() > (1.0f - cmplx / 100.0f)) ? random.nextInt(juce::Range<int>(40, 101)) : 0;
+                    }
+                    else {
+                        bool isHit = (((j + offset) * k) % n) < k;
+                        if (entrp > 0 && random.nextInt(100) < (entrp / 3)) isHit = !isHit;
+                        vel = isHit ? random.nextInt(juce::Range<int>(40, 90 + (entrp / 10))) : 0;
+                    }
                 }
+                drumPatternUI[trk][j] = vel;
             }
-
-            drumPatternUI[trk][j] = vel;
         }
     }
 
@@ -577,6 +592,7 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     auto totalNumOutputChannels = getTotalNumOutputChannels();
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i) buffer.clear(i, 0, buffer.getNumSamples());
 
+    // ★ エラー修正：ポインタ取得
     auto* leftChannel = buffer.getWritePointer(0);
     auto* rightChannel = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
 
@@ -691,6 +707,7 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         if (mixOut > 1.0f) mixOut = 1.0f;
         if (mixOut < -1.0f) mixOut = -1.0f;
 
+        // ★ エラー修正：ポインタへの代入
         if (leftChannel != nullptr) leftChannel[i] = mixOut;
         if (rightChannel != nullptr) rightChannel[i] = mixOut;
     }

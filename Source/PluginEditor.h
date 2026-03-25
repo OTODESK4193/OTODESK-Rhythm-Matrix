@@ -59,7 +59,6 @@ private:
     juce::ComboBox styleMenu;
     juce::ComboBox fillBarMenu;
 
-    // ★ FollowとArpボタンを点灯式のTextButtonに変更
     juce::TextButton btnAutoFollow{ "Follow" };
     juce::TextButton btnArpMode{ "Arp Mode" };
 
@@ -105,11 +104,11 @@ private:
     juce::Label shiftLabels[8];
     juce::TextButton btnShiftLock[8];
 
-    juce::Rectangle<float> dragAllArea;
-    juce::Rectangle<float> lockArea;
-    juce::Rectangle<float> sampleArea;
-    juce::Rectangle<float> mainGridArea;
-    juce::Rectangle<float> midiDragArea;
+    juce::Rectangle<int> dragAllArea;
+    juce::Rectangle<int> lockArea;
+    juce::Rectangle<int> sampleArea;
+    juce::Rectangle<int> mainGridArea;
+    juce::Rectangle<int> midiDragArea;
     bool isDragging = false;
 
     int dragTargetTrack = -1;
@@ -121,7 +120,7 @@ private:
     void updateDivisionMenus();
     void updateTimeSigNumMenu();
     void updateTrackNames();
-    void updateStyleMenu(); // ★ スタイルメニュー更新用
+    void updateStyleMenu();
 
     juce::File exportMidi(int trackIndex);
 

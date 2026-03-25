@@ -92,7 +92,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         };
 
     addAndMakeVisible(generateButton); addAndMakeVisible(styleMenu); addAndMakeVisible(statusLabel);
-    updateStyleMenu(); // 初期リスト生成
+    updateStyleMenu();
 
     addAndMakeVisible(fillBarMenu);
     fillBarMenu.addItem("Fill: Off", 1);
@@ -103,7 +103,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     fillBarMenu.setSelectedId(audioProcessor.fillBarTarget.load() + 1, juce::dontSendNotification);
     fillBarMenu.onChange = [this] { audioProcessor.fillBarTarget.store(fillBarMenu.getSelectedId() - 1); };
 
-    // ★ FollowとArpModeボタンを点灯式(TextButton)に変更
     addAndMakeVisible(btnAutoFollow);
     btnAutoFollow.setClickingTogglesState(true);
     btnAutoFollow.setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
@@ -116,7 +115,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     btnArpMode.setToggleState(audioProcessor.arpMode.load(), juce::dontSendNotification);
     btnArpMode.onClick = [this] {
         audioProcessor.arpMode.store(btnArpMode.getToggleState());
-        updateStyleMenu(); // メニューを入れ替え
+        updateStyleMenu();
         updateTrackNames();
         };
 
@@ -312,7 +311,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
 AIDrumMachineAudioProcessorEditor::~AIDrumMachineAudioProcessorEditor() { stopTimer(); }
 
-// ★ Arp時のメニュー切り替え
 void AIDrumMachineAudioProcessorEditor::updateStyleMenu() {
     styleMenu.clear();
     if (audioProcessor.arpMode.load()) {
@@ -365,7 +363,7 @@ void AIDrumMachineAudioProcessorEditor::updateTimeSigNumMenu() {
         if (currentGenre == 6) maxNum = 17;
     }
     else {
-        maxNum = 17; // Arp時は自由度を高く
+        maxNum = 17;
     }
 
     int currentNum = audioProcessor.timeSigNumerator.load();
@@ -477,7 +475,9 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     timeSigSlash.setBounds(row1.removeFromLeft(15));
     timeSigDenMenu.setBounds(row1.removeFromLeft(60).reduced(2));
 
-    dragAllArea = row1.removeFromRight(120).toFloat();
+    // ★ GUI配置時のFloat/Int型エラーを防ぐため、int型Rectとして領域を抽出
+    juce::Rectangle<int> dragAllAreaInt = row1.removeFromRight(120);
+    dragAllArea = dragAllAreaInt;
 
     area.removeFromTop(10);
     auto row2 = area.removeFromTop(30);
@@ -507,100 +507,101 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     int patW = patArea.getWidth() / 4;
     for (int i = 0; i < 4; ++i) btnPattern[i].setBounds(patArea.removeFromLeft(patW).reduced(4, 0));
 
-    auto bottomArea = area.removeFromBottom(250).toFloat();
+    // ★ エラー修正：toFloat()を外し、すべてを完全に int 領域で計算
+    juce::Rectangle<int> bottomAreaInt = area.removeFromBottom(250);
 
     if (currentView == Setup2View) {
-        auto s2top = bottomArea.removeFromTop(30);
-        arpKeyMenu.setBounds(s2top.removeFromLeft(100).reduced(2).toNearestInt());
-        arpScaleMenu.setBounds(s2top.removeFromLeft(150).reduced(2).toNearestInt());
-        btnArpMono.setBounds(s2top.removeFromLeft(100).reduced(2).toNearestInt());
-        bottomArea.removeFromTop(10);
+        auto s2top = bottomAreaInt.removeFromTop(30);
+        arpKeyMenu.setBounds(s2top.removeFromLeft(100).reduced(2));
+        arpScaleMenu.setBounds(s2top.removeFromLeft(150).reduced(2));
+        btnArpMono.setBounds(s2top.removeFromLeft(100).reduced(2));
+        bottomAreaInt.removeFromTop(10);
     }
 
     if (currentView == SequencerView) {
-        lockArea = bottomArea.removeFromLeft(30);
-        auto controlArea = bottomArea.removeFromLeft(150);
-        sampleArea = bottomArea.removeFromLeft(110);
+        lockArea = bottomAreaInt.removeFromLeft(30);
+        auto controlArea = bottomAreaInt.removeFromLeft(150);
+        sampleArea = bottomAreaInt.removeFromLeft(110);
 
-        int rows = 8; float cellH = sampleArea.getHeight() / rows;
+        int rows = 8; int cellH = sampleArea.getHeight() / rows;
         for (int row = 0; row < rows; ++row) {
             int idx = 7 - row;
-            trackNameLabels[idx].setBounds(sampleArea.withY(sampleArea.getY() + row * cellH).withHeight(cellH).removeFromLeft(105).reduced(2).toNearestInt());
+            trackNameLabels[idx].setBounds(sampleArea.withY(sampleArea.getY() + row * cellH).withHeight(cellH).removeFromLeft(105).reduced(2));
             auto ctrlRow = controlArea.withY(controlArea.getY() + row * cellH).withHeight(cellH).reduced(1);
-            btnMute[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1).toNearestInt()); btnSolo[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1).toNearestInt()); btnClear[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1).toNearestInt()); btnShiftL[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1).toNearestInt()); btnShiftR[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1).toNearestInt());
+            btnMute[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1)); btnSolo[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1)); btnClear[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1)); btnShiftL[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1)); btnShiftR[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1));
         }
-        midiDragArea = bottomArea.removeFromRight(40);
-        mainGridArea = bottomArea;
+        midiDragArea = bottomAreaInt.removeFromRight(40);
+        mainGridArea = bottomAreaInt;
     }
     else {
-        lockArea = juce::Rectangle<float>(); midiDragArea = bottomArea.removeFromRight(40);
-        auto labelArea = bottomArea.removeFromLeft(140);
-        sampleArea = bottomArea.removeFromLeft(110);
+        lockArea = juce::Rectangle<int>(); midiDragArea = bottomAreaInt.removeFromRight(40);
+        auto labelArea = bottomAreaInt.removeFromLeft(140);
+        sampleArea = bottomAreaInt.removeFromLeft(110);
 
-        auto setupControls = bottomArea;
-        int rows = 8; float cellH = sampleArea.getHeight() / rows;
+        auto setupControls = bottomAreaInt;
+        int rows = 8; int cellH = sampleArea.getHeight() / rows;
         for (int row = 0; row < rows; ++row) {
             int idx = 7 - row;
             auto lRow = labelArea.withY(labelArea.getY() + row * cellH).withHeight(cellH).reduced(2);
-            midiKeyLabels[idx].setBounds(lRow.removeFromLeft(40).toNearestInt());
-            trackNameLabels[idx].setBounds(lRow.toNearestInt());
+            midiKeyLabels[idx].setBounds(lRow.removeFromLeft(40));
+            trackNameLabels[idx].setBounds(lRow);
 
             auto ctrlRow = setupControls.withY(setupControls.getY() + row * cellH).withHeight(cellH).reduced(2);
 
             if (currentView == Setup1View) {
                 ctrlRow.removeFromLeft(10);
-                divLabels[idx].setBounds(ctrlRow.removeFromLeft(30).toNearestInt());
-                divSelectors[idx].setBounds(ctrlRow.removeFromLeft(55).toNearestInt());
+                divLabels[idx].setBounds(ctrlRow.removeFromLeft(30));
+                divSelectors[idx].setBounds(ctrlRow.removeFromLeft(55));
                 ctrlRow.removeFromLeft(5);
-                btnDivLock[idx].setBounds(ctrlRow.removeFromLeft(20).reduced(1).toNearestInt());
+                btnDivLock[idx].setBounds(ctrlRow.removeFromLeft(20).reduced(1));
 
-                float remainingWidth = ctrlRow.getWidth();
-                float blockWidth = remainingWidth / 3.0f;
+                int remainingWidth = ctrlRow.getWidth();
+                int blockWidth = remainingWidth / 3;
 
                 auto cmplxBlock = ctrlRow.removeFromLeft(blockWidth);
                 cmplxBlock.removeFromLeft(15);
-                compLabels[idx].setBounds(cmplxBlock.removeFromLeft(45).toNearestInt());
-                btnCmplxLock[idx].setBounds(cmplxBlock.removeFromRight(20).reduced(1).toNearestInt());
+                compLabels[idx].setBounds(cmplxBlock.removeFromLeft(45));
+                btnCmplxLock[idx].setBounds(cmplxBlock.removeFromRight(20).reduced(1));
                 cmplxBlock.removeFromRight(5);
-                complexitySliders[idx].setBounds(cmplxBlock.toNearestInt());
+                complexitySliders[idx].setBounds(cmplxBlock);
 
                 auto entrpBlock = ctrlRow.removeFromLeft(blockWidth);
                 entrpBlock.removeFromLeft(15);
-                entrpLabels[idx].setBounds(entrpBlock.removeFromLeft(45).toNearestInt());
-                btnEntrpLock[idx].setBounds(entrpBlock.removeFromRight(20).reduced(1).toNearestInt());
+                entrpLabels[idx].setBounds(entrpBlock.removeFromLeft(45));
+                btnEntrpLock[idx].setBounds(entrpBlock.removeFromRight(20).reduced(1));
                 entrpBlock.removeFromRight(5);
-                entropySliders[idx].setBounds(entrpBlock.toNearestInt());
+                entropySliders[idx].setBounds(entrpBlock);
 
                 auto shiftBlock = ctrlRow;
                 shiftBlock.removeFromLeft(15);
-                shiftLabels[idx].setBounds(shiftBlock.removeFromLeft(40).toNearestInt());
-                btnShiftLock[idx].setBounds(shiftBlock.removeFromRight(20).reduced(1).toNearestInt());
+                shiftLabels[idx].setBounds(shiftBlock.removeFromLeft(40));
+                btnShiftLock[idx].setBounds(shiftBlock.removeFromRight(20).reduced(1));
                 shiftBlock.removeFromRight(5);
-                shiftSliders[idx].setBounds(shiftBlock.toNearestInt());
+                shiftSliders[idx].setBounds(shiftBlock);
             }
             else if (currentView == Setup2View) {
                 ctrlRow.removeFromLeft(10);
-                octaveLabels[idx].setBounds(ctrlRow.removeFromLeft(50).toNearestInt());
-                octaveSliders[idx].setBounds(ctrlRow.removeFromLeft(200).toNearestInt());
+                octaveLabels[idx].setBounds(ctrlRow.removeFromLeft(50));
+                octaveSliders[idx].setBounds(ctrlRow.removeFromLeft(200));
             }
         }
-        mainGridArea = juce::Rectangle<float>();
+        mainGridArea = juce::Rectangle<int>();
     }
 }
 
 void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
     g.fillAll(juce::Colours::darkgrey);
-    g.setColour(juce::Colours::cyan.withAlpha(0.6f)); g.fillRoundedRectangle(dragAllArea, 4.0f);
+    g.setColour(juce::Colours::cyan.withAlpha(0.6f)); g.fillRoundedRectangle(dragAllArea.toFloat(), 4.0f);
     g.setColour(juce::Colours::white); g.setFont(14.0f); g.drawText("DRAG ALL MIDI", dragAllArea, juce::Justification::centred, false);
 
     if (currentView == SequencerView) {
-        int rows = 8; float cellH = mainGridArea.getHeight() / rows;
+        int rows = 8; float cellH = mainGridArea.getHeight() / (float)rows;
         int numBeats = audioProcessor.timeSigNumerator.load();
 
         for (int row = 0; row < rows; ++row) {
             int idx = 7 - row;
 
-            juce::Rectangle<float> lockBtn(lockArea.getX(), lockArea.getY() + row * cellH, lockArea.getWidth() - 2.0f, cellH - 2.0f);
+            juce::Rectangle<float> lockBtn((float)lockArea.getX(), lockArea.getY() + row * cellH, lockArea.getWidth() - 2.0f, cellH - 2.0f);
             g.setColour(audioProcessor.trackLocked[idx] ? juce::Colours::red.withAlpha(0.8f) : juce::Colours::grey.withAlpha(0.5f));
             g.fillRoundedRectangle(lockBtn, 4.0f);
             g.setColour(juce::Colours::white); g.setFont(10.0f);
@@ -643,9 +644,8 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
             }
         }
     }
-    // ★ Setup 2 ではサンプルスロット（枠やDrop Sampleの文字）を描画しない
     else if (currentView == Setup1View) {
-        int rows = 8; float cellH = sampleArea.getHeight() / rows;
+        int rows = 8; float cellH = sampleArea.getHeight() / (float)rows;
         for (int row = 0; row < rows; ++row) {
             int idx = 7 - row; juce::Rectangle<float> sArea(sampleArea.getX(), sampleArea.getY() + row * cellH + 2, sampleArea.getWidth() - 4, cellH - 4);
             g.setColour(audioProcessor.hasSampleLoaded(idx) ? juce::Colours::lightblue.withAlpha(0.2f) : juce::Colours::darkgrey.darker());
@@ -655,9 +655,8 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
 }
 
 void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
-    auto pos = e.getPosition().toFloat();
+    auto pos = e.getPosition();
 
-    // ★ サンプルの削除判定も Setup1View と SequencerView に制限
     if (e.mods.isRightButtonDown() && sampleArea.contains(pos) && currentView != Setup2View) {
         int idx = 7 - (int)((pos.y - sampleArea.getY()) / (sampleArea.getHeight() / 8));
         if (idx >= 0 && audioProcessor.hasSampleLoaded(idx)) {
@@ -693,7 +692,7 @@ void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
 
 void AIDrumMachineAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e) {
     if (e.mouseWasDraggedSinceMouseDown() && !isDragging) {
-        isDragging = true; auto startPos = e.getMouseDownPosition().toFloat(); int track = -2;
+        isDragging = true; auto startPos = e.getMouseDownPosition(); int track = -2;
         if (dragAllArea.contains(startPos)) track = -1;
         else if (midiDragArea.contains(startPos)) track = 7 - (int)((startPos.y - midiDragArea.getY()) / (midiDragArea.getHeight() / 8));
         if (track != -2) {
@@ -704,11 +703,11 @@ void AIDrumMachineAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e) {
 }
 void AIDrumMachineAudioProcessorEditor::mouseUp(const juce::MouseEvent& e) { isDragging = false; }
 bool AIDrumMachineAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files) {
-    if (currentView == Setup2View) return false; // ★ Setup2 ではサンプルドロップ無効
+    if (currentView == Setup2View) return false;
     for (const auto& f : files) if (f.endsWithIgnoreCase(".wav") || f.endsWithIgnoreCase(".mp3") || f.endsWithIgnoreCase(".aif")) return true; return false;
 }
 void AIDrumMachineAudioProcessorEditor::filesDropped(const juce::StringArray& files, int x, int y) {
-    if (currentView == Setup2View) return; // ★ 無効化
+    if (currentView == Setup2View) return;
     int idx = 7 - (int)((y - sampleArea.getY()) / (sampleArea.getHeight() / 8));
     if (idx >= 0 && idx < 8) { for (const auto& f : files) { audioProcessor.loadSample(idx, f); trackNameLabels[idx].setText(juce::File(f).getFileNameWithoutExtension(), juce::dontSendNotification); repaint(); break; } }
 }

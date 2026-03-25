@@ -9,6 +9,7 @@
 #include <cstring>
 #include <vector>
 
+// ★ シンセサイザーのパラメータ構造体
 struct InstrumentPatch {
     int wave;
     float freq;
@@ -24,6 +25,7 @@ struct InstrumentPatch {
     float vol;
 };
 
+// ★ 59種類のパッチID（M_ArpPluckを定義に追加）
 enum PatchID {
     K_909, K_808, K_Acoustic, K_Deep, K_Punch, K_Hard, K_Soft, K_Sub, K_Click, K_FM,
     S_909, S_808, S_Tight, S_Fat, S_Rim, S_Clap, S_Snap, S_Noise, S_Lofi, S_Acoustic,
@@ -58,13 +60,14 @@ struct SavedPattern {
     int bars = 4;
 };
 
+// ★ 音楽理論（スケール定義）
 const int scalePatterns[6][7] = {
-    {0, 2, 4, 5, 7, 9, 11}, // Major
-    {0, 2, 3, 5, 7, 8, 10}, // Natural Minor
-    {0, 2, 4, 7, 9, -1, -1},// Pentatonic Major
-    {0, 3, 5, 7, 10, -1, -1},//Pentatonic Minor
-    {0, 2, 3, 5, 7, 9, 10}, // Dorian
-    {0, 2, 3, 5, 7, 8, 11}  // Harmonic Minor
+    {0, 2, 4, 5, 7, 9, 11}, // 0: Major
+    {0, 2, 3, 5, 7, 8, 10}, // 1: Natural Minor
+    {0, 2, 4, 7, 9, -1, -1},// 2: Pentatonic Major
+    {0, 3, 5, 7, 10, -1, -1},//3: Pentatonic Minor
+    {0, 2, 3, 5, 7, 9, 10}, // 4: Dorian
+    {0, 2, 3, 5, 7, 8, 11}  // 5: Harmonic Minor
 };
 const int scaleLengths[6] = { 7, 7, 5, 5, 7, 7 };
 
@@ -167,6 +170,7 @@ public:
     bool trackMuted[8] = { false, false, false, false, false, false, false, false };
     bool trackSoloed[8] = { false, false, false, false, false, false, false, false };
 
+    // ★ Arp Mode Parameters
     std::atomic<bool> arpMode{ false };
     std::atomic<bool> arpMono{ true };
     std::atomic<int> arpKey{ 0 };
