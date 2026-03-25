@@ -1,7 +1,11 @@
+// ==============================================================================
+// Source/PluginProcessor.h
+// ==============================================================================
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <atomic>
+#include <array>
 
 class AIDrumMachineAudioProcessor : public juce::AudioProcessor
 {
@@ -33,10 +37,20 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
+    // パラメータ
     std::atomic<int> timeSigNumerator{ 4 };
     std::atomic<int> timeSigDenominator{ 4 };
+    int globalBarCount = 4;
 
+    // エディタ用メインバッファ（UIからはこちらを編集する）
     int drumPattern[8][1024] = { {0} };
+
+    // UIからの変更をDSPに通知するフラグ
+    std::atomic<bool> patternUpdated{ false };
+
+    // UI側に再描画・再同期を要求するフラグ
+    std::atomic<bool> uiNeedsUpdate{ false };
+
     int trackDivisions[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
     bool trackLocked[8] = { false, false, false, false, false, false, false, false };
 
@@ -44,14 +58,11 @@ public:
     bool trackCmplxLocked[8] = { false, false, false, false, false, false, false, false };
     int trackComplexity[8] = { 50, 50, 50, 50, 50, 50, 50, 50 };
 
-    // ★ 新パラメーターの追加
     bool trackEntrpLocked[8] = { false, false, false, false, false, false, false, false };
     int trackEntropy[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; // 0〜100
 
     bool trackShiftLocked[8] = { false, false, false, false, false, false, false, false };
     int trackShift[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; // -50 〜 50
-
-    int globalBarCount = 4;
 
     bool trackMuted[8] = { false, false, false, false, false, false, false, false };
     bool trackSoloed[8] = { false, false, false, false, false, false, false, false };
@@ -77,12 +88,16 @@ public:
     bool hasSampleLoaded(int trackIndex) const { return hasSample[trackIndex]; }
     void clearSample(int trackIndex);
 
+    // ★リファクタリング: 一括生成アルゴリズム
+    void generateAllTracks();
     void shiftTrackLeft(int trackIndex);
     void shiftTrackRight(int trackIndex);
     void clearTrack(int trackIndex);
-    void randomizeTrack(int trackIndex);
 
 private:
+    // DSPオーディオスレッド用バックバッファ（スレッドセーフティの確保）
+    int drumPatternDSP[8][1024] = { {0} };
+
     int samplesInLoop = 0;
     int trackCurrentStep[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
 

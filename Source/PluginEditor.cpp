@@ -1,3 +1,6 @@
+// ==============================================================================
+// Source/PluginEditor.cpp
+// ==============================================================================
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
@@ -50,7 +53,11 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
     addAndMakeVisible(timeSigLabel); timeSigLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible(timeSigNumMenu);
-    timeSigNumMenu.onChange = [this] { audioProcessor.timeSigNumerator.store(timeSigNumMenu.getSelectedId()); resized(); repaint(); };
+    timeSigNumMenu.onChange = [this] {
+        audioProcessor.timeSigNumerator.store(timeSigNumMenu.getSelectedId());
+        audioProcessor.patternUpdated.store(true);
+        resized(); repaint();
+        };
 
     addAndMakeVisible(timeSigSlash); timeSigSlash.setColour(juce::Label::textColourId, juce::Colours::white);
     timeSigSlash.setJustificationType(juce::Justification::centred);
@@ -62,6 +69,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         audioProcessor.timeSigDenominator.store(timeSigDenMenu.getSelectedId());
         updateTimeSigNumMenu();
         updateDivisionMenus();
+        audioProcessor.patternUpdated.store(true);
         resized(); repaint();
         };
 
@@ -73,6 +81,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     barCountMenu.onChange = [this] {
         audioProcessor.globalBarCount = barCountMenu.getSelectedId();
         if (currentViewBar >= audioProcessor.globalBarCount) currentViewBar = audioProcessor.globalBarCount - 1;
+        audioProcessor.patternUpdated.store(true);
         updateTabColors(); updateViewVisibility(); resized(); repaint();
         };
 
@@ -125,7 +134,11 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
         addChildComponent(divLabels[i]); divLabels[i].setText("Div:", juce::dontSendNotification);
         addChildComponent(divSelectors[i]);
-        divSelectors[i].onChange = [this, i] { audioProcessor.trackDivisions[i] = divSelectors[i].getSelectedId(); repaint(); };
+        divSelectors[i].onChange = [this, i] {
+            audioProcessor.trackDivisions[i] = divSelectors[i].getSelectedId();
+            audioProcessor.patternUpdated.store(true);
+            repaint();
+            };
         addChildComponent(btnDivLock[i]); btnDivLock[i].setButtonText("L"); btnDivLock[i].setClickingTogglesState(true);
         btnDivLock[i].onClick = [this, i] { audioProcessor.trackDivLocked[i] = btnDivLock[i].getToggleState(); };
 
@@ -160,21 +173,14 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     juce::Component::SafePointer<AIDrumMachineAudioProcessorEditor> safeThis(this);
     generateButton.onClick = [safeThis, this] {
         if (safeThis == nullptr) return;
-        const int minTempos[] = { 125, 120, 130, 160, 135, 160,  90, 135,  90, 120, 110,  80,  80,  90,  80, 100, 100,  85,  85, 120, 140, 120, 60, 60 };
-        const int maxTempos[] = { 135, 126, 135, 180, 145, 160, 180, 145, 110, 127, 115, 120, 120,  95, 120, 115, 112,  95,  95, 160, 180, 170, 200, 200 };
-        int genreIdx = styleMenu.getSelectedId() - 1;
-        if (genreIdx >= 0 && genreIdx < 24 && !audioProcessor.isSyncEnabled.load()) {
-            juce::Random r; double newBpm = (double)r.nextInt(juce::Range<int>(minTempos[genreIdx], maxTempos[genreIdx] + 1));
-            audioProcessor.internalTempo.store(newBpm);
-        }
-        for (int i = 0; i < 8; ++i) {
-            audioProcessor.randomizeTrack(i);
-            divSelectors[i].setSelectedId(audioProcessor.trackDivisions[i], juce::dontSendNotification);
-            complexitySliders[i].setValue(audioProcessor.trackComplexity[i], juce::dontSendNotification);
-            entropySliders[i].setValue(audioProcessor.trackEntropy[i], juce::dontSendNotification);
-            shiftSliders[i].setValue(audioProcessor.trackShift[i], juce::dontSendNotification);
-        }
-        currentViewBar = 0; updateTabColors(); resized(); repaint();
+
+        // ★ Processor内で安全に全て生成
+        audioProcessor.generateAllTracks();
+
+        currentViewBar = 0;
+        updateTabColors();
+        resized();
+        repaint();
         };
     updateViewVisibility(); startTimerHz(30);
 }
@@ -238,6 +244,23 @@ void AIDrumMachineAudioProcessorEditor::updateTabColors() {
 void AIDrumMachineAudioProcessorEditor::timerCallback() {
     if (audioProcessor.isSyncEnabled.load()) tempoLabel.setText("DAW: " + juce::String(audioProcessor.currentBpm.load(), 1) + " BPM", juce::dontSendNotification);
     else if (!tempoLabel.isBeingEdited()) tempoLabel.setText(juce::String(audioProcessor.internalTempo.load(), 1) + " BPM", juce::dontSendNotification);
+
+    // ★ ジャンル生成でProcessor側がパラメータを変更した場合、UIを同期させる
+    if (audioProcessor.uiNeedsUpdate.exchange(false)) {
+        timeSigDenMenu.setSelectedId(audioProcessor.timeSigDenominator.load(), juce::dontSendNotification);
+        updateTimeSigNumMenu();
+        timeSigNumMenu.setSelectedId(audioProcessor.timeSigNumerator.load(), juce::dontSendNotification);
+        updateDivisionMenus();
+
+        for (int i = 0; i < 8; ++i) {
+            divSelectors[i].setSelectedId(audioProcessor.trackDivisions[i], juce::dontSendNotification);
+            complexitySliders[i].setValue(audioProcessor.trackComplexity[i], juce::dontSendNotification);
+            entropySliders[i].setValue(audioProcessor.trackEntropy[i], juce::dontSendNotification);
+            shiftSliders[i].setValue(audioProcessor.trackShift[i], juce::dontSendNotification);
+        }
+        resized();
+    }
+
     repaint();
 }
 
@@ -307,11 +330,10 @@ void AIDrumMachineAudioProcessorEditor::resized() {
 
             auto ctrlRow = setupControls.withY(setupControls.getY() + row * cellH).withHeight(cellH).reduced(2);
 
-            // ★ Divコンボボックスの幅を広げて見切れを修正 (40px -> 55px)
             ctrlRow.removeFromLeft(10);
             divLabels[idx].setBounds(ctrlRow.removeFromLeft(30).toNearestInt());
             divSelectors[idx].setBounds(ctrlRow.removeFromLeft(55).toNearestInt());
-            ctrlRow.removeFromLeft(5); // 余白追加
+            ctrlRow.removeFromLeft(5);
             btnDivLock[idx].setBounds(ctrlRow.removeFromLeft(20).reduced(1).toNearestInt());
 
             float remainingWidth = ctrlRow.getWidth();
@@ -433,7 +455,13 @@ void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
             float cellW = mainGridArea.getWidth() / (float)(div * numBeats);
             int col = (int)((pos.x - mainGridArea.getX()) / cellW);
             int globalStep = (currentViewBar * div * numBeats) + col;
-            if (globalStep < 1024) { audioProcessor.drumPattern[idx][globalStep] = (audioProcessor.drumPattern[idx][globalStep] > 0) ? 0 : 100; repaint(); }
+            if (globalStep < 1024) {
+                audioProcessor.drumPattern[idx][globalStep] = (audioProcessor.drumPattern[idx][globalStep] > 0) ? 0 : 100;
+
+                // ★ UIからの変更をDSPに安全に通知
+                audioProcessor.patternUpdated.store(true);
+                repaint();
+            }
         }
     }
 }

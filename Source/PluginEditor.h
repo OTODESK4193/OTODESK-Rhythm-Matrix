@@ -1,3 +1,6 @@
+// ==============================================================================
+// Source/PluginEditor.h
+// ==============================================================================
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -80,7 +83,6 @@ private:
     juce::TextButton btnDivLock[8];
     juce::TextButton btnCmplxLock[8];
 
-    // ★ 新パラメーターのUI部品
     juce::Slider entropySliders[8];
     juce::Label entrpLabels[8];
     juce::TextButton btnEntrpLock[8];
