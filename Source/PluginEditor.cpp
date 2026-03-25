@@ -33,7 +33,9 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             juce::MessageBoxIconType::WarningIcon, "Reset All", "Reset settings to genre defaults?", this,
             juce::ModalCallbackFunction::create([this](int result) {
                 if (result == 1) {
-                    audioProcessor.globalBarCount = 1; barCountMenu.setSelectedId(1, juce::dontSendNotification);
+                    audioProcessor.globalBarCount = 1;
+                    barCountMenu.setSelectedId(1, juce::dontSendNotification);
+                    currentViewBar = 0; // ★ Bar1タブに戻す
                     for (int i = 0; i < 8; ++i) {
                         audioProcessor.clearTrack(i);
                         audioProcessor.trackDivisions[i] = 4; divSelectors[i].setSelectedId(4, juce::dontSendNotification);
@@ -41,7 +43,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
                         audioProcessor.trackEntropy[i] = 0; entropySliders[i].setValue(0.0, juce::dontSendNotification);
                         audioProcessor.trackShift[i] = 0; shiftSliders[i].setValue(0.0, juce::dontSendNotification);
                     }
-                    updateViewVisibility(); resized(); repaint();
+                    updateTabColors(); updateViewVisibility(); resized(); repaint();
                 }
                 }));
         };
@@ -68,7 +70,11 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     barCountMenu.addItem("1 Bar", 1); barCountMenu.addItem("2 Bars", 2);
     barCountMenu.addItem("3 Bars", 3); barCountMenu.addItem("4 Bars", 4);
     barCountMenu.setSelectedId(audioProcessor.globalBarCount, juce::dontSendNotification);
-    barCountMenu.onChange = [this] { audioProcessor.globalBarCount = barCountMenu.getSelectedId(); updateViewVisibility(); resized(); repaint(); };
+    barCountMenu.onChange = [this] {
+        audioProcessor.globalBarCount = barCountMenu.getSelectedId();
+        if (currentViewBar >= audioProcessor.globalBarCount) currentViewBar = audioProcessor.globalBarCount - 1;
+        updateTabColors(); updateViewVisibility(); resized(); repaint();
+        };
 
     addAndMakeVisible(generateButton); addAndMakeVisible(styleMenu); addAndMakeVisible(statusLabel);
     const juce::StringArray genres = {
@@ -96,12 +102,27 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         trackNameLabels[i].setColour(juce::Label::textColourId, juce::Colours::white); trackNameLabels[i].setMinimumHorizontalScale(1.0f);
         addChildComponent(midiKeyLabels[i]); midiKeyLabels[i].setText("[" + trackNotes[i] + "]", juce::dontSendNotification);
         midiKeyLabels[i].setColour(juce::Label::textColourId, juce::Colours::grey); midiKeyLabels[i].setJustificationType(juce::Justification::centredRight);
+
         addAndMakeVisible(btnMute[i]); addAndMakeVisible(btnSolo[i]); addAndMakeVisible(btnClear[i]); addAndMakeVisible(btnShiftL[i]); addAndMakeVisible(btnShiftR[i]);
         btnMute[i].setButtonText("M"); btnSolo[i].setButtonText("S"); btnClear[i].setButtonText("C"); btnShiftL[i].setButtonText("<"); btnShiftR[i].setButtonText(">");
         btnMute[i].setClickingTogglesState(true); btnSolo[i].setClickingTogglesState(true);
+
+        // ★ 色分けの復元 (M=赤, S=青)
+        btnMute[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::red);
+        btnSolo[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::blue);
+
         btnMute[i].onClick = [this, i] { audioProcessor.trackMuted[i] = btnMute[i].getToggleState(); };
         btnSolo[i].onClick = [this, i] { audioProcessor.trackSoloed[i] = btnSolo[i].getToggleState(); };
-        btnClear[i].onClick = [this, i] { audioProcessor.clearTrack(i); repaint(); };
+
+        // ★ Cボタンの確認ダイアログ復元
+        btnClear[i].onClick = [this, i] {
+            juce::NativeMessageBox::showOkCancelBox(
+                juce::MessageBoxIconType::WarningIcon, "Clear Track", "Clear Track " + juce::String(i + 1) + "?", this,
+                juce::ModalCallbackFunction::create([this, i](int result) {
+                    if (result == 1) { audioProcessor.clearTrack(i); repaint(); }
+                    }));
+            };
+
         btnShiftL[i].onClick = [this, i] { audioProcessor.shiftTrackLeft(i); repaint(); };
         btnShiftR[i].onClick = [this, i] { audioProcessor.shiftTrackRight(i); repaint(); };
 
@@ -242,14 +263,28 @@ void AIDrumMachineAudioProcessorEditor::resized() {
 
     area.removeFromTop(10);
     auto row2 = area.removeFromTop(30);
-    generateButton.setBounds(row2.removeFromLeft(120)); row2.removeFromLeft(10); styleMenu.setBounds(row2.removeFromLeft(200)); row2.removeFromLeft(10); statusLabel.setBounds(row2);
+    generateButton.setBounds(row2.removeFromLeft(120)); row2.removeFromLeft(10); styleMenu.setBounds(row2.removeFromLeft(200)); row2.removeFromLeft(10);
 
+    // ★ コンボボックス被り問題の修正：先に右側の要素を配置してから、残りをstatusLabelに渡す
     row2.removeFromRight(10);
     barCountMenu.setBounds(row2.removeFromRight(80).reduced(2));
     barCountLabel.setBounds(row2.removeFromRight(40));
 
+    statusLabel.setBounds(row2); // これでコンボボックスに被らなくなります
+
     auto tabArea = area.removeFromTop(40).withTrimmedTop(10); int tabW = tabArea.getWidth() / 4;
-    tabButton1.setBounds(tabArea.removeFromLeft(tabW).reduced(2)); tabButton2.setBounds(tabArea.removeFromLeft(tabW).reduced(2)); tabButton3.setBounds(tabArea.removeFromLeft(tabW).reduced(2)); tabButton4.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
+
+    // ★ Bar数に応じたタブの表示/非表示切り替え
+    int bars = audioProcessor.globalBarCount;
+    tabButton1.setVisible(bars >= 1);
+    tabButton2.setVisible(bars >= 2);
+    tabButton3.setVisible(bars >= 3);
+    tabButton4.setVisible(bars >= 4);
+
+    if (bars >= 1) tabButton1.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
+    if (bars >= 2) tabButton2.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
+    if (bars >= 3) tabButton3.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
+    if (bars >= 4) tabButton4.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
 
     auto bottomArea = area.removeFromBottom(250).toFloat();
     if (currentView == SequencerView) {
@@ -266,11 +301,9 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     else {
         lockArea = juce::Rectangle<float>(); midiDragArea = bottomArea.removeFromRight(40);
         auto labelArea = bottomArea.removeFromLeft(120);
-
-        // ★ サンプルエリアを現在の2/3 (約160px → 110px) に縮小
         sampleArea = bottomArea.removeFromLeft(110);
 
-        auto setupControls = bottomArea; // 残りの広大なスペースをすべてスライダー群に使用
+        auto setupControls = bottomArea;
         int rows = 8; float cellH = sampleArea.getHeight() / rows;
         for (int row = 0; row < rows; ++row) {
             int idx = 7 - row;
@@ -279,25 +312,21 @@ void AIDrumMachineAudioProcessorEditor::resized() {
 
             auto ctrlRow = setupControls.withY(setupControls.getY() + row * cellH).withHeight(cellH).reduced(2);
 
-            // Div (固定幅)
             ctrlRow.removeFromLeft(10);
             divLabels[idx].setBounds(ctrlRow.removeFromLeft(30).toNearestInt());
-            divSelectors[idx].setBounds(ctrlRow.removeFromLeft(50).toNearestInt());
+            divSelectors[idx].setBounds(ctrlRow.removeFromLeft(40).toNearestInt());
             btnDivLock[idx].setBounds(ctrlRow.removeFromLeft(20).reduced(1).toNearestInt());
 
-            // ★ 残りのスペースを3つのスライダーで均等に分割
             float remainingWidth = ctrlRow.getWidth();
             float blockWidth = remainingWidth / 3.0f;
 
-            // Cmplx
             auto cmplxBlock = ctrlRow.removeFromLeft(blockWidth);
             cmplxBlock.removeFromLeft(15);
             compLabels[idx].setBounds(cmplxBlock.removeFromLeft(45).toNearestInt());
             btnCmplxLock[idx].setBounds(cmplxBlock.removeFromRight(20).reduced(1).toNearestInt());
             cmplxBlock.removeFromRight(5);
-            complexitySliders[idx].setBounds(cmplxBlock.toNearestInt()); // 残りをスライダーが目一杯使う
+            complexitySliders[idx].setBounds(cmplxBlock.toNearestInt());
 
-            // Entrp
             auto entrpBlock = ctrlRow.removeFromLeft(blockWidth);
             entrpBlock.removeFromLeft(15);
             entrpLabels[idx].setBounds(entrpBlock.removeFromLeft(45).toNearestInt());
@@ -305,8 +334,7 @@ void AIDrumMachineAudioProcessorEditor::resized() {
             entrpBlock.removeFromRight(5);
             entropySliders[idx].setBounds(entrpBlock.toNearestInt());
 
-            // Shift
-            auto shiftBlock = ctrlRow; // 最後のブロックは残り全てを使用
+            auto shiftBlock = ctrlRow;
             shiftBlock.removeFromLeft(15);
             shiftLabels[idx].setBounds(shiftBlock.removeFromLeft(40).toNearestInt());
             btnShiftLock[idx].setBounds(shiftBlock.removeFromRight(20).reduced(1).toNearestInt());
