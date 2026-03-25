@@ -48,8 +48,6 @@ void AIDrumMachineAudioProcessor::randomizeTrack(int trk) {
     bool isAlgorithmMode = (genre >= 22);
     int num = timeSigNumerator.load();
     int den = timeSigDenominator.load();
-
-    // 分母に基づく最大Divisionの決定 (32分音符相当まで)
     int maxDiv = (den == 16) ? 2 : ((den == 8) ? 4 : 8);
 
     if (!trackDivLocked[trk]) {
@@ -73,8 +71,6 @@ void AIDrumMachineAudioProcessor::randomizeTrack(int trk) {
         case 22: case 23: newDiv = random.nextInt(juce::Range<int>(1, 10)); break;
         default: newDiv = 4; break;
         }
-
-        // 最大値でクランプ
         if (newDiv > maxDiv) newDiv = maxDiv;
         trackDivisions[trk] = newDiv;
     }
@@ -82,21 +78,41 @@ void AIDrumMachineAudioProcessor::randomizeTrack(int trk) {
         if (trackDivisions[trk] > maxDiv) trackDivisions[trk] = maxDiv;
     }
 
+    // ★ 新パラメーターの初期設定
+    if (!trackEntrpLocked[trk]) {
+        trackEntropy[trk] = isAlgorithmMode ? 50 : random.nextInt(juce::Range<int>(0, 20));
+    }
+
+    if (!trackShiftLocked[trk]) {
+        trackShift[trk] = 0; // 基本はジャスト
+        if (genre == 17) { // Neo Soul
+            if (trk == 1) trackShift[trk] = 10; // スネア少し後ノリ
+            if (trk == 2) trackShift[trk] = 25; // ハット大きく後ノリ
+        }
+        else if (genre == 18) { // Hip Hop (Boom Bap)
+            if (trk == 0) trackShift[trk] = 5;  // キック少しもたる
+            if (trk == 1) trackShift[trk] = 8;
+        }
+        else if (genre == 0) { // Techno
+            if (trk == 2) trackShift[trk] = -5; // 裏ハット少し突っ込む(Push)
+        }
+    }
+
     int div = trackDivisions[trk];
     int n = div * num * globalBarCount;
     int cmplx = trackComplexity[trk];
+    int entrp = trackEntropy[trk];
     int k = juce::jmax(1, (n * cmplx) / 100);
     int offset = random.nextInt(juce::Range<int>(0, juce::jmax(1, n)));
 
     for (int j = 0; j < 1024; ++j) {
         if (j >= n) { drumPattern[trk][j] = 0; continue; }
 
-        int stepInBar = j % (div * num); // 1小節内の位置
+        int stepInBar = j % (div * num);
         bool isAnchor = false;
         bool isNegativeAnchor = false;
         int anchorVel = 100;
 
-        // ★ジャンルのアンカー最適化は後回しとするため、現状のコードを維持（安全に動作）
         switch (genre) {
         case 0:
             if (trk == 0 && stepInBar % div == 0) isAnchor = true;
@@ -135,19 +151,29 @@ void AIDrumMachineAudioProcessor::randomizeTrack(int trk) {
             break;
         }
 
+        // ★ Entropyに基づく揺らぎと突然変異の適用
         if (isAnchor) {
-            drumPattern[trk][j] = anchorVel;
+            // Entropyが高いと、AnchorのVelocityが最大30%揺らぐ（ヒューマナイズ）
+            int velJitter = (int)((entrp / 100.0f) * 30.0f);
+            drumPattern[trk][j] = anchorVel - random.nextInt(juce::Range<int>(0, velJitter + 1));
         }
         else if (isNegativeAnchor) {
-            drumPattern[trk][j] = (random.nextInt(100) < cmplx / 2) ? random.nextInt(juce::Range<int>(10, 30)) : 0;
+            // Entropyが高いと、ゴーストノートが鳴りやすくなる
+            int ghostProb = (cmplx / 3) + (entrp / 2);
+            drumPattern[trk][j] = (random.nextInt(100) < ghostProb) ? random.nextInt(juce::Range<int>(10, 30 + (entrp / 5))) : 0;
         }
         else if (cmplx > 0) {
-            if (genre == 23) {
-                drumPattern[trk][j] = (random.nextFloat() > (1.0f - cmplx / 100.0f)) ? random.nextInt(juce::Range<int>(60, 101)) : 0;
+            if (genre == 23) { // Pure Chaos
+                drumPattern[trk][j] = (random.nextFloat() > (1.0f - cmplx / 100.0f)) ? random.nextInt(juce::Range<int>(40, 101)) : 0;
             }
-            else {
+            else { // Euclidean
                 bool isHit = (((j + offset) * k) % n) < k;
-                drumPattern[trk][j] = isHit ? random.nextInt(juce::Range<int>(40, 90)) : 0;
+
+                // Entropyによるユークリッドの突然変異（確率で反転）
+                if (entrp > 0 && random.nextInt(100) < (entrp / 3)) {
+                    isHit = !isHit;
+                }
+                drumPattern[trk][j] = isHit ? random.nextInt(juce::Range<int>(40, 90 + (entrp / 10))) : 0;
             }
         }
         else {
@@ -214,7 +240,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     }
     currentBpm.store(bpm);
 
-    // ★ 拍子（分母）に基づくサンプル単位の再計算
     double samplesPerQuarterNote = sampleRate * (60.0 / bpm);
     int den = timeSigDenominator.load();
     double samplesPerBeat = samplesPerQuarterNote * (4.0 / (double)den);
@@ -241,7 +266,20 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             {
                 int div = trackDivisions[trk]; if (div < 1) div = 1;
                 int totalStepsInLoop = div * num * globalBarCount;
-                int currentStepForTrack = (samplesInLoop * totalStepsInLoop) / samplesPerLoop;
+
+                // ★ Micro-Shift の適用 (-50% 〜 +50% of a step)
+                double samplesPerStep = (double)samplesPerLoop / (double)totalStepsInLoop;
+                int shiftInSamples = (int)((trackShift[trk] / 100.0) * samplesPerStep);
+
+                // シフトを適用した仮想的な再生位置
+                // trackShift が正（後ノリ） -> shiftInSamples は正 -> 仮想位置は遅れる（マイナス）
+                int virtualSamplesInLoop = samplesInLoop - shiftInSamples;
+
+                // ループのラップアラウンド処理
+                while (virtualSamplesInLoop < 0) virtualSamplesInLoop += samplesPerLoop;
+                virtualSamplesInLoop %= samplesPerLoop;
+
+                int currentStepForTrack = (virtualSamplesInLoop * totalStepsInLoop) / samplesPerLoop;
 
                 if (currentStepForTrack != trackCurrentStep[trk] && currentStepForTrack < 1024)
                 {

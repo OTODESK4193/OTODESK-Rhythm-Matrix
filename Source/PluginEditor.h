@@ -80,6 +80,15 @@ private:
     juce::TextButton btnDivLock[8];
     juce::TextButton btnCmplxLock[8];
 
+    // ★ 新パラメーターのUI部品
+    juce::Slider entropySliders[8];
+    juce::Label entrpLabels[8];
+    juce::TextButton btnEntrpLock[8];
+
+    juce::Slider shiftSliders[8];
+    juce::Label shiftLabels[8];
+    juce::TextButton btnShiftLock[8];
+
     juce::Rectangle<float> dragAllArea;
     juce::Rectangle<float> lockArea;
     juce::Rectangle<float> sampleArea;
@@ -93,7 +102,7 @@ private:
     void updateTabColors();
     void updateViewVisibility();
     void updateDivisionMenus();
-    void updateTimeSigNumMenu(); // ★分子の最大値を動的に変更する関数を追加
+    void updateTimeSigNumMenu();
 
     juce::File exportMidi(int trackIndex);
 

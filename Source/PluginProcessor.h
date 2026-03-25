@@ -33,11 +33,9 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    // ★拍子設定の追加
-    std::atomic<int> timeSigNumerator{ 4 };   // 拍数 (1〜32)
-    std::atomic<int> timeSigDenominator{ 4 }; // 音符単位 (4, 8, 16)
+    std::atomic<int> timeSigNumerator{ 4 };
+    std::atomic<int> timeSigDenominator{ 4 };
 
-    // ★最大ステップ数を大幅に拡張 (例: 32拍 × Div 8 × 4小節 = 1024)
     int drumPattern[8][1024] = { {0} };
     int trackDivisions[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
     bool trackLocked[8] = { false, false, false, false, false, false, false, false };
@@ -45,6 +43,14 @@ public:
     bool trackDivLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackCmplxLocked[8] = { false, false, false, false, false, false, false, false };
     int trackComplexity[8] = { 50, 50, 50, 50, 50, 50, 50, 50 };
+
+    // ★ 新パラメーターの追加
+    bool trackEntrpLocked[8] = { false, false, false, false, false, false, false, false };
+    int trackEntropy[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; // 0〜100
+
+    bool trackShiftLocked[8] = { false, false, false, false, false, false, false, false };
+    int trackShift[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; // -50 〜 50
+
     int globalBarCount = 4;
 
     bool trackMuted[8] = { false, false, false, false, false, false, false, false };
