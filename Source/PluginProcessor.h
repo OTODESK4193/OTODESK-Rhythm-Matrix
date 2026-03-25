@@ -1,7 +1,6 @@
 #pragma once
-
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <juce_audio_formats/juce_audio_formats.h> // ★追加：オーディオ形式管理用
+#include <juce_audio_formats/juce_audio_formats.h>
 #include <atomic>
 
 class AIDrumMachineAudioProcessor : public juce::AudioProcessor
@@ -12,18 +11,14 @@ public:
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
-
 #ifndef JucePlugin_PreferredChannelConfigurations
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
 #endif
 
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override;
-
     const juce::String getName() const override;
-
     bool acceptsMidi() const override;
     bool producesMidi() const override;
     bool isMidiEffect() const override;
@@ -42,6 +37,10 @@ public:
     int trackDivisions[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
     bool trackLocked[8] = { false, false, false, false, false, false, false, false };
 
+    // ★追加：Mute / Solo用フラグ
+    bool trackMuted[8] = { false, false, false, false, false, false, false, false };
+    bool trackSoloed[8] = { false, false, false, false, false, false, false, false };
+
     int getTrackCurrentStep(int trackIndex) const {
         if (trackIndex >= 0 && trackIndex < 8) return trackCurrentStep[trackIndex];
         return 0;
@@ -57,27 +56,30 @@ public:
         for (int i = 0; i < 8; ++i) trackCurrentStep[i] = -1;
     }
 
-    // ★追加：サンプラー機能の関数と変数
     void loadSample(int trackIndex, const juce::String& filePath);
     bool hasSampleLoaded(int trackIndex) const { return hasSample[trackIndex]; }
+
+    // ★追加：トラック操作のロジック関数
+    void shiftTrackLeft(int trackIndex);
+    void shiftTrackRight(int trackIndex);
+    void clearTrack(int trackIndex);
+    void randomizeTrack(int trackIndex);
 
 private:
     int samplesInLoop = 0;
     int trackCurrentStep[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
 
-    // シンセ用変数
     float trackEnv[8] = { 0.0f };
     float trackPitchEnv[8] = { 0.0f };
     float trackPhase[8] = { 0.0f };
     juce::Random random;
 
-    // ★追加：サンプラー用変数群
     juce::AudioFormatManager formatManager;
     juce::AudioSampleBuffer sampleBuffers[8];
     bool hasSample[8] = { false };
     int samplePlayPos[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
     float sampleVolume[8] = { 1.0f };
-    juce::CriticalSection sampleLock; // オーディオスレッド保護用ロック
+    juce::CriticalSection sampleLock;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AIDrumMachineAudioProcessor)
 };

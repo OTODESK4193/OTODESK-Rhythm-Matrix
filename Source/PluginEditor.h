@@ -1,11 +1,9 @@
 #pragma once
-
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "Network/GeminiClient.h"
 
-// ★修正：FileDragAndDropTarget を追加継承してOSからのファイルドロップを受信可能に
 class AIDrumMachineAudioProcessorEditor : public juce::AudioProcessorEditor,
     public juce::Timer,
     public juce::DragAndDropContainer,
@@ -17,12 +15,10 @@ public:
 
     void paint(juce::Graphics&) override;
     void resized() override;
-
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
     void mouseUp(const juce::MouseEvent& e) override;
 
-    // ★追加：外部ファイルドラッグ＆ドロップ用関数
     bool isInterestedInFileDrag(const juce::StringArray& files) override;
     void filesDropped(const juce::StringArray& files, int x, int y) override;
     void fileDragEnter(const juce::StringArray& files, int x, int y) override;
@@ -40,6 +36,14 @@ private:
     juce::Label tempoLabel;
     juce::int64 lastStopClickTime = 0;
 
+    juce::TextButton tabSeqButton{ "SEQUENCER" };
+    juce::TextButton tabSetupButton{ "SETUP" };
+    enum ViewMode { SequencerView, SetupView };
+    ViewMode currentView = SequencerView;
+
+    // ★追加：全体クリアボタン
+    juce::TextButton btnClearAll{ "CLEAR ALL" };
+
     juce::TextButton generateButton{ "Generate" };
     juce::ComboBox styleMenu;
     juce::Label statusLabel;
@@ -53,6 +57,12 @@ private:
     juce::Label trackNameLabels[8];
     juce::String trackNotes[8] = { "C1", "D1", "F#1", "A#1", "D#1", "F1", "A1", "D2" };
 
+    juce::TextButton btnMute[8];
+    juce::TextButton btnSolo[8];
+    juce::TextButton btnClear[8];
+    juce::TextButton btnShiftL[8];
+    juce::TextButton btnShiftR[8];
+
     juce::Rectangle<float> dragAllArea;
     juce::Rectangle<float> lockArea;
     juce::Rectangle<float> sampleArea;
@@ -60,11 +70,11 @@ private:
     juce::Rectangle<float> midiDragArea;
     bool isDragging = false;
 
-    // ★追加：ドラッグ中にどのトラックがターゲットになっているかを保持
     int dragTargetTrack = -1;
-    int getTrackIndexFromMouseY(int y); // 座標計算ヘルパー
+    int getTrackIndexFromMouseY(int y);
 
     void updateTabColors();
+    void updateViewVisibility();
     bool needsPagination() const;
     juce::File exportMidi(int trackIndex);
 
