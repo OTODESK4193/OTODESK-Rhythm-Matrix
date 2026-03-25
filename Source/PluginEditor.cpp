@@ -4,18 +4,39 @@
 AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachineAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
-    setSize(600, 400);
+    // ★修正：ゆとりを持たせるため横幅を850に拡張
+    setSize(850, 440);
 
+    // --- トランスポート ---
+    addAndMakeVisible(syncButton);
+    addAndMakeVisible(playButton);
+    addAndMakeVisible(stopButton);
+    addAndMakeVisible(tempoLabel);
+
+    syncButton.setToggleState(audioProcessor.isSyncEnabled.load(), juce::dontSendNotification);
+    syncButton.onClick = [this] { audioProcessor.isSyncEnabled = syncButton.getToggleState(); };
+    playButton.onClick = [this] { audioProcessor.isPlayingInternal = true; };
+    stopButton.onClick = [this] {
+        auto now = juce::Time::currentTimeMillis();
+        if (now - lastStopClickTime < 500) audioProcessor.resetPosition();
+        else audioProcessor.isPlayingInternal = false;
+        lastStopClickTime = now;
+        };
+    tempoLabel.setJustificationType(juce::Justification::centred);
+    tempoLabel.setEditable(true);
+    tempoLabel.onTextChange = [this] {
+        double newTempo = tempoLabel.getText().getDoubleValue();
+        if (newTempo >= 20.0 && newTempo <= 999.0) audioProcessor.internalTempo = newTempo;
+        };
+
+    // --- 生成コントロール ---
     addAndMakeVisible(generateButton);
     addAndMakeVisible(styleMenu);
     addAndMakeVisible(statusLabel);
 
-    // ★追加：3つ目の選択肢として「オフライン・テストモード」を追加
     styleMenu.addItem("Chaotic Polyrhythm (Div 1-9)", 1);
     styleMenu.addItem("Standard Techno (Div 4 Only)", 2);
     styleMenu.addItem("Offline Random (No API)", 3);
-
-    // UI検証がしやすいように、デフォルトをOfflineに設定しておきます
     styleMenu.setSelectedId(3);
 
     addAndMakeVisible(tabButton1);
@@ -38,21 +59,32 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
     updateTabColors();
 
+    // ★追加：書き換え可能なトラック名ラベルの初期化
+    juce::String defaultNames[8] = { "Kick", "Snare", "CHH", "OHH", "Clap", "L.Tom", "M.Tom", "H.Tom" };
+    for (int i = 0; i < 8; ++i) {
+        addAndMakeVisible(trackNameLabels[i]);
+        trackNameLabels[i].setText(defaultNames[i], juce::dontSendNotification);
+        trackNameLabels[i].setEditable(true); // クリックで編集可能に
+        trackNameLabels[i].setJustificationType(juce::Justification::centredLeft);
+        trackNameLabels[i].setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+        trackNameLabels[i].setColour(juce::Label::textColourId, juce::Colours::white);
+        trackNameLabels[i].setColour(juce::Label::textWhenEditingColourId, juce::Colours::orange);
+    }
+
     juce::Component::SafePointer<AIDrumMachineAudioProcessorEditor> safeThis(this);
 
     generateButton.onClick = [safeThis, this]
         {
             if (safeThis == nullptr) return;
 
-            // ★追加：オフラインモードが選ばれている場合の処理
             if (styleMenu.getSelectedId() == 3)
             {
                 statusLabel.setText("SUCCESS! Offline Random generated.", juce::dontSendNotification);
-
                 juce::Random random;
+
                 for (int i = 0; i < 8; ++i)
                 {
-                    // 1〜9のランダムな分割数を決定
+                    if (safeThis->audioProcessor.trackLocked[i]) continue;
                     int div = random.nextInt(juce::Range<int>(1, 10));
                     safeThis->audioProcessor.trackDivisions[i] = div;
 
@@ -60,21 +92,12 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
                     for (int j = 0; j < 36; ++j)
                     {
                         if (j < totalSteps) {
-                            // 30%の確率でノートをオンにする（ベロシティ80〜100）
-                            if (random.nextFloat() > 0.7f) {
-                                safeThis->audioProcessor.drumPattern[i][j] = random.nextInt(juce::Range<int>(80, 101));
-                            }
-                            else {
-                                safeThis->audioProcessor.drumPattern[i][j] = 0;
-                            }
+                            if (random.nextFloat() > 0.7f) safeThis->audioProcessor.drumPattern[i][j] = random.nextInt(juce::Range<int>(80, 101));
+                            else safeThis->audioProcessor.drumPattern[i][j] = 0;
                         }
-                        else {
-                            // 使用しない余剰バッファは0で初期化
-                            safeThis->audioProcessor.drumPattern[i][j] = 0;
-                        }
+                        else safeThis->audioProcessor.drumPattern[i][j] = 0;
                     }
                 }
-
                 safeThis->currentViewBar = 0;
                 safeThis->updateTabColors();
                 safeThis->resized();
@@ -82,20 +105,11 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             }
             else
             {
-                // 今までのAPI通信モード
                 statusLabel.setText("Requesting Gemini (4 Bars)...", juce::dontSendNotification);
-
-                // ★注意：再度ご自身のAPIキーに書き換えてください！
-                juce::String myKey = "AIzaSyBT2vQXyacUMdmNOF2OjkYYQ_OPtJgORtQ";
-
+                juce::String myKey = "ご自身のAPIキーをここに入力してください";
                 juce::String userPrompt = "";
-                if (styleMenu.getSelectedId() == 1) {
-                    userPrompt = "Generate a chaotic and evolving polyrhythmic techno beat for 4 bars. Use divisions like 5 or 7 for hi-hats.";
-                }
-                else {
-                    userPrompt = "Generate a standard 4-on-the-floor techno beat for 4 bars. CRITICAL INSTRUCTION: You MUST set 'division': 4 for ALL 8 tracks. Do NOT use any division other than 4. The 'pattern' array for each track MUST have exactly 16 items.";
-                }
-
+                if (styleMenu.getSelectedId() == 1) userPrompt = "Generate a chaotic and evolving polyrhythmic techno beat for 4 bars. Use divisions like 5 or 7 for hi-hats.";
+                else userPrompt = "Generate a standard 4-on-the-floor techno beat for 4 bars. CRITICAL INSTRUCTION: You MUST set 'division': 4 for ALL 8 tracks. Do NOT use any division other than 4. The 'pattern' array for each track MUST have exactly 16 items.";
                 gemini.fetchDrumPattern(userPrompt, myKey);
             }
         };
@@ -107,8 +121,8 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
             for (int i = 0; i < 8; ++i)
             {
+                if (safeThis->audioProcessor.trackLocked[i]) continue;
                 juce::Identifier trackKey("track" + juce::String(i + 1));
-
                 if (data.hasProperty(trackKey))
                 {
                     auto trackObj = data[trackKey];
@@ -120,7 +134,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
                         int div = static_cast<int>(trackObj[divKey]);
                         if (div < 1) div = 1;
                         if (div > 9) div = 9;
-
                         safeThis->audioProcessor.trackDivisions[i] = div;
 
                         auto* patternArray = trackObj[patKey].getArray();
@@ -129,46 +142,29 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
                             int totalSteps = div * 4;
                             for (int j = 0; j < 36; ++j)
                             {
-                                if (j < totalSteps && j < patternArray->size()) {
-                                    int velocity = static_cast<int>(patternArray->getReference(j));
-                                    safeThis->audioProcessor.drumPattern[i][j] = velocity;
-                                }
-                                else {
-                                    safeThis->audioProcessor.drumPattern[i][j] = 0;
-                                }
+                                if (j < totalSteps && j < patternArray->size()) safeThis->audioProcessor.drumPattern[i][j] = static_cast<int>(patternArray->getReference(j));
+                                else safeThis->audioProcessor.drumPattern[i][j] = 0;
                             }
                         }
                     }
                 }
             }
-
             safeThis->currentViewBar = 0;
             safeThis->updateTabColors();
             safeThis->resized();
             safeThis->repaint();
         };
 
-    gemini.onError = [safeThis](const juce::String& err)
-        {
-            if (safeThis != nullptr)
-                safeThis->statusLabel.setText("Error: " + err, juce::dontSendNotification);
-        };
+    gemini.onError = [safeThis](const juce::String& err) { if (safeThis != nullptr) safeThis->statusLabel.setText("Error: " + err, juce::dontSendNotification); };
 
     startTimerHz(30);
 }
 
-AIDrumMachineAudioProcessorEditor::~AIDrumMachineAudioProcessorEditor()
-{
-    stopTimer();
-}
+AIDrumMachineAudioProcessorEditor::~AIDrumMachineAudioProcessorEditor() { stopTimer(); }
 
 bool AIDrumMachineAudioProcessorEditor::needsPagination() const
 {
-    for (int i = 0; i < 8; ++i) {
-        if (audioProcessor.trackDivisions[i] >= 5) {
-            return true;
-        }
-    }
+    for (int i = 0; i < 8; ++i) if (audioProcessor.trackDivisions[i] >= 5) return true;
     return false;
 }
 
@@ -182,97 +178,45 @@ void AIDrumMachineAudioProcessorEditor::updateTabColors()
 
 void AIDrumMachineAudioProcessorEditor::timerCallback()
 {
-    repaint();
-}
-
-void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
-{
-    g.fillAll(juce::Colours::darkgrey);
-
-    auto area = getLocalBounds().reduced(20);
-    auto gridArea = area.removeFromBottom(250);
-
-    int rows = 8;
-    float cellH = static_cast<float>(gridArea.getHeight()) / rows;
-
-    bool paginate = needsPagination();
-
-    for (int row = 0; row < rows; ++row)
-    {
-        int trackIndex = (rows - 1) - row;
-        int div = audioProcessor.trackDivisions[trackIndex];
-        if (div < 1) div = 1;
-
-        int colsToDraw = paginate ? div : (div * 4);
-        float cellW = static_cast<float>(gridArea.getWidth()) / colsToDraw;
-
-        for (int col = 0; col < colsToDraw; ++col)
-        {
-            juce::Rectangle<float> cell(gridArea.getX() + col * cellW,
-                gridArea.getY() + row * cellH,
-                cellW - 2.0f,
-                cellH - 2.0f);
-
-            int globalStep = paginate ? ((currentViewBar * div) + col) : col;
-            int velocity = audioProcessor.drumPattern[trackIndex][globalStep];
-
-            if (velocity > 0)
-            {
-                float alpha = 0.3f + 0.7f * (velocity / 100.0f);
-                g.setColour(juce::Colours::orange.withAlpha(alpha));
-            }
-            else
-            {
-                g.setColour(juce::Colours::black.withAlpha(0.4f));
-            }
-
-            g.fillRoundedRectangle(cell, 4.0f);
-        }
-
-        int currentStep = audioProcessor.getTrackCurrentStep(trackIndex);
-
-        if (paginate)
-        {
-            int startStepOfThisBar = currentViewBar * div;
-            int endStepOfThisBar = startStepOfThisBar + div;
-
-            if (currentStep >= startStepOfThisBar && currentStep < endStepOfThisBar)
-            {
-                int localStep = currentStep - startStepOfThisBar;
-                float playheadX = gridArea.getX() + localStep * cellW;
-                juce::Rectangle<float> playheadRect(playheadX, gridArea.getY() + row * cellH, cellW - 2.0f, cellH - 2.0f);
-
-                g.setColour(juce::Colours::white.withAlpha(0.4f));
-                g.fillRoundedRectangle(playheadRect, 4.0f);
-            }
-        }
-        else
-        {
-            if (currentStep < colsToDraw)
-            {
-                float playheadX = gridArea.getX() + currentStep * cellW;
-                juce::Rectangle<float> playheadRect(playheadX, gridArea.getY() + row * cellH, cellW - 2.0f, cellH - 2.0f);
-
-                g.setColour(juce::Colours::white.withAlpha(0.4f));
-                g.fillRoundedRectangle(playheadRect, 4.0f);
-            }
-        }
+    if (audioProcessor.isSyncEnabled.load()) {
+        playButton.setEnabled(false);
+        stopButton.setEnabled(false);
+        tempoLabel.setEditable(false);
+        tempoLabel.setText("DAW: " + juce::String(audioProcessor.currentBpm.load(), 1) + " BPM", juce::dontSendNotification);
     }
+    else {
+        playButton.setEnabled(true);
+        stopButton.setEnabled(true);
+        tempoLabel.setEditable(true);
+        if (!tempoLabel.isBeingEdited()) tempoLabel.setText(juce::String(audioProcessor.internalTempo.load(), 1) + " BPM", juce::dontSendNotification);
+    }
+    repaint();
 }
 
 void AIDrumMachineAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced(20);
 
-    auto topControls = area.removeFromTop(30);
-    generateButton.setBounds(topControls.removeFromLeft(120));
-    topControls.removeFromLeft(10);
-    styleMenu.setBounds(topControls.removeFromLeft(200));
-    topControls.removeFromLeft(10);
-    statusLabel.setBounds(topControls);
+    auto row1 = area.removeFromTop(30);
+    syncButton.setBounds(row1.removeFromLeft(60));
+    playButton.setBounds(row1.removeFromLeft(60).reduced(2));
+    stopButton.setBounds(row1.removeFromLeft(60).reduced(2));
+    row1.removeFromLeft(10);
+    tempoLabel.setBounds(row1.removeFromLeft(80));
+
+    row1.removeFromLeft(20);
+    dragAllArea = row1.removeFromLeft(140).toFloat();
+
+    area.removeFromTop(10);
+
+    auto row2 = area.removeFromTop(30);
+    generateButton.setBounds(row2.removeFromLeft(120));
+    row2.removeFromLeft(10);
+    styleMenu.setBounds(row2.removeFromLeft(200));
+    row2.removeFromLeft(10);
+    statusLabel.setBounds(row2);
 
     bool paginate = needsPagination();
-
     tabButton1.setVisible(paginate);
     tabButton2.setVisible(paginate);
     tabButton3.setVisible(paginate);
@@ -287,41 +231,236 @@ void AIDrumMachineAudioProcessorEditor::resized()
         tabButton3.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
         tabButton4.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
     }
+
+    auto bottomArea = area.removeFromBottom(250).toFloat();
+    lockArea = bottomArea.removeFromLeft(50);
+
+    // ★修正：将来のSample D&Dスロット用に120px確保し、中にLabelを配置
+    sampleArea = bottomArea.removeFromLeft(120);
+    int rows = 8;
+    float cellH = sampleArea.getHeight() / rows;
+    for (int row = 0; row < rows; ++row) {
+        int trackIndex = (rows - 1) - row;
+        juce::Rectangle<float> rowArea(sampleArea.getX(), sampleArea.getY() + row * cellH, sampleArea.getWidth(), cellH);
+        // Labelの配置 (左側70px)
+        trackNameLabels[trackIndex].setBounds(rowArea.removeFromLeft(75).reduced(2).toNearestInt());
+    }
+
+    midiDragArea = bottomArea.removeFromRight(40);
+    mainGridArea = bottomArea; // 残りがグリッド
+}
+
+void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
+{
+    g.fillAll(juce::Colours::darkgrey);
+
+    g.setColour(juce::Colours::cyan.withAlpha(0.6f));
+    g.fillRoundedRectangle(dragAllArea, 4.0f);
+    g.setColour(juce::Colours::white);
+    g.setFont(14.0f);
+    g.drawText("DRAG ALL MIDI", dragAllArea, juce::Justification::centred, false);
+
+    int rows = 8;
+    float cellH = mainGridArea.getHeight() / rows;
+    bool paginate = needsPagination();
+
+    for (int row = 0; row < rows; ++row)
+    {
+        int trackIndex = (rows - 1) - row;
+
+        // 1. Lockボタン
+        juce::Rectangle<float> lockBtn(lockArea.getX(), lockArea.getY() + row * cellH, lockArea.getWidth() - 4.0f, cellH - 2.0f);
+        g.setColour(audioProcessor.trackLocked[trackIndex] ? juce::Colours::red.withAlpha(0.8f) : juce::Colours::grey.withAlpha(0.5f));
+        g.fillRoundedRectangle(lockBtn, 4.0f);
+        g.setColour(juce::Colours::white);
+        g.setFont(12.0f);
+        g.drawText(audioProcessor.trackLocked[trackIndex] ? "LOCKED" : "FREE", lockBtn, juce::Justification::centred, false);
+
+        // ★追加：2. 将来のサンプルD&D用スロットの背景と、固定ノート名の描画
+        juce::Rectangle<float> sArea(sampleArea.getX() + 2.0f, sampleArea.getY() + row * cellH + 2.0f, sampleArea.getWidth() - 4.0f, cellH - 4.0f);
+        g.setColour(juce::Colours::darkgrey.darker(0.8f)); // スロットっぽく少し暗くする
+        g.fillRoundedRectangle(sArea, 4.0f);
+
+        // ノート名 (C1等) をスロットの右側に描画
+        juce::Rectangle<float> noteRect(sampleArea.getX() + 75.0f, sampleArea.getY() + row * cellH, 45.0f, cellH);
+        g.setColour(juce::Colours::grey);
+        g.setFont(12.0f);
+        g.drawText(trackNotes[trackIndex], noteRect, juce::Justification::centred, false);
+
+        // 3. 個別MIDIドラッグボタン
+        juce::Rectangle<float> mDrag(midiDragArea.getX() + 4.0f, midiDragArea.getY() + row * cellH, midiDragArea.getWidth() - 4.0f, cellH - 2.0f);
+        g.setColour(juce::Colours::cyan.withAlpha(0.3f));
+        g.fillRoundedRectangle(mDrag, 4.0f);
+        g.setColour(juce::Colours::white);
+        g.setFont(11.0f);
+        g.drawText("MIDI", mDrag, juce::Justification::centred, false);
+
+        // 4. グリッド
+        int div = audioProcessor.trackDivisions[trackIndex];
+        if (div < 1) div = 1;
+        int colsToDraw = paginate ? div : (div * 4);
+        float cellW = mainGridArea.getWidth() / colsToDraw;
+
+        for (int col = 0; col < colsToDraw; ++col)
+        {
+            juce::Rectangle<float> cell(mainGridArea.getX() + col * cellW, mainGridArea.getY() + row * cellH, cellW - 2.0f, cellH - 2.0f);
+            int globalStep = paginate ? ((currentViewBar * div) + col) : col;
+            int velocity = audioProcessor.drumPattern[trackIndex][globalStep];
+
+            if (velocity > 0) {
+                g.setColour(juce::Colours::orange.withAlpha(0.3f + 0.7f * (velocity / 100.0f)));
+            }
+            else {
+                g.setColour(juce::Colours::black.withAlpha(0.4f));
+            }
+            g.fillRoundedRectangle(cell, 4.0f);
+        }
+
+        // プレイヘッド
+        int currentStep = audioProcessor.getTrackCurrentStep(trackIndex);
+        if (paginate) {
+            int startStepOfThisBar = currentViewBar * div;
+            if (currentStep >= startStepOfThisBar && currentStep < startStepOfThisBar + div) {
+                float playheadX = mainGridArea.getX() + (currentStep - startStepOfThisBar) * cellW;
+                g.setColour(juce::Colours::white.withAlpha(0.4f));
+                g.fillRoundedRectangle(juce::Rectangle<float>(playheadX, mainGridArea.getY() + row * cellH, cellW - 2.0f, cellH - 2.0f), 4.0f);
+            }
+        }
+        else {
+            if (currentStep < colsToDraw) {
+                float playheadX = mainGridArea.getX() + currentStep * cellW;
+                g.setColour(juce::Colours::white.withAlpha(0.4f));
+                g.fillRoundedRectangle(juce::Rectangle<float>(playheadX, mainGridArea.getY() + row * cellH, cellW - 2.0f, cellH - 2.0f), 4.0f);
+            }
+        }
+    }
 }
 
 void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e)
 {
-    auto area = getLocalBounds().reduced(20);
-    auto gridArea = area.removeFromBottom(250);
+    juce::Point<float> pos = e.getPosition().toFloat();
+    int rows = 8;
 
-    if (gridArea.contains(e.getPosition()))
+    if (lockArea.contains(pos)) {
+        int row = static_cast<int>((pos.y - lockArea.getY()) / (lockArea.getHeight() / rows));
+        if (row >= 0 && row < rows) {
+            int trackIndex = (rows - 1) - row;
+            audioProcessor.trackLocked[trackIndex] = !audioProcessor.trackLocked[trackIndex];
+            repaint();
+        }
+    }
+    else if (mainGridArea.contains(pos)) {
+        int row = static_cast<int>((pos.y - mainGridArea.getY()) / (mainGridArea.getHeight() / rows));
+        if (row >= 0 && row < rows) {
+            int trackIndex = (rows - 1) - row;
+            int div = audioProcessor.trackDivisions[trackIndex];
+            if (div < 1) div = 1;
+
+            bool paginate = needsPagination();
+            int colsToDraw = paginate ? div : (div * 4);
+            float cellW = mainGridArea.getWidth() / colsToDraw;
+
+            int col = static_cast<int>((pos.x - mainGridArea.getX()) / cellW);
+            if (col >= 0 && col < colsToDraw) {
+                int globalStep = paginate ? ((currentViewBar * div) + col) : col;
+                audioProcessor.drumPattern[trackIndex][globalStep] = (audioProcessor.drumPattern[trackIndex][globalStep] == 0) ? 100 : 0;
+                repaint();
+            }
+        }
+    }
+}
+
+void AIDrumMachineAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e)
+{
+    if (e.mouseWasDraggedSinceMouseDown() && !isDragging)
     {
-        int rows = 8;
-        float cellH = static_cast<float>(gridArea.getHeight()) / rows;
+        isDragging = true;
+        juce::Point<float> startPos = e.getMouseDownPosition().toFloat();
+        int trackToExport = -2;
 
-        int row = static_cast<int>((e.y - gridArea.getY()) / cellH);
-        if (row < 0 || row >= rows) return;
+        if (dragAllArea.contains(startPos)) {
+            trackToExport = -1;
+        }
+        else if (midiDragArea.contains(startPos)) {
+            int rows = 8;
+            int row = static_cast<int>((startPos.y - midiDragArea.getY()) / (midiDragArea.getHeight() / rows));
+            if (row >= 0 && row < rows) trackToExport = (rows - 1) - row;
+        }
 
-        int trackIndex = (rows - 1) - row;
-        int div = audioProcessor.trackDivisions[trackIndex];
+        if (trackToExport != -2) {
+            juce::File midiFile = exportMidi(trackToExport);
+            if (midiFile.existsAsFile()) {
+                juce::StringArray files;
+                files.add(midiFile.getFullPathName());
+
+                if (auto* dragContainer = juce::DragAndDropContainer::findParentDragContainerFor(this)) {
+                    dragContainer->performExternalDragDropOfFiles(files, false, this);
+                }
+                else {
+                    performExternalDragDropOfFiles(files, false, this);
+                }
+            }
+        }
+    }
+}
+
+void AIDrumMachineAudioProcessorEditor::mouseUp(const juce::MouseEvent& e)
+{
+    isDragging = false;
+}
+
+juce::File AIDrumMachineAudioProcessorEditor::exportMidi(int trackIndex)
+{
+    juce::MidiMessageSequence sequence;
+    int midiNotes[8] = { 36, 38, 42, 46, 39, 41, 45, 50 };
+
+    int startTrack = (trackIndex == -1) ? 0 : trackIndex;
+    int endTrack = (trackIndex == -1) ? 7 : trackIndex;
+
+    double ppq = 960.0;
+    double ticksPerBar = ppq * 4.0;
+
+    for (int trk = startTrack; trk <= endTrack; ++trk)
+    {
+        int div = audioProcessor.trackDivisions[trk];
         if (div < 1) div = 1;
 
-        bool paginate = needsPagination();
-        int colsToDraw = paginate ? div : (div * 4);
-        float cellW = static_cast<float>(gridArea.getWidth()) / colsToDraw;
+        double ticksPerStep = ticksPerBar / static_cast<double>(div);
 
-        int col = static_cast<int>((e.x - gridArea.getX()) / cellW);
-        if (col < 0 || col >= colsToDraw) return;
+        for (int step = 0; step < div * 4; ++step)
+        {
+            int vel = audioProcessor.drumPattern[trk][step];
+            if (vel > 0)
+            {
+                double startTime = step * ticksPerStep;
+                double endTime = startTime + (ticksPerStep * 0.5);
 
-        int globalStep = paginate ? ((currentViewBar * div) + col) : col;
+                juce::uint8 midiVel = static_cast<juce::uint8>((vel / 100.0f) * 127.0f);
+                if (midiVel == 0) midiVel = 1;
 
-        if (audioProcessor.drumPattern[trackIndex][globalStep] == 0) {
-            audioProcessor.drumPattern[trackIndex][globalStep] = 100;
+                auto noteOn = juce::MidiMessage::noteOn(10, midiNotes[trk], midiVel);
+                noteOn.setTimeStamp(startTime);
+                sequence.addEvent(noteOn);
+
+                auto noteOff = juce::MidiMessage::noteOff(10, midiNotes[trk]);
+                noteOff.setTimeStamp(endTime);
+                sequence.addEvent(noteOff);
+            }
         }
-        else {
-            audioProcessor.drumPattern[trackIndex][globalStep] = 0;
-        }
-
-        repaint();
     }
+    sequence.updateMatchedPairs();
+
+    juce::MidiFile midiFile;
+    midiFile.setTicksPerQuarterNote(static_cast<short>(ppq));
+    midiFile.addTrack(sequence);
+
+    juce::String filename = (trackIndex == -1) ? "Polyrhythm_All.mid" : ("Polyrhythm_Track_" + juce::String(trackIndex + 1) + ".mid");
+    juce::File tempFile = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile(filename);
+    tempFile.deleteFile();
+
+    juce::FileOutputStream outStream(tempFile);
+    midiFile.writeTo(outStream);
+    outStream.flush();
+
+    return tempFile;
 }

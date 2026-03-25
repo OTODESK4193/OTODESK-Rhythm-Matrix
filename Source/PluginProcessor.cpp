@@ -15,9 +15,7 @@ AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
 {
 }
 
-AIDrumMachineAudioProcessor::~AIDrumMachineAudioProcessor()
-{
-}
+AIDrumMachineAudioProcessor::~AIDrumMachineAudioProcessor() {}
 
 const juce::String AIDrumMachineAudioProcessor::getName() const { return JucePlugin_Name; }
 bool AIDrumMachineAudioProcessor::acceptsMidi() const { return false; }
@@ -32,9 +30,8 @@ void AIDrumMachineAudioProcessor::changeProgramName(int index, const juce::Strin
 
 void AIDrumMachineAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    samplesInLoop = 0;
+    resetPosition();
     for (int i = 0; i < 8; ++i) {
-        trackCurrentStep[i] = 0;
         trackEnv[i] = 0.0f;
         trackPitchEnv[i] = 0.0f;
         trackPhase[i] = 0.0f;
@@ -66,8 +63,26 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     float sampleRate = (float)getSampleRate();
     if (sampleRate <= 0.0f) sampleRate = 44100.0f;
 
-    // テンポ120BPMの1小節の長さと、4小節ループの長さ
-    int samplesPerBar = (int)(sampleRate * (60.0f / 120.0f) * 4.0f);
+    // ★追加：トランスポート（DAW同期）の処理
+    double bpm = internalTempo.load();
+    bool isPlaying = isPlayingInternal.load();
+
+    if (isSyncEnabled.load()) {
+        if (auto* playHead = getPlayHead()) {
+            if (auto pos = playHead->getPosition()) {
+                if (pos->getBpm().hasValue()) bpm = *pos->getBpm();
+                isPlaying = pos->getIsPlaying();
+            }
+        }
+    }
+
+    // UI表示用と安全策（極端なBPMを防ぐ）
+    if (bpm < 20.0) bpm = 20.0;
+    if (bpm > 999.0) bpm = 999.0;
+    currentBpm.store(bpm);
+
+    // ★修正：固定120BPMから、現在のBPMを用いた動的計算に変更
+    int samplesPerBar = (int)(sampleRate * (60.0 / bpm) * 4.0);
     int samplesPerLoop = samplesPerBar * 4;
     float pi2 = juce::MathConstants<float>::twoPi;
 
@@ -76,43 +91,42 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     for (int i = 0; i < numSamples; ++i)
     {
-        // 1. 4小節シーケンサー
-        samplesInLoop++;
-        if (samplesInLoop >= samplesPerLoop) {
-            samplesInLoop = 0;
-        }
+        // ★修正：再生中(isPlaying)の時だけシーケンサーを進める
+        if (isPlaying) {
+            samplesInLoop++;
+            if (samplesInLoop >= samplesPerLoop) {
+                samplesInLoop = 0;
+            }
 
-        for (int trk = 0; trk < 8; ++trk)
-        {
-            int div = trackDivisions[trk];
-            if (div < 1) div = 1;
-            int totalStepsInLoop = div * 4; // 4小節トータルのステップ数
-
-            // ループ全体の中で、今どのステップにいるかを計算
-            int currentStepForTrack = (samplesInLoop * totalStepsInLoop) / samplesPerLoop;
-
-            // ステップが切り替わった瞬間、トリガーを引く
-            if (currentStepForTrack != trackCurrentStep[trk])
+            for (int trk = 0; trk < 8; ++trk)
             {
-                trackCurrentStep[trk] = currentStepForTrack;
+                int div = trackDivisions[trk];
+                if (div < 1) div = 1;
+                int totalStepsInLoop = div * 4;
 
-                int velocity = drumPattern[trk][trackCurrentStep[trk]];
-                if (velocity > 0)
+                int currentStepForTrack = (samplesInLoop * totalStepsInLoop) / samplesPerLoop;
+
+                if (currentStepForTrack != trackCurrentStep[trk])
                 {
-                    trackEnv[trk] = velocity / 100.0f;
-                    trackPitchEnv[trk] = 1.0f;
+                    trackCurrentStep[trk] = currentStepForTrack;
+
+                    int velocity = drumPattern[trk][trackCurrentStep[trk]];
+                    if (velocity > 0)
+                    {
+                        trackEnv[trk] = velocity / 100.0f;
+                        trackPitchEnv[trk] = 1.0f;
+                    }
                 }
             }
         }
 
-        // 2. シンセサイザー（既存の8系統そのまま）
+        // シンセサイザー処理（既存のまま）
         float mixOut = 0.0f;
         for (int trk = 0; trk < 8; ++trk)
         {
             if (trackEnv[trk] > 0.001f)
             {
                 float osc = 0.0f;
-
                 if (trk == 0) {
                     float freq = 50.0f + 200.0f * trackPitchEnv[trk];
                     trackPhase[trk] += pi2 * freq / sampleRate;

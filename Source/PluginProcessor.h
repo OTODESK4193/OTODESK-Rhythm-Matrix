@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <atomic>
 
 class AIDrumMachineAudioProcessor : public juce::AudioProcessor
 {
@@ -36,24 +37,36 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    // 4小節対応（1小節最大9分割 × 4 = 36）
     int drumPattern[8][36] = { {0} };
-    int trackDivisions[8] = { 4, 4, 4, 4, 4, 4, 4, 4 }; // 各トラックの1小節あたりの分割数
+    int trackDivisions[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
+    bool trackLocked[8] = { false, false, false, false, false, false, false, false };
 
-    // 画面（Editor）が「今どこを再生しているか（0〜35）」を知るための関数
     int getTrackCurrentStep(int trackIndex) const {
         if (trackIndex >= 0 && trackIndex < 8) return trackCurrentStep[trackIndex];
         return 0;
     }
 
-private:
-    // ★修正: 4小節（ループ全体）の絶対同期用タイマー
-    int samplesInLoop = 0;
-    int trackCurrentStep[8] = { 0 }; // 各トラックの現在のステップ位置（0〜35）
+    // ★追加：トランスポート（再生・同期）用の変数
+    std::atomic<bool> isSyncEnabled{ false };
+    std::atomic<bool> isPlayingInternal{ false };
+    std::atomic<double> internalTempo{ 120.0 };
+    std::atomic<double> currentBpm{ 120.0 }; // UI表示用（現在適用されているBPM）
 
-    float trackEnv[8] = { 0.0f };      // 音量（アンプ）エンベロープ
-    float trackPitchEnv[8] = { 0.0f }; // ピッチ（アタック感）エンベロープ
-    float trackPhase[8] = { 0.0f };    // オシレーターの位相
+    // ★追加：頭出し（ストップ2回押し）用関数
+    void resetPosition() {
+        samplesInLoop = 0;
+        for (int i = 0; i < 8; ++i) {
+            trackCurrentStep[i] = -1; // 次の再生時に確実にトリガーさせるため -1 にリセット
+        }
+    }
+
+private:
+    int samplesInLoop = 0;
+    int trackCurrentStep[8] = { -1, -1, -1, -1, -1, -1, -1, -1 }; // 初期値を-1に変更
+
+    float trackEnv[8] = { 0.0f };
+    float trackPitchEnv[8] = { 0.0f };
+    float trackPhase[8] = { 0.0f };
 
     juce::Random random;
 
