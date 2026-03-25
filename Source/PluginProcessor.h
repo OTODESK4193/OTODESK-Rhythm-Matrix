@@ -25,13 +25,18 @@ struct InstrumentPatch {
     float vol;         // Output Volume
 };
 
-// パッチIDの定義
+// ★ 50種類のパッチID
 enum PatchID {
-    K_909, K_808, K_Acoustic, K_Deep, K_Punch, K_Hard, K_Soft,
-    S_909, S_808, S_Tight, S_Fat, S_Rim, S_Clap, S_Snap,
-    H_Closed, H_Open, H_Fast, H_Shaker,
-    P_TomL, P_TomM, P_TomH, P_Conga, P_Bongo, P_Tabla, P_Wood, P_Cowbell, P_Gong,
-    P_Noise, P_Sub, P_Chaos,
+    // Kicks (10)
+    K_909, K_808, K_Acoustic, K_Deep, K_Punch, K_Hard, K_Soft, K_Sub, K_Click, K_FM,
+    // Snares & Claps (10)
+    S_909, S_808, S_Tight, S_Fat, S_Rim, S_Clap, S_Snap, S_Noise, S_Lofi, S_Acoustic,
+    // Hats & Cymbals (8)
+    H_Closed, H_Open, H_Fast, H_Shaker, H_Tambourine, H_Ride, H_Crash, H_Metallic,
+    // Percussions & Toms (12)
+    P_TomL, P_TomM, P_TomH, P_Conga, P_Bongo, P_TablaL, P_TablaH, P_Wood, P_Cowbell, P_Gong, P_Clave, P_LogDrum,
+    // FX & Synths (10)
+    F_Noise, F_SubDrop, F_Chaos, F_Laser, F_Wobble, F_Pluck, F_Bell, F_Marimba, F_Chant, F_Sweep,
     PATCH_MAX
 };
 
@@ -41,13 +46,24 @@ struct GenreDefinition {
     int minTempo;
     int maxTempo;
     const char* trackNames[8];
-    PatchID trackPatches[8]; // ★ 各トラックの音色パッチ
+    PatchID trackPatches[8];
     int allowedDivs[8][4];
     int shiftMin[8];
     int shiftMax[8];
 };
 
-// ★ 汎用ドラムシンセボイス
+// ★ パターン保存用構造体
+struct SavedPattern {
+    int drumPattern[8][1024] = { {0} };
+    int trackDivisions[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
+    int trackShift[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    int trackComplexity[8] = { 50, 50, 50, 50, 50, 50, 50, 50 };
+    int trackEntropy[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    int num = 4;
+    int den = 4;
+    int bars = 4;
+};
+
 class DrumVoice {
 public:
     void setSampleRate(float sr) { sampleRate = sr; }
@@ -57,7 +73,7 @@ public:
         phase = 0.0f;
         pEnv = 1.0f;
         aEnv = 0.0f;
-        state = 1; // 1: Attack, 2: Decay
+        state = 1;
         svfLp = svfHp = svfBp = 0.0f;
         outVol = patch.vol * (velocity / 100.0f);
     }
@@ -65,7 +81,6 @@ public:
     float process() {
         if (state == 0) return 0.0f;
 
-        // Envelopes
         if (state == 1) {
             aEnv += 1000.0f / (patch.aAtt * sampleRate + 1.0f);
             if (aEnv >= 1.0f) { aEnv = 1.0f; state = 2; }
@@ -76,7 +91,6 @@ public:
         }
         pEnv *= std::exp(-1.0f / (patch.pDecay * sampleRate * 0.001f + 1.0f));
 
-        // Oscillator
         float currentFreq = patch.freq * (1.0f + pEnv * patch.pAmt);
         phase += currentFreq / sampleRate;
         if (phase > 1.0f) phase -= 1.0f;
@@ -87,11 +101,9 @@ public:
         else if (patch.wave == 2) osc = 2.0f * phase - 1.0f;
         else if (patch.wave == 3) osc = phase < 0.5f ? 1.0f : -1.0f;
 
-        // Noise
         float noiseSig = ((rand() % 2000) / 1000.0f - 1.0f) * patch.noise;
         float sig = osc + noiseSig;
 
-        // Chamberlin SVF Filter
         if (patch.fType != 3) {
             float f = 2.0f * std::sin(juce::MathConstants<float>::pi * patch.fFreq / sampleRate);
             float q = 1.0f / patch.fRes;
@@ -104,7 +116,6 @@ public:
             else sig = svfBp;
         }
 
-        // Saturation & Output
         sig = std::tanh(sig * patch.drive);
         return sig * aEnv * outVol;
     }
@@ -155,7 +166,7 @@ public:
 
     std::atomic<bool> patternUpdated{ false };
     std::atomic<bool> uiNeedsUpdate{ false };
-    std::atomic<int> currentPlayingBar{ 0 }; // ★ GUI追従用
+    std::atomic<int> currentPlayingBar{ 0 };
 
     bool trackLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackDivLocked[8] = { false, false, false, false, false, false, false, false };
@@ -168,6 +179,10 @@ public:
     bool trackSoloed[8] = { false, false, false, false, false, false, false, false };
 
     std::atomic<int> currentGenre{ 0 };
+
+    // ★ パターン保存スロット
+    SavedPattern savedPatterns[4];
+    bool isPatternSaved[4] = { false, false, false, false };
 
     int getTrackCurrentStep(int trackIndex) const {
         if (trackIndex >= 0 && trackIndex < 8) return trackCurrentStep[trackIndex];
@@ -206,7 +221,7 @@ private:
     int trackCurrentStep[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
 
     juce::Random random;
-    DrumVoice synthVoices[8]; // ★ シンセボイス
+    DrumVoice synthVoices[8];
 
     juce::AudioFormatManager formatManager;
     juce::AudioSampleBuffer sampleBuffers[8];

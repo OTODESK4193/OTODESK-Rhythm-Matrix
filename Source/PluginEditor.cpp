@@ -7,7 +7,7 @@
 AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachineAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
-    setSize(1000, 480);
+    setSize(1000, 520); // ★ ボタン追加のため少し高さを広げました
 
     addAndMakeVisible(syncButton); addAndMakeVisible(playButton); addAndMakeVisible(stopButton); addAndMakeVisible(tempoLabel);
     syncButton.setToggleState(audioProcessor.isSyncEnabled.load(), juce::dontSendNotification);
@@ -123,12 +123,11 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
         updateDivisionMenus();
 
-        // トラック名のUI更新
         for (int i = 0; i < 8; ++i) {
             trackNameLabels[i].setText(def.trackNames[i], juce::dontSendNotification);
 
-            // アルゴリズムモード時はコアトラックのロックを解除
-            if (genreIndex >= 22 && (i == 0 || i == 1 || i == 4)) {
+            // アルゴリズム＆特殊アンサンブルモード時はロック解除
+            if ((genreIndex >= 22 || genreIndex == 14 || genreIndex == 21) && (i == 0 || i == 1 || i == 4)) {
                 audioProcessor.trackCmplxLocked[i] = false;
                 btnCmplxLock[i].setToggleState(false, juce::dontSendNotification);
             }
@@ -144,6 +143,62 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     tabButton1.onClick = [tabClick] { tabClick(0); }; tabButton2.onClick = [tabClick] { tabClick(1); };
     tabButton3.onClick = [tabClick] { tabClick(2); }; tabButton4.onClick = [tabClick] { tabClick(3); };
     updateTabColors();
+
+    // ★ Pattern 1-4 ボタンの初期化
+    for (int i = 0; i < 4; ++i) {
+        addAndMakeVisible(btnPattern[i]);
+        btnPattern[i].setButtonText("Pat " + juce::String(i + 1));
+        btnPattern[i].setTriggeredOnMouseDown(true); // 右クリック検出用
+
+        btnPattern[i].onClick = [this, i] {
+            auto mods = juce::ModifierKeys::getCurrentModifiers();
+            if (mods.isPopupMenu()) { // 右クリック
+                if (audioProcessor.isPatternSaved[i]) {
+                    juce::NativeMessageBox::showOkCancelBox(juce::MessageBoxIconType::QuestionIcon, "Clear Pattern", "Clear Pattern " + juce::String(i + 1) + "?", this,
+                        juce::ModalCallbackFunction::create([this, i](int result) {
+                            if (result == 1) {
+                                audioProcessor.isPatternSaved[i] = false;
+                                updatePatternButtonColors();
+                            }
+                            }));
+                }
+            }
+            else { // 左クリック
+                if (!audioProcessor.isPatternSaved[i]) { // 保存
+                    SavedPattern& sp = audioProcessor.savedPatterns[i];
+                    for (int t = 0; t < 8; ++t) {
+                        std::memcpy(sp.drumPattern[t], audioProcessor.drumPatternUI[t], sizeof(sp.drumPattern[t]));
+                        sp.trackDivisions[t] = audioProcessor.trackDivisionsUI[t];
+                        sp.trackShift[t] = audioProcessor.trackShiftUI[t];
+                        sp.trackComplexity[t] = audioProcessor.trackComplexity[t];
+                        sp.trackEntropy[t] = audioProcessor.trackEntropy[t];
+                    }
+                    sp.num = audioProcessor.timeSigNumerator.load();
+                    sp.den = audioProcessor.timeSigDenominator.load();
+                    sp.bars = audioProcessor.globalBarCount.load();
+                    audioProcessor.isPatternSaved[i] = true;
+                }
+                else { // 呼び出し
+                    SavedPattern& sp = audioProcessor.savedPatterns[i];
+                    for (int t = 0; t < 8; ++t) {
+                        std::memcpy(audioProcessor.drumPatternUI[t], sp.drumPattern[t], sizeof(sp.drumPattern[t]));
+                        audioProcessor.trackDivisionsUI[t] = sp.trackDivisions[t];
+                        audioProcessor.trackShiftUI[t] = sp.trackShift[t];
+                        audioProcessor.trackComplexity[t] = sp.trackComplexity[t];
+                        audioProcessor.trackEntropy[t] = sp.trackEntropy[t];
+                    }
+                    audioProcessor.timeSigNumerator.store(sp.num);
+                    audioProcessor.timeSigDenominator.store(sp.den);
+                    audioProcessor.globalBarCount.store(sp.bars);
+
+                    audioProcessor.patternUpdated.store(true);
+                    audioProcessor.uiNeedsUpdate.store(true);
+                }
+                updatePatternButtonColors();
+            }
+            };
+    }
+    updatePatternButtonColors();
 
     for (int i = 0; i < 8; ++i) {
         addAndMakeVisible(trackNameLabels[i]);
@@ -285,13 +340,29 @@ void AIDrumMachineAudioProcessorEditor::updateViewVisibility() {
 
         midiKeyLabels[i].setVisible(!isSeq);
     }
+
+    // Patternボタンの表示管理
+    for (int i = 0; i < 4; ++i) btnPattern[i].setVisible(isSeq);
 }
+
 void AIDrumMachineAudioProcessorEditor::updateTabColors() {
     tabButton1.setColour(juce::TextButton::buttonColourId, currentViewBar == 0 ? juce::Colours::orange : juce::Colours::darkgrey);
     tabButton2.setColour(juce::TextButton::buttonColourId, currentViewBar == 1 ? juce::Colours::orange : juce::Colours::darkgrey);
     tabButton3.setColour(juce::TextButton::buttonColourId, currentViewBar == 2 ? juce::Colours::orange : juce::Colours::darkgrey);
     tabButton4.setColour(juce::TextButton::buttonColourId, currentViewBar == 3 ? juce::Colours::orange : juce::Colours::darkgrey);
 }
+
+void AIDrumMachineAudioProcessorEditor::updatePatternButtonColors() {
+    for (int i = 0; i < 4; ++i) {
+        if (audioProcessor.isPatternSaved[i]) {
+            btnPattern[i].setColour(juce::TextButton::buttonColourId, juce::Colours::cyan.withAlpha(0.6f));
+        }
+        else {
+            btnPattern[i].setColour(juce::TextButton::buttonColourId, juce::Colours::darkgrey);
+        }
+    }
+}
+
 void AIDrumMachineAudioProcessorEditor::timerCallback() {
     if (audioProcessor.isSyncEnabled.load()) tempoLabel.setText("DAW: " + juce::String(audioProcessor.currentBpm.load(), 1) + " BPM", juce::dontSendNotification);
     else if (!tempoLabel.isBeingEdited()) tempoLabel.setText(juce::String(audioProcessor.internalTempo.load(), 1) + " BPM", juce::dontSendNotification);
@@ -300,6 +371,7 @@ void AIDrumMachineAudioProcessorEditor::timerCallback() {
         timeSigDenMenu.setSelectedId(audioProcessor.timeSigDenominator.load(), juce::dontSendNotification);
         updateTimeSigNumMenu();
         timeSigNumMenu.setSelectedId(audioProcessor.timeSigNumerator.load(), juce::dontSendNotification);
+        barCountMenu.setSelectedId(audioProcessor.globalBarCount.load(), juce::dontSendNotification);
 
         for (int i = 0; i < 8; ++i) {
             updateDivisionMenus();
@@ -314,7 +386,7 @@ void AIDrumMachineAudioProcessorEditor::timerCallback() {
     // ★ 自動ページ追従 (Auto-Follow)
     if (audioProcessor.isPlayingInternal.load() || audioProcessor.isSyncEnabled.load()) {
         int activeBar = audioProcessor.currentPlayingBar.load();
-        if (activeBar != currentViewBar && activeBar < audioProcessor.globalBarCount.load()) {
+        if (activeBar != currentViewBar && activeBar < audioProcessor.globalBarCount.load() && activeBar >= 0) {
             currentViewBar = activeBar;
             updateTabColors();
         }
@@ -362,6 +434,13 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     if (bars >= 2) tabButton2.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
     if (bars >= 3) tabButton3.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
     if (bars >= 4) tabButton4.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
+
+    // ★ Patternボタンの配置
+    auto patArea = area.removeFromTop(40).withTrimmedTop(10).withTrimmedBottom(5);
+    int patW = patArea.getWidth() / 4;
+    for (int i = 0; i < 4; ++i) {
+        btnPattern[i].setBounds(patArea.removeFromLeft(patW).reduced(4, 0));
+    }
 
     auto bottomArea = area.removeFromBottom(250).toFloat();
     if (currentView == SequencerView) {
