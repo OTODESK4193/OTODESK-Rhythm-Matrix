@@ -18,7 +18,6 @@ AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
 
 AIDrumMachineAudioProcessor::~AIDrumMachineAudioProcessor() {}
 
-// ★修正：シフトやランダムを globalBarCount に連動
 void AIDrumMachineAudioProcessor::shiftTrackLeft(int trk) {
     if (trk < 0 || trk >= 8 || trackLocked[trk]) return;
     int totalSteps = trackDivisions[trk] * globalBarCount;
@@ -46,7 +45,7 @@ void AIDrumMachineAudioProcessor::randomizeTrack(int trk) {
     if (!trackCmplxLocked[trk]) trackComplexity[trk] = random.nextInt(juce::Range<int>(10, 90));
 
     int totalSteps = trackDivisions[trk] * globalBarCount;
-    float probThreshold = 1.0f - (trackComplexity[trk] / 100.0f); // 複雑さが高いほどしきい値が下がり鳴りやすくなる
+    float probThreshold = 1.0f - (trackComplexity[trk] / 100.0f);
 
     for (int j = 0; j < 36; ++j) {
         if (j < totalSteps) drumPattern[trk][j] = (random.nextFloat() > probThreshold) ? random.nextInt(juce::Range<int>(80, 110)) : 0;
@@ -54,7 +53,6 @@ void AIDrumMachineAudioProcessor::randomizeTrack(int trk) {
     }
 }
 
-// (中略：getName ～ releaseResources までの関数は完全維持)
 const juce::String AIDrumMachineAudioProcessor::getName() const { return JucePlugin_Name; }
 bool AIDrumMachineAudioProcessor::acceptsMidi() const { return false; }
 bool AIDrumMachineAudioProcessor::producesMidi() const { return false; }
@@ -78,6 +76,14 @@ void AIDrumMachineAudioProcessor::loadSample(int trackIndex, const juce::String&
         samplePlayPos[trackIndex] = -1;
         delete reader;
     }
+}
+
+// ★追加：サンプルの消去処理（スレッドセーフ）
+void AIDrumMachineAudioProcessor::clearSample(int trackIndex) {
+    if (trackIndex < 0 || trackIndex >= 8) return;
+    juce::ScopedLock sl(sampleLock);
+    hasSample[trackIndex] = false;
+    samplePlayPos[trackIndex] = -1;
 }
 
 void AIDrumMachineAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
@@ -120,7 +126,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (bpm > 999.0) bpm = 999.0;
     currentBpm.store(bpm);
 
-    // ★修正：4小節固定を撤廃し、globalBarCount に基づいてループ長を決定
     int samplesPerBar = (int)(sampleRate * (60.0 / bpm) * 4.0);
     int samplesPerLoop = samplesPerBar * globalBarCount;
     float pi2 = juce::MathConstants<float>::twoPi;
@@ -143,7 +148,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             {
                 int div = trackDivisions[trk];
                 if (div < 1) div = 1;
-                // ★修正：小節数に応じてトラックの総ステップ数を計算
                 int totalStepsInLoop = div * globalBarCount;
                 int currentStepForTrack = (samplesInLoop * totalStepsInLoop) / samplesPerLoop;
 
@@ -167,7 +171,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             }
         }
 
-        // （※ここから下の発音ロジックは元のまま完全維持）
         float mixOut = 0.0f;
         for (int trk = 0; trk < 8; ++trk)
         {

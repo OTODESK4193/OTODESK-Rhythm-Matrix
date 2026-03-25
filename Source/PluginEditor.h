@@ -43,7 +43,6 @@ private:
 
     juce::TextButton btnClearAll{ "CLEAR ALL" };
 
-    // ★追加：トップバーに移動したBar Count
     juce::Label barCountLabel{ "", "Bars:" };
     juce::ComboBox barCountMenu;
 
@@ -57,8 +56,9 @@ private:
     juce::TextButton tabButton4{ "Bar 4" };
     int currentViewBar = 0;
 
+    // ★追加：サンプル削除時のラベル復元用に配列をメンバ化
+    const juce::String defaultTrackNames[8] = { "Kick", "Snare", "CHH", "OHH", "Clap", "L.Tom", "M.Tom", "H.Tom" };
     juce::Label trackNameLabels[8];
-    juce::String trackNotes[8] = { "C1", "D1", "F#1", "A#1", "D#1", "F1", "A1", "D2" };
 
     juce::TextButton btnMute[8];
     juce::TextButton btnSolo[8];
@@ -66,12 +66,10 @@ private:
     juce::TextButton btnShiftL[8];
     juce::TextButton btnShiftR[8];
 
-    // --- Setup UI ---
     juce::ComboBox divSelectors[8];
     juce::Slider complexitySliders[8];
     juce::Label divLabels[8];
     juce::Label compLabels[8];
-    // ★追加：個別のロックボタン
     juce::TextButton btnDivLock[8];
     juce::TextButton btnCmplxLock[8];
 
