@@ -13,6 +13,8 @@ AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
     )
 #endif
 {
+    // ★追加：WAV, AIFF, MP3等の基本フォーマットを読み込めるように登録
+    formatManager.registerBasicFormats();
 }
 
 AIDrumMachineAudioProcessor::~AIDrumMachineAudioProcessor() {}
@@ -28,6 +30,28 @@ void AIDrumMachineAudioProcessor::setCurrentProgram(int index) {}
 const juce::String AIDrumMachineAudioProcessor::getProgramName(int index) { return {}; }
 void AIDrumMachineAudioProcessor::changeProgramName(int index, const juce::String& newName) {}
 
+// ★追加：指定トラックにオーディオファイルを読み込む（スレッドセーフ）
+void AIDrumMachineAudioProcessor::loadSample(int trackIndex, const juce::String& filePath)
+{
+    if (trackIndex < 0 || trackIndex >= 8) return;
+
+    juce::File file(filePath);
+    if (auto* reader = formatManager.createReaderFor(file))
+    {
+        // テンポラリバッファに一旦読み込む（オーディオ処理を止めないため）
+        juce::AudioSampleBuffer tempBuffer(reader->numChannels, (int)reader->lengthInSamples);
+        reader->read(&tempBuffer, 0, (int)reader->lengthInSamples, 0, true, true);
+
+        // メモリの入れ替え時のみロックをかける（安全対策）
+        juce::ScopedLock sl(sampleLock);
+        sampleBuffers[trackIndex] = tempBuffer;
+        hasSample[trackIndex] = true;
+        samplePlayPos[trackIndex] = -1; // 再生位置リセット
+
+        delete reader;
+    }
+}
+
 void AIDrumMachineAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     resetPosition();
@@ -35,6 +59,7 @@ void AIDrumMachineAudioProcessor::prepareToPlay(double sampleRate, int samplesPe
         trackEnv[i] = 0.0f;
         trackPitchEnv[i] = 0.0f;
         trackPhase[i] = 0.0f;
+        samplePlayPos[i] = -1;
     }
 }
 
@@ -63,7 +88,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     float sampleRate = (float)getSampleRate();
     if (sampleRate <= 0.0f) sampleRate = 44100.0f;
 
-    // ★追加：トランスポート（DAW同期）の処理
     double bpm = internalTempo.load();
     bool isPlaying = isPlayingInternal.load();
 
@@ -76,12 +100,10 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         }
     }
 
-    // UI表示用と安全策（極端なBPMを防ぐ）
     if (bpm < 20.0) bpm = 20.0;
     if (bpm > 999.0) bpm = 999.0;
     currentBpm.store(bpm);
 
-    // ★修正：固定120BPMから、現在のBPMを用いた動的計算に変更
     int samplesPerBar = (int)(sampleRate * (60.0 / bpm) * 4.0);
     int samplesPerLoop = samplesPerBar * 4;
     float pi2 = juce::MathConstants<float>::twoPi;
@@ -89,9 +111,11 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     auto* leftChannel = buffer.getWritePointer(0);
     auto* rightChannel = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
 
+    // ★サンプラーの読み込みと衝突しないようにロック
+    juce::ScopedLock sl(sampleLock);
+
     for (int i = 0; i < numSamples; ++i)
     {
-        // ★修正：再生中(isPlaying)の時だけシーケンサーを進める
         if (isPlaying) {
             samplesInLoop++;
             if (samplesInLoop >= samplesPerLoop) {
@@ -113,20 +137,41 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                     int velocity = drumPattern[trk][trackCurrentStep[trk]];
                     if (velocity > 0)
                     {
-                        trackEnv[trk] = velocity / 100.0f;
+                        // 共通のベロシティ処理
+                        float vol = velocity / 100.0f;
+
+                        // シンセ用トリガー
+                        trackEnv[trk] = vol;
                         trackPitchEnv[trk] = 1.0f;
+
+                        // ★サンプラー用トリガー
+                        if (hasSample[trk]) {
+                            samplePlayPos[trk] = 0; // 頭から再生開始
+                            sampleVolume[trk] = vol;
+                        }
                     }
                 }
             }
         }
 
-        // シンセサイザー処理（既存のまま）
         float mixOut = 0.0f;
         for (int trk = 0; trk < 8; ++trk)
         {
-            if (trackEnv[trk] > 0.001f)
+            float osc = 0.0f;
+
+            // ★追加：サンプルが読み込まれている場合はWAVを優先して再生
+            if (hasSample[trk])
             {
-                float osc = 0.0f;
+                if (samplePlayPos[trk] >= 0 && samplePlayPos[trk] < sampleBuffers[trk].getNumSamples())
+                {
+                    // モノラルとしてLチャンネルのデータを取得（WAVの音源）
+                    osc = sampleBuffers[trk].getSample(0, samplePlayPos[trk]) * sampleVolume[trk];
+                    samplePlayPos[trk]++;
+                }
+            }
+            // サンプルがない場合は既存のシンセを再生
+            else if (trackEnv[trk] > 0.001f)
+            {
                 if (trk == 0) {
                     float freq = 50.0f + 200.0f * trackPitchEnv[trk];
                     trackPhase[trk] += pi2 * freq / sampleRate;
@@ -145,20 +190,12 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                     trackPitchEnv[trk] *= 0.99f;
                     trackEnv[trk] *= 0.998f;
                 }
-                else if (trk == 2) {
+                else if (trk >= 2 && trk <= 4) {
                     float noise = random.nextFloat() * 2.0f - 1.0f;
                     osc = noise * trackEnv[trk] * 0.4f;
-                    trackEnv[trk] *= 0.992f;
-                }
-                else if (trk == 3) {
-                    float noise = random.nextFloat() * 2.0f - 1.0f;
-                    osc = noise * trackEnv[trk] * 0.4f;
-                    trackEnv[trk] *= 0.999f;
-                }
-                else if (trk == 4) {
-                    float noise = random.nextFloat() * 2.0f - 1.0f;
-                    osc = noise * trackEnv[trk] * 0.5f;
-                    trackEnv[trk] *= 0.996f;
+                    if (trk == 2) trackEnv[trk] *= 0.992f;
+                    else if (trk == 3) trackEnv[trk] *= 0.999f;
+                    else trackEnv[trk] *= 0.996f;
                 }
                 else if (trk >= 5 && trk <= 7) {
                     float baseFreq = 100.0f + (trk - 5) * 50.0f;
@@ -169,8 +206,8 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                     trackPitchEnv[trk] *= 0.996f;
                     trackEnv[trk] *= 0.999f;
                 }
-                mixOut += osc * 0.6f;
             }
+            mixOut += osc * 0.6f;
         }
 
         if (mixOut > 1.0f) mixOut = 1.0f;

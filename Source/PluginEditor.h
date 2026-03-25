@@ -5,9 +5,11 @@
 #include "PluginProcessor.h"
 #include "Network/GeminiClient.h"
 
+// ★修正：FileDragAndDropTarget を追加継承してOSからのファイルドロップを受信可能に
 class AIDrumMachineAudioProcessorEditor : public juce::AudioProcessorEditor,
     public juce::Timer,
-    public juce::DragAndDropContainer
+    public juce::DragAndDropContainer,
+    public juce::FileDragAndDropTarget
 {
 public:
     AIDrumMachineAudioProcessorEditor(AIDrumMachineAudioProcessor&);
@@ -19,6 +21,13 @@ public:
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
     void mouseUp(const juce::MouseEvent& e) override;
+
+    // ★追加：外部ファイルドラッグ＆ドロップ用関数
+    bool isInterestedInFileDrag(const juce::StringArray& files) override;
+    void filesDropped(const juce::StringArray& files, int x, int y) override;
+    void fileDragEnter(const juce::StringArray& files, int x, int y) override;
+    void fileDragMove(const juce::StringArray& files, int x, int y) override;
+    void fileDragExit(const juce::StringArray& files) override;
 
     void timerCallback() override;
 
@@ -41,17 +50,19 @@ private:
     juce::TextButton tabButton4{ "Bar 4" };
     int currentViewBar = 0;
 
-    // ★追加：各トラックの書き換え可能な名前ラベルと、固定のノート名
     juce::Label trackNameLabels[8];
     juce::String trackNotes[8] = { "C1", "D1", "F#1", "A#1", "D#1", "F1", "A1", "D2" };
 
-    // UIレイアウト用のエリア
     juce::Rectangle<float> dragAllArea;
     juce::Rectangle<float> lockArea;
-    juce::Rectangle<float> sampleArea; // ★名称変更：将来のD&D枠
+    juce::Rectangle<float> sampleArea;
     juce::Rectangle<float> mainGridArea;
     juce::Rectangle<float> midiDragArea;
     bool isDragging = false;
+
+    // ★追加：ドラッグ中にどのトラックがターゲットになっているかを保持
+    int dragTargetTrack = -1;
+    int getTrackIndexFromMouseY(int y); // 座標計算ヘルパー
 
     void updateTabColors();
     bool needsPagination() const;

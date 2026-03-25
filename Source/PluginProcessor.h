@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_formats/juce_audio_formats.h> // ★追加：オーディオ形式管理用
 #include <atomic>
 
 class AIDrumMachineAudioProcessor : public juce::AudioProcessor
@@ -46,29 +47,37 @@ public:
         return 0;
     }
 
-    // ★追加：トランスポート（再生・同期）用の変数
     std::atomic<bool> isSyncEnabled{ false };
     std::atomic<bool> isPlayingInternal{ false };
     std::atomic<double> internalTempo{ 120.0 };
-    std::atomic<double> currentBpm{ 120.0 }; // UI表示用（現在適用されているBPM）
+    std::atomic<double> currentBpm{ 120.0 };
 
-    // ★追加：頭出し（ストップ2回押し）用関数
     void resetPosition() {
         samplesInLoop = 0;
-        for (int i = 0; i < 8; ++i) {
-            trackCurrentStep[i] = -1; // 次の再生時に確実にトリガーさせるため -1 にリセット
-        }
+        for (int i = 0; i < 8; ++i) trackCurrentStep[i] = -1;
     }
+
+    // ★追加：サンプラー機能の関数と変数
+    void loadSample(int trackIndex, const juce::String& filePath);
+    bool hasSampleLoaded(int trackIndex) const { return hasSample[trackIndex]; }
 
 private:
     int samplesInLoop = 0;
-    int trackCurrentStep[8] = { -1, -1, -1, -1, -1, -1, -1, -1 }; // 初期値を-1に変更
+    int trackCurrentStep[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
 
+    // シンセ用変数
     float trackEnv[8] = { 0.0f };
     float trackPitchEnv[8] = { 0.0f };
     float trackPhase[8] = { 0.0f };
-
     juce::Random random;
+
+    // ★追加：サンプラー用変数群
+    juce::AudioFormatManager formatManager;
+    juce::AudioSampleBuffer sampleBuffers[8];
+    bool hasSample[8] = { false };
+    int samplePlayPos[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+    float sampleVolume[8] = { 1.0f };
+    juce::CriticalSection sampleLock; // オーディオスレッド保護用ロック
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AIDrumMachineAudioProcessor)
 };

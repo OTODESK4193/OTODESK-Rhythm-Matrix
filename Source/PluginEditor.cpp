@@ -4,10 +4,8 @@
 AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachineAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
-    // ★修正：ゆとりを持たせるため横幅を850に拡張
     setSize(850, 440);
 
-    // --- トランスポート ---
     addAndMakeVisible(syncButton);
     addAndMakeVisible(playButton);
     addAndMakeVisible(stopButton);
@@ -29,7 +27,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         if (newTempo >= 20.0 && newTempo <= 999.0) audioProcessor.internalTempo = newTempo;
         };
 
-    // --- 生成コントロール ---
     addAndMakeVisible(generateButton);
     addAndMakeVisible(styleMenu);
     addAndMakeVisible(statusLabel);
@@ -59,12 +56,11 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
     updateTabColors();
 
-    // ★追加：書き換え可能なトラック名ラベルの初期化
     juce::String defaultNames[8] = { "Kick", "Snare", "CHH", "OHH", "Clap", "L.Tom", "M.Tom", "H.Tom" };
     for (int i = 0; i < 8; ++i) {
         addAndMakeVisible(trackNameLabels[i]);
         trackNameLabels[i].setText(defaultNames[i], juce::dontSendNotification);
-        trackNameLabels[i].setEditable(true); // クリックで編集可能に
+        trackNameLabels[i].setEditable(true);
         trackNameLabels[i].setJustificationType(juce::Justification::centredLeft);
         trackNameLabels[i].setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
         trackNameLabels[i].setColour(juce::Label::textColourId, juce::Colours::white);
@@ -106,7 +102,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             else
             {
                 statusLabel.setText("Requesting Gemini (4 Bars)...", juce::dontSendNotification);
-                juce::String myKey = "ご自身のAPIキーをここに入力してください";
+                juce::String myKey = "AIzaSyBT2vQXyacUMdmNOF2OjkYYQ_OPtJgORtQ";
                 juce::String userPrompt = "";
                 if (styleMenu.getSelectedId() == 1) userPrompt = "Generate a chaotic and evolving polyrhythmic techno beat for 4 bars. Use divisions like 5 or 7 for hi-hats.";
                 else userPrompt = "Generate a standard 4-on-the-floor techno beat for 4 bars. CRITICAL INSTRUCTION: You MUST set 'division': 4 for ALL 8 tracks. Do NOT use any division other than 4. The 'pattern' array for each track MUST have exactly 16 items.";
@@ -235,19 +231,17 @@ void AIDrumMachineAudioProcessorEditor::resized()
     auto bottomArea = area.removeFromBottom(250).toFloat();
     lockArea = bottomArea.removeFromLeft(50);
 
-    // ★修正：将来のSample D&Dスロット用に120px確保し、中にLabelを配置
     sampleArea = bottomArea.removeFromLeft(120);
     int rows = 8;
     float cellH = sampleArea.getHeight() / rows;
     for (int row = 0; row < rows; ++row) {
         int trackIndex = (rows - 1) - row;
         juce::Rectangle<float> rowArea(sampleArea.getX(), sampleArea.getY() + row * cellH, sampleArea.getWidth(), cellH);
-        // Labelの配置 (左側70px)
         trackNameLabels[trackIndex].setBounds(rowArea.removeFromLeft(75).reduced(2).toNearestInt());
     }
 
     midiDragArea = bottomArea.removeFromRight(40);
-    mainGridArea = bottomArea; // 残りがグリッド
+    mainGridArea = bottomArea;
 }
 
 void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
@@ -268,7 +262,6 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
     {
         int trackIndex = (rows - 1) - row;
 
-        // 1. Lockボタン
         juce::Rectangle<float> lockBtn(lockArea.getX(), lockArea.getY() + row * cellH, lockArea.getWidth() - 4.0f, cellH - 2.0f);
         g.setColour(audioProcessor.trackLocked[trackIndex] ? juce::Colours::red.withAlpha(0.8f) : juce::Colours::grey.withAlpha(0.5f));
         g.fillRoundedRectangle(lockBtn, 4.0f);
@@ -276,18 +269,25 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
         g.setFont(12.0f);
         g.drawText(audioProcessor.trackLocked[trackIndex] ? "LOCKED" : "FREE", lockBtn, juce::Justification::centred, false);
 
-        // ★追加：2. 将来のサンプルD&D用スロットの背景と、固定ノート名の描画
         juce::Rectangle<float> sArea(sampleArea.getX() + 2.0f, sampleArea.getY() + row * cellH + 2.0f, sampleArea.getWidth() - 4.0f, cellH - 4.0f);
-        g.setColour(juce::Colours::darkgrey.darker(0.8f)); // スロットっぽく少し暗くする
+
+        // ★修正：ファイルドラッグ中はターゲット枠を白く光らせる、読み込み済みなら色を変える
+        if (dragTargetTrack == trackIndex) {
+            g.setColour(juce::Colours::white.withAlpha(0.3f));
+        }
+        else if (audioProcessor.hasSampleLoaded(trackIndex)) {
+            g.setColour(juce::Colours::lightblue.withAlpha(0.2f)); // サンプルあり
+        }
+        else {
+            g.setColour(juce::Colours::darkgrey.darker(0.8f)); // デフォルト
+        }
         g.fillRoundedRectangle(sArea, 4.0f);
 
-        // ノート名 (C1等) をスロットの右側に描画
         juce::Rectangle<float> noteRect(sampleArea.getX() + 75.0f, sampleArea.getY() + row * cellH, 45.0f, cellH);
         g.setColour(juce::Colours::grey);
         g.setFont(12.0f);
         g.drawText(trackNotes[trackIndex], noteRect, juce::Justification::centred, false);
 
-        // 3. 個別MIDIドラッグボタン
         juce::Rectangle<float> mDrag(midiDragArea.getX() + 4.0f, midiDragArea.getY() + row * cellH, midiDragArea.getWidth() - 4.0f, cellH - 2.0f);
         g.setColour(juce::Colours::cyan.withAlpha(0.3f));
         g.fillRoundedRectangle(mDrag, 4.0f);
@@ -295,7 +295,6 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
         g.setFont(11.0f);
         g.drawText("MIDI", mDrag, juce::Justification::centred, false);
 
-        // 4. グリッド
         int div = audioProcessor.trackDivisions[trackIndex];
         if (div < 1) div = 1;
         int colsToDraw = paginate ? div : (div * 4);
@@ -316,7 +315,6 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
             g.fillRoundedRectangle(cell, 4.0f);
         }
 
-        // プレイヘッド
         int currentStep = audioProcessor.getTrackCurrentStep(trackIndex);
         if (paginate) {
             int startStepOfThisBar = currentViewBar * div;
@@ -335,6 +333,78 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
         }
     }
 }
+
+// ==========================================
+// ★追加：外部からのファイルドラッグ＆ドロップ処理
+// ==========================================
+
+bool AIDrumMachineAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files)
+{
+    // WAV, AIFF, MP3等の音声ファイルが含まれていれば受け入れる
+    for (auto file : files) {
+        if (file.endsWithIgnoreCase(".wav") || file.endsWithIgnoreCase(".aif") ||
+            file.endsWithIgnoreCase(".aiff") || file.endsWithIgnoreCase(".mp3")) {
+            return true;
+        }
+    }
+    return false;
+}
+
+int AIDrumMachineAudioProcessorEditor::getTrackIndexFromMouseY(int y)
+{
+    if (sampleArea.contains(sampleArea.getX(), (float)y)) {
+        int rows = 8;
+        float cellH = sampleArea.getHeight() / rows;
+        int row = static_cast<int>((y - sampleArea.getY()) / cellH);
+        if (row >= 0 && row < rows) return (rows - 1) - row;
+    }
+    return -1;
+}
+
+void AIDrumMachineAudioProcessorEditor::fileDragEnter(const juce::StringArray& files, int x, int y) {
+    fileDragMove(files, x, y);
+}
+
+void AIDrumMachineAudioProcessorEditor::fileDragMove(const juce::StringArray& files, int x, int y) {
+    int target = getTrackIndexFromMouseY(y);
+    if (dragTargetTrack != target) {
+        dragTargetTrack = target;
+        repaint(sampleArea.toNearestInt());
+    }
+}
+
+void AIDrumMachineAudioProcessorEditor::fileDragExit(const juce::StringArray& files) {
+    dragTargetTrack = -1;
+    repaint(sampleArea.toNearestInt());
+}
+
+void AIDrumMachineAudioProcessorEditor::filesDropped(const juce::StringArray& files, int x, int y)
+{
+    dragTargetTrack = -1;
+    int targetTrack = getTrackIndexFromMouseY(y);
+
+    if (targetTrack != -1) {
+        // 対応するファイルを1つ見つけて読み込む
+        for (auto file : files) {
+            if (file.endsWithIgnoreCase(".wav") || file.endsWithIgnoreCase(".aif") ||
+                file.endsWithIgnoreCase(".aiff") || file.endsWithIgnoreCase(".mp3"))
+            {
+                // Processorに波形データを渡す
+                audioProcessor.loadSample(targetTrack, file);
+
+                // 拡張子を除いたファイル名をラベルに自動セット
+                juce::File f(file);
+                trackNameLabels[targetTrack].setText(f.getFileNameWithoutExtension(), juce::dontSendNotification);
+                repaint();
+                break;
+            }
+        }
+    }
+}
+
+// ==========================================
+// 既存のマウスイベント（クリック・内部MIDIドラッグ）
+// ==========================================
 
 void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e)
 {
