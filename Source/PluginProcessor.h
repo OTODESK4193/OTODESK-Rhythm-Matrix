@@ -45,6 +45,8 @@ public:
     bool trackMuted[8] = { false, false, false, false, false, false, false, false };
     bool trackSoloed[8] = { false, false, false, false, false, false, false, false };
 
+    std::atomic<int> currentGenre{ 0 };
+
     int getTrackCurrentStep(int trackIndex) const {
         if (trackIndex >= 0 && trackIndex < 8) return trackCurrentStep[trackIndex];
         return 0;

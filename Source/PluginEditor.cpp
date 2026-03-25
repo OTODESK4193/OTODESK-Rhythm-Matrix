@@ -67,16 +67,29 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     addAndMakeVisible(generateButton);
     addAndMakeVisible(styleMenu);
     addAndMakeVisible(statusLabel);
-    styleMenu.addItem("Chaotic Polyrhythm (Div 1-9)", 1);
-    styleMenu.addItem("Standard Techno (Div 4 Only)", 2);
-    styleMenu.addItem("Offline Random (No API)", 3);
-    styleMenu.setSelectedId(3);
+
+    // ★修正：全22ジャンルのリスト [cite: 8, 16, 23, 31, 38, 45, 52, 59, 66, 74, 79, 86, 94, 99, 104, 112, 117, 121, 125, 131, 136, 140]
+    const juce::StringArray genres = {
+        "0. Techno (Detroit/Berlin)", "1. House (Deep/Acid)", "2. UK Garage (2-step)", "3. Drum & Bass / Jungle",
+        "4. Trap", "5. Footwork / Juke", "6. IDM (Breakcore)", "7. Dubstep",
+        "8. Afrobeat", "9. Gqom", "10. Amapiano", "11. Indian Classical",
+        "12. Samba / Bossa Nova", "13. Reggaeton / Dembow", "14. Gamelan",
+        "15. Funk (James Brown)", "16. New Jack Swing", "17. Neo Soul (J Dilla)",
+        "18. Hip Hop (Boom Bap)", "19. Math Rock", "20. Progressive Metal", "21. Minimalism (Reich)"
+    };
+    for (int i = 0; i < genres.size(); ++i) {
+        styleMenu.addItem(genres[i], i + 1);
+    }
+    styleMenu.setSelectedId(1);
+    styleMenu.onChange = [this] {
+        audioProcessor.currentGenre = styleMenu.getSelectedId() - 1;
+        };
 
     addAndMakeVisible(tabButton1); addAndMakeVisible(tabButton2);
     addAndMakeVisible(tabButton3); addAndMakeVisible(tabButton4);
 
     statusLabel.setJustificationType(juce::Justification::centredLeft);
-    statusLabel.setText("Select style & Click Generate", juce::dontSendNotification);
+    statusLabel.setText("Select genre & Click Generate", juce::dontSendNotification);
 
     auto tabClick = [this](int barIndex) { currentViewBar = barIndex; updateTabColors(); repaint(); };
     tabButton1.onClick = [tabClick] { tabClick(0); }; tabButton2.onClick = [tabClick] { tabClick(1); };
@@ -141,25 +154,30 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
     juce::Component::SafePointer<AIDrumMachineAudioProcessorEditor> safeThis(this);
 
-    // ★修正：Offline Random に Phase 1: ユークリッドリズムを呼び出す
     generateButton.onClick = [safeThis, this] {
         if (safeThis == nullptr) return;
-        if (styleMenu.getSelectedId() == 3) {
-            statusLabel.setText("SUCCESS! Euclidean Rhythm generated.", juce::dontSendNotification);
-            for (int i = 0; i < 8; ++i) {
-                safeThis->audioProcessor.randomizeTrack(i);
-                // UI値の同期
-                safeThis->divSelectors[i].setSelectedId(safeThis->audioProcessor.trackDivisions[i], juce::dontSendNotification);
-                safeThis->complexitySliders[i].setValue(safeThis->audioProcessor.trackComplexity[i], juce::dontSendNotification);
+        statusLabel.setText("SUCCESS! " + styleMenu.getText() + " generated.", juce::dontSendNotification);
+
+        juce::Random random;
+        int genreIdx = styleMenu.getSelectedId() - 1;
+
+        // ★修正：全22ジャンルに対応した推奨テンポ [cite: 10, 18, 25, 33, 40, 47, 54, 61, 68, 76, 81, 88, 96, 101, 106, 114, 119, 123, 127, 133, 138, 142]
+        const int minTempos[] = { 125, 120, 130, 160, 135, 160,  90, 135,  90, 120, 110,  80,  80,  90,  80, 100, 100,  85,  85, 120, 140, 120 };
+        const int maxTempos[] = { 135, 126, 135, 180, 145, 160, 180, 145, 110, 127, 115, 120, 120,  95, 120, 115, 112,  95,  95, 160, 180, 170 };
+
+        if (genreIdx >= 0 && genreIdx < 22) {
+            if (!safeThis->audioProcessor.isSyncEnabled.load()) {
+                double newBpm = (double)random.nextInt(juce::Range<int>(minTempos[genreIdx], maxTempos[genreIdx] + 1));
+                safeThis->audioProcessor.internalTempo.store(newBpm);
             }
-            safeThis->currentViewBar = 0; safeThis->updateTabColors(); safeThis->resized(); safeThis->repaint();
         }
-        else {
-            statusLabel.setText("Requesting Gemini (4 Bars)...", juce::dontSendNotification);
-            juce::String myKey = "AIzaSyBT2vQXyacUMdmNOF2OjkYYQ_OPtJgORtQ";
-            juce::String userPrompt = (styleMenu.getSelectedId() == 1) ? "Generate chaotic polyrhythmic techno." : "Generate standard 4-on-the-floor techno. division MUST be 4.";
-            gemini.fetchDrumPattern(userPrompt, myKey);
+
+        for (int i = 0; i < 8; ++i) {
+            safeThis->audioProcessor.randomizeTrack(i);
+            safeThis->divSelectors[i].setSelectedId(safeThis->audioProcessor.trackDivisions[i], juce::dontSendNotification);
+            safeThis->complexitySliders[i].setValue(safeThis->audioProcessor.trackComplexity[i], juce::dontSendNotification);
         }
+        safeThis->currentViewBar = 0; safeThis->updateTabColors(); safeThis->resized(); safeThis->repaint();
         };
 
     gemini.onSuccess = [safeThis, this](const juce::var& data) {
@@ -306,13 +324,12 @@ void AIDrumMachineAudioProcessorEditor::resized()
         mainGridArea = bottomArea;
     }
     else {
-        // ★修正：SETUP画面の領域を明確に分割して密集を解消
         lockArea = juce::Rectangle<float>();
         midiDragArea = bottomArea.removeFromRight(40);
 
-        auto labelArea = bottomArea.removeFromLeft(120); // 鍵盤と名前用
-        sampleArea = bottomArea.removeFromLeft(160);     // 波形ドロップ領域用
-        auto setupControls = bottomArea;                 // 残りはすべてコントロール用
+        auto labelArea = bottomArea.removeFromLeft(120);
+        sampleArea = bottomArea.removeFromLeft(160);
+        auto setupControls = bottomArea;
 
         int rows = 8; float cellH = sampleArea.getHeight() / rows;
 
@@ -321,16 +338,16 @@ void AIDrumMachineAudioProcessorEditor::resized()
 
             auto lRow = labelArea.withY(labelArea.getY() + row * cellH).withHeight(cellH).reduced(2);
             midiKeyLabels[trackIndex].setBounds(lRow.removeFromLeft(40).toNearestInt());
-            trackNameLabels[trackIndex].setBounds(lRow.toNearestInt()); // 残りの80を名前に
+            trackNameLabels[trackIndex].setBounds(lRow.toNearestInt());
 
             auto ctrlRow = setupControls.withY(setupControls.getY() + row * cellH).withHeight(cellH).reduced(2);
-            ctrlRow.removeFromLeft(20); // ドロップエリアからの隙間
+            ctrlRow.removeFromLeft(20);
 
             divLabels[trackIndex].setBounds(ctrlRow.removeFromLeft(30).toNearestInt());
             divSelectors[trackIndex].setBounds(ctrlRow.removeFromLeft(50).toNearestInt());
             btnDivLock[trackIndex].setBounds(ctrlRow.removeFromLeft(20).reduced(1).toNearestInt());
 
-            ctrlRow.removeFromLeft(20); // 少し隙間を開ける
+            ctrlRow.removeFromLeft(20);
 
             compLabels[trackIndex].setBounds(ctrlRow.removeFromLeft(45).toNearestInt());
             complexitySliders[trackIndex].setBounds(ctrlRow.removeFromLeft(120).toNearestInt());
@@ -388,8 +405,11 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
                 juce::Rectangle<float> cell(mainGridArea.getX() + col * cellW, mainGridArea.getY() + row * cellH, cellW - 2.0f, cellH - 2.0f);
                 int globalStep = paginate ? ((currentViewBar * div) + col) : col;
                 int velocity = audioProcessor.drumPattern[trackIndex][globalStep];
-                if (velocity > 0) g.setColour(juce::Colours::orange.withAlpha(0.3f + 0.7f * (velocity / 100.0f)));
+
+                float alpha = juce::jlimit(0.0f, 1.0f, 0.3f + 0.7f * (velocity / 100.0f));
+                if (velocity > 0) g.setColour(juce::Colours::orange.withAlpha(alpha));
                 else g.setColour(juce::Colours::black.withAlpha(0.4f));
+
                 g.fillRoundedRectangle(cell, 4.0f);
             }
 
@@ -412,7 +432,6 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
         }
     }
     else {
-        // ★修正：明示的に確保した sampleArea そのものをドロップエリアとして描画
         cellH = sampleArea.getHeight() / rows;
         for (int row = 0; row < rows; ++row) {
             int trackIndex = (rows - 1) - row;

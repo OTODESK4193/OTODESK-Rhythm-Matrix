@@ -39,34 +39,120 @@ void AIDrumMachineAudioProcessor::clearTrack(int trk) {
     for (int j = 0; j < 36; ++j) drumPattern[trk][j] = 0;
 }
 
-// ★【Phase 1】ユークリッドリズム E(k, n) によるランダマイズ実装
+// ★【Phase 2 & 1】階層化アンカーシステムとユークリッド補助生成
 void AIDrumMachineAudioProcessor::randomizeTrack(int trk) {
     if (trk < 0 || trk >= 8 || trackLocked[trk]) return;
-    if (!trackDivLocked[trk]) trackDivisions[trk] = random.nextInt(juce::Range<int>(1, 10));
+
+    int genre = currentGenre.load();
+
+    // ジャンルに応じたDivisionの自動決定
+    if (!trackDivLocked[trk]) {
+        if (genre == 0 || genre == 1 || genre == 18) trackDivisions[trk] = 4; // Techno, House, Boom Bap
+        else if (genre == 2) trackDivisions[trk] = (trk == 2 || trk == 3) ? 6 : 4; // UK Garage
+        else if (genre == 4 || genre == 7) trackDivisions[trk] = (trk == 2) ? 6 : 4; // Trap, Dubstep
+        else if (genre == 16) trackDivisions[trk] = 6; // New Jack Swing
+        else trackDivisions[trk] = random.nextInt(juce::Range<int>(3, 8));
+    }
+
     if (!trackCmplxLocked[trk]) trackComplexity[trk] = random.nextInt(juce::Range<int>(10, 90));
 
-    // n = 総ステップ数 (Division × 小節数)
-    int n = trackDivisions[trk] * globalBarCount;
+    int div = trackDivisions[trk];
+    int n = div * globalBarCount;
     int cmplx = trackComplexity[trk];
-
-    // k = 打点数 (Complexityを基に算出)
     int k = juce::jmax(1, (n * cmplx) / 100);
 
-    for (int j = 0; j < 36; ++j) {
-        if (j < n) {
-            // Bjorklundアルゴリズムと等価なBresenham式のユークリッド判定
-            bool isHit = ((j * k) % n) < k;
+    // ユークリッドの開始位置をランダムにずらす（頭に集中させないため）
+    int offset = random.nextInt(juce::Range<int>(0, n));
 
+    for (int j = 0; j < 36; ++j) {
+        if (j >= n) { drumPattern[trk][j] = 0; continue; }
+
+        int beatPos = j % div;
+        int beatNum = j / div; // 0=1拍目, 1=2拍目, 2=3拍目, 3=4拍目
+        bool isDownbeat = (beatPos == 0);
+        bool isBackbeat = (beatPos == 0 && (beatNum == 1 || beatNum == 3));
+
+        bool isAnchor = false;
+        bool isNegativeAnchor = false;
+        int anchorVel = 0;
+
+        // 【Phase 2】ジャンル別のアンカー（絶対配置）とネガティブアンカー（絶対消去）
+        switch (genre) {
+        case 0: // Techno
+            if (trk == 0 && isDownbeat) { isAnchor = true; anchorVel = 100; }
+            if (trk == 1 && isDownbeat && !isBackbeat) { isNegativeAnchor = true; }
+            if (trk == 2 && beatPos == div / 2) { isAnchor = true; anchorVel = 90; }
+            break;
+        case 1: // House
+            if (trk == 0 && isDownbeat) { isAnchor = true; anchorVel = 100; }
+            if ((trk == 1 || trk == 4) && isBackbeat) { isAnchor = true; anchorVel = 100; }
+            if ((trk == 1 || trk == 4) && isDownbeat && !isBackbeat) { isNegativeAnchor = true; }
+            break;
+        case 2: // UK Garage
+            if (trk == 0 && (j == 0 || j == div * 2 + div / 2 + 1)) { isAnchor = true; anchorVel = 100; }
+            if (trk == 1 && isBackbeat) { isAnchor = true; anchorVel = 100; }
+            if (trk == 0 && isBackbeat) { isNegativeAnchor = true; }
+            break;
+        case 3: // Drum & Bass
+            if (trk == 0 && (j == 0 || j == div * 2 + div / 2)) { isAnchor = true; anchorVel = 100; }
+            if (trk == 1 && isBackbeat) { isAnchor = true; anchorVel = 100; }
+            break;
+        case 4: // Trap
+            if (trk == 0 && j == 0) { isAnchor = true; anchorVel = 100; }
+            if (trk == 1 && j == div * 2) { isAnchor = true; anchorVel = 100; } // ハーフタイム
+            break;
+        case 7: // Dubstep
+            if (trk == 0 && j == 0) { isAnchor = true; anchorVel = 100; }
+            if (trk == 1 && j == div * 2) { isAnchor = true; anchorVel = 100; }
+            if (trk == 1 && j != div * 2) { isNegativeAnchor = true; }
+            break;
+        case 8: // Afrobeat
+            if (trk == 0 && isDownbeat) { isAnchor = true; anchorVel = 100; }
+            break;
+        case 9: // Gqom
+            if (trk == 0 && isDownbeat && beatNum != 3) { isAnchor = true; anchorVel = 100; }
+            if (trk == 0 && beatNum == 3) { isNegativeAnchor = true; }
+            break;
+        case 10: // Amapiano
+            if (trk == 0 && isDownbeat) { isAnchor = true; anchorVel = 90; }
+            if (trk == 5 && beatNum > 0) { isAnchor = true; anchorVel = 95; } // ログドラム
+            break;
+        case 13: // Reggaeton / Dembow
+            if (trk == 0 && isDownbeat) { isAnchor = true; anchorVel = 100; }
+            if (trk == 1 && (j == div - 1 || j == div * 2 + div / 2)) { isAnchor = true; anchorVel = 90; }
+            break;
+        case 15: // Funk
+            if (j == 0) { isAnchor = true; anchorVel = 100; } // The One
+            if (trk == 1 && isBackbeat) { isAnchor = true; anchorVel = 100; }
+            break;
+        case 16: // New Jack Swing
+            if (trk == 0 && (j == 0 || j == div * 2 + 1)) { isAnchor = true; anchorVel = 100; }
+            if (trk == 1 && isBackbeat) { isAnchor = true; anchorVel = 100; }
+            break;
+        case 18: // Hip Hop (Boom Bap)
+            if (trk == 0 && (j == 0 || j == div * 2 || j == div * 2 + div / 2)) { isAnchor = true; anchorVel = 95; }
+            if (trk == 1 && isBackbeat) { isAnchor = true; anchorVel = 100; }
+            break;
+        default:
+            break;
+        }
+
+        // 【Phase 1】アンカーで埋まっていない部分にユークリッドを流し込む（コンディショナル・フィラー）
+        if (isAnchor) {
+            drumPattern[trk][j] = anchorVel;
+        }
+        else if (isNegativeAnchor) {
+            drumPattern[trk][j] = 0;
+        }
+        else {
+            // オフセットを加算してユークリッド配置を計算
+            bool isHit = (((j + offset) * k) % n) < k;
             if (isHit) {
-                // ヒットする場合はヴェロシティにランダムな揺らぎを与える
-                drumPattern[trk][j] = random.nextInt(juce::Range<int>(80, 110));
+                drumPattern[trk][j] = random.nextInt(juce::Range<int>(60, 95)); // フィラーはやや弱め
             }
             else {
                 drumPattern[trk][j] = 0;
             }
-        }
-        else {
-            drumPattern[trk][j] = 0;
         }
     }
 }
