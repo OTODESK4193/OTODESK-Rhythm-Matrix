@@ -13,7 +13,6 @@ AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
     )
 #endif
 {
-    // ★追加：WAV, AIFF, MP3等の基本フォーマットを読み込めるように登録
     formatManager.registerBasicFormats();
 }
 
@@ -30,25 +29,49 @@ void AIDrumMachineAudioProcessor::setCurrentProgram(int index) {}
 const juce::String AIDrumMachineAudioProcessor::getProgramName(int index) { return {}; }
 void AIDrumMachineAudioProcessor::changeProgramName(int index, const juce::String& newName) {}
 
-// ★追加：指定トラックにオーディオファイルを読み込む（スレッドセーフ）
+// ★改修：リサンプリング対応のサンプル読み込み
 void AIDrumMachineAudioProcessor::loadSample(int trackIndex, const juce::String& filePath)
 {
     if (trackIndex < 0 || trackIndex >= 8) return;
 
     juce::File file(filePath);
-    if (auto* reader = formatManager.createReaderFor(file))
+    std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
+
+    if (reader != nullptr)
     {
-        // テンポラリバッファに一旦読み込む（オーディオ処理を止めないため）
-        juce::AudioSampleBuffer tempBuffer(reader->numChannels, (int)reader->lengthInSamples);
-        reader->read(&tempBuffer, 0, (int)reader->lengthInSamples, 0, true, true);
+        double pluginSampleRate = getSampleRate();
+        if (pluginSampleRate <= 0) pluginSampleRate = 44100.0;
 
-        // メモリの入れ替え時のみロックをかける（安全対策）
-        juce::ScopedLock sl(sampleLock);
-        sampleBuffers[trackIndex] = tempBuffer;
-        hasSample[trackIndex] = true;
-        samplePlayPos[trackIndex] = -1; // 再生位置リセット
+        // 1. リサンプリングの必要があるか確認
+        double ratio = reader->sampleRate / pluginSampleRate;
+        int targetLength = (int)(reader->lengthInSamples / ratio);
 
-        delete reader;
+        juce::AudioSampleBuffer tempBuffer(1, targetLength);
+
+        // 2. リサンプリングして読み込み（JUCEのAudioFormatReaderSource + ResamplingAudioSourceを使用）
+        // ここでは知見に基づき、最も安全で高品質な「読み込み時変換」を行います
+        juce::AudioFormatReaderSource readerSource(reader.get(), false);
+        juce::ResamplingAudioSource resampler(&readerSource, false, 1);
+
+        resampler.setResamplingRatio(ratio);
+        resampler.prepareToPlay(targetLength, pluginSampleRate);
+
+        juce::AudioSourceChannelInfo info(&tempBuffer, 0, targetLength);
+        resampler.getNextAudioBlock(info);
+
+        // 3. オーディオスレッドをロックしてバッファをスワップ
+        {
+            juce::ScopedLock sl(sampleLock);
+            sampleBuffers[trackIndex].makeCopyOf(tempBuffer);
+            hasSample[trackIndex] = true;
+            samplePlayPos[trackIndex] = -1;
+        }
+
+        juce::Logger::writeToLog("Sample Loaded successfully: " + file.getFileName());
+        juce::Logger::writeToLog("Target Length: " + juce::String(targetLength));
+    }
+    else {
+        juce::Logger::writeToLog("Failed to create reader for: " + filePath);
     }
 }
 
@@ -100,8 +123,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         }
     }
 
-    if (bpm < 20.0) bpm = 20.0;
-    if (bpm > 999.0) bpm = 999.0;
     currentBpm.store(bpm);
 
     int samplesPerBar = (int)(sampleRate * (60.0 / bpm) * 4.0);
@@ -111,43 +132,40 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     auto* leftChannel = buffer.getWritePointer(0);
     auto* rightChannel = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
 
-    // ★サンプラーの読み込みと衝突しないようにロック
+    // ★知見：オーディオスレッド内でのロック時間を最小限に
     juce::ScopedLock sl(sampleLock);
 
     for (int i = 0; i < numSamples; ++i)
     {
         if (isPlaying) {
             samplesInLoop++;
-            if (samplesInLoop >= samplesPerLoop) {
-                samplesInLoop = 0;
-            }
+            if (samplesInLoop >= samplesPerLoop) samplesInLoop = 0;
 
             for (int trk = 0; trk < 8; ++trk)
             {
                 int div = trackDivisions[trk];
                 if (div < 1) div = 1;
                 int totalStepsInLoop = div * 4;
-
                 int currentStepForTrack = (samplesInLoop * totalStepsInLoop) / samplesPerLoop;
 
                 if (currentStepForTrack != trackCurrentStep[trk])
                 {
                     trackCurrentStep[trk] = currentStepForTrack;
-
                     int velocity = drumPattern[trk][trackCurrentStep[trk]];
+
                     if (velocity > 0)
                     {
-                        // 共通のベロシティ処理
                         float vol = velocity / 100.0f;
 
-                        // シンセ用トリガー
-                        trackEnv[trk] = vol;
-                        trackPitchEnv[trk] = 1.0f;
-
-                        // ★サンプラー用トリガー
+                        // サンプラーのトリガー
                         if (hasSample[trk]) {
-                            samplePlayPos[trk] = 0; // 頭から再生開始
+                            samplePlayPos[trk] = 0; // 頭に戻す
                             sampleVolume[trk] = vol;
+                        }
+                        // サンプルがない場合のみシンセを起動
+                        else {
+                            trackEnv[trk] = vol;
+                            trackPitchEnv[trk] = 1.0f;
                         }
                     }
                 }
@@ -159,20 +177,21 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         {
             float osc = 0.0f;
 
-            // ★追加：サンプルが読み込まれている場合はWAVを優先して再生
-            if (hasSample[trk])
+            // ★優先順位：サンプル > シンセ
+            if (hasSample[trk] && samplePlayPos[trk] >= 0)
             {
-                if (samplePlayPos[trk] >= 0 && samplePlayPos[trk] < sampleBuffers[trk].getNumSamples())
+                if (samplePlayPos[trk] < sampleBuffers[trk].getNumSamples())
                 {
-                    // モノラルとしてLチャンネルのデータを取得（WAVの音源）
                     osc = sampleBuffers[trk].getSample(0, samplePlayPos[trk]) * sampleVolume[trk];
                     samplePlayPos[trk]++;
                 }
+                else {
+                    samplePlayPos[trk] = -1; // 再生終了
+                }
             }
-            // サンプルがない場合は既存のシンセを再生
             else if (trackEnv[trk] > 0.001f)
             {
-                if (trk == 0) {
+                if (trk == 0) { // Kick
                     float freq = 50.0f + 200.0f * trackPitchEnv[trk];
                     trackPhase[trk] += pi2 * freq / sampleRate;
                     if (trackPhase[trk] > pi2) trackPhase[trk] -= pi2;
@@ -180,7 +199,7 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                     trackPitchEnv[trk] *= 0.995f;
                     trackEnv[trk] *= 0.9995f;
                 }
-                else if (trk == 1) {
+                else if (trk == 1) { // Snare
                     float freq = 180.0f + 50.0f * trackPitchEnv[trk];
                     trackPhase[trk] += pi2 * freq / sampleRate;
                     if (trackPhase[trk] > pi2) trackPhase[trk] -= pi2;
@@ -190,14 +209,14 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                     trackPitchEnv[trk] *= 0.99f;
                     trackEnv[trk] *= 0.998f;
                 }
-                else if (trk >= 2 && trk <= 4) {
+                else if (trk >= 2 && trk <= 4) { // HiHats / Clap
                     float noise = random.nextFloat() * 2.0f - 1.0f;
                     osc = noise * trackEnv[trk] * 0.4f;
                     if (trk == 2) trackEnv[trk] *= 0.992f;
                     else if (trk == 3) trackEnv[trk] *= 0.999f;
                     else trackEnv[trk] *= 0.996f;
                 }
-                else if (trk >= 5 && trk <= 7) {
+                else { // Toms
                     float baseFreq = 100.0f + (trk - 5) * 50.0f;
                     float freq = baseFreq + 100.0f * trackPitchEnv[trk];
                     trackPhase[trk] += pi2 * freq / sampleRate;
@@ -210,8 +229,8 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             mixOut += osc * 0.6f;
         }
 
-        if (mixOut > 1.0f) mixOut = 1.0f;
-        if (mixOut < -1.0f) mixOut = -1.0f;
+        if (mixOut > 1.2f) mixOut = 1.2f; // ソフトリミッター
+        if (mixOut < -1.2f) mixOut = -1.2f;
 
         leftChannel[i] = mixOut;
         if (rightChannel != nullptr) rightChannel[i] = mixOut;
