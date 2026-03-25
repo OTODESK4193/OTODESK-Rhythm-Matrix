@@ -7,7 +7,7 @@
 AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachineAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
-    setSize(1050, 520); // 幅を少し拡張
+    setSize(1050, 520);
 
     addAndMakeVisible(syncButton); addAndMakeVisible(playButton); addAndMakeVisible(stopButton); addAndMakeVisible(tempoLabel);
     syncButton.setToggleState(audioProcessor.isSyncEnabled.load(), juce::dontSendNotification);
@@ -104,7 +104,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     };
     for (int i = 0; i < genres.size(); ++i) styleMenu.addItem(genres[i], i + 1);
 
-    // ★ Fillコンボボックスの設定
     addAndMakeVisible(fillBarMenu);
     fillBarMenu.addItem("Fill: Off", 1);
     fillBarMenu.addItem("Fill: Bar 1", 2);
@@ -115,6 +114,11 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     fillBarMenu.onChange = [this] {
         audioProcessor.fillBarTarget.store(fillBarMenu.getSelectedId() - 1);
         };
+
+    // ★ Auto-Follow UI 追加
+    addAndMakeVisible(btnAutoFollow);
+    btnAutoFollow.setToggleState(audioProcessor.autoFollowEnabled.load(), juce::dontSendNotification);
+    btnAutoFollow.onClick = [this] { audioProcessor.autoFollowEnabled.store(btnAutoFollow.getToggleState()); };
 
     styleMenu.onChange = [this] {
         int genreIndex = styleMenu.getSelectedId() - 1;
@@ -307,7 +311,11 @@ void AIDrumMachineAudioProcessorEditor::updateTimeSigNumMenu() {
     int maxNum = 7;
     if (den == 8) maxNum = 9;
     else if (den == 16) maxNum = 17;
-    if (audioProcessor.currentGenre.load() == 6) maxNum = 17;
+
+    int currentGenre = audioProcessor.currentGenre.load();
+    const auto& def = AIDrumMachineAudioProcessor::getGenreDef(currentGenre);
+    if (def.defaultNum > maxNum) maxNum = def.defaultNum; // ★ ジャンル指定が優先
+    if (currentGenre == 6) maxNum = 17; // IDM
 
     int currentNum = audioProcessor.timeSigNumerator.load();
     if (currentNum > maxNum) {
@@ -393,7 +401,8 @@ void AIDrumMachineAudioProcessorEditor::timerCallback() {
         resized();
     }
 
-    if (audioProcessor.isPlayingInternal.load() || audioProcessor.isSyncEnabled.load()) {
+    // ★ Auto-Follow UI追従
+    if (audioProcessor.autoFollowEnabled.load() && (audioProcessor.isPlayingInternal.load() || audioProcessor.isSyncEnabled.load())) {
         int activeBar = audioProcessor.currentPlayingBar.load();
         if (activeBar != currentViewBar && activeBar < audioProcessor.globalBarCount.load() && activeBar >= 0) {
             currentViewBar = activeBar;
@@ -427,7 +436,11 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     row2.removeFromLeft(10);
     styleMenu.setBounds(row2.removeFromLeft(200));
     row2.removeFromLeft(10);
-    fillBarMenu.setBounds(row2.removeFromLeft(100)); // ★ ジャンルの横に配置
+
+    // ★ Fill & Follow コンポーネントを綺麗に配置
+    fillBarMenu.setBounds(row2.removeFromLeft(100));
+    row2.removeFromLeft(10);
+    btnAutoFollow.setBounds(row2.removeFromLeft(70));
 
     row2.removeFromRight(10);
     barCountMenu.setBounds(row2.removeFromRight(80).reduced(2));

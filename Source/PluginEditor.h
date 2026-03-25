@@ -56,7 +56,9 @@ private:
 
     juce::TextButton generateButton{ "Generate" };
     juce::ComboBox styleMenu;
-    juce::ComboBox fillBarMenu; // ★ フィル用コンボボックス
+    juce::ComboBox fillBarMenu;
+    juce::ToggleButton btnAutoFollow{ "Follow" }; // ★ Auto-Follow トグル
+
     juce::Label statusLabel;
 
     juce::TextButton tabButton1{ "Bar 1" };

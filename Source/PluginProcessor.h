@@ -9,12 +9,12 @@
 #include <cstring>
 #include <vector>
 
-// ★ シンセサイザーのパラメータ構造体
+// ★ シンセパラメータ（プレビュー特化：超ショートディケイ）
 struct InstrumentPatch {
     int wave;          // 0:Sine, 1:Triangle, 2:Saw, 3:Square
     float freq;        // Base Frequency (Hz)
     float pDecay;      // Pitch Envelope Decay (ms)
-    float pAmt;        // Pitch Envelope Amount (Multiplier)
+    float pAmt;        // Pitch Envelope Amount
     float aAtt;        // Amp Envelope Attack (ms)
     float aDec;        // Amp Envelope Decay (ms)
     float noise;       // Noise Mix Level
@@ -25,18 +25,14 @@ struct InstrumentPatch {
     float vol;         // Output Volume
 };
 
-// ★ 50種類のパッチID
+// ★ 58種類のパッチID（メロディックパッチ追加）
 enum PatchID {
-    // Kicks (10)
     K_909, K_808, K_Acoustic, K_Deep, K_Punch, K_Hard, K_Soft, K_Sub, K_Click, K_FM,
-    // Snares & Claps (10)
     S_909, S_808, S_Tight, S_Fat, S_Rim, S_Clap, S_Snap, S_Noise, S_Lofi, S_Acoustic,
-    // Hats & Cymbals (8)
     H_Closed, H_Open, H_Fast, H_Shaker, H_Tambourine, H_Ride, H_Crash, H_Metallic,
-    // Percussions & Toms (12)
     P_TomL, P_TomM, P_TomH, P_Conga, P_Bongo, P_TablaL, P_TablaH, P_Wood, P_Cowbell, P_Gong, P_Clave, P_LogDrum,
-    // FX & Synths (10)
     F_Noise, F_SubDrop, F_Chaos, F_Laser, F_Wobble, F_Pluck, F_Bell, F_Marimba, F_Chant, F_Sweep,
+    M_Pluck1, M_Pluck2, M_Pluck3, M_Pluck4, M_Pluck5, M_Pluck6, M_Pluck7, M_Pluck8, // Pentatonic
     PATCH_MAX
 };
 
@@ -52,7 +48,6 @@ struct GenreDefinition {
     int shiftMax[8];
 };
 
-// ★ パターン保存用構造体
 struct SavedPattern {
     int drumPattern[8][1024] = { {0} };
     int trackDivisions[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
@@ -159,7 +154,7 @@ public:
     std::atomic<int> timeSigNumerator{ 4 };
     std::atomic<int> timeSigDenominator{ 4 };
     std::atomic<int> globalBarCount{ 4 };
-    std::atomic<int> fillBarTarget{ 0 }; // 0:Off, 1:Bar1, 2:Bar2, 3:Bar3, 4:Bar4
+    std::atomic<int> fillBarTarget{ 0 };
 
     int drumPatternUI[8][1024] = { {0} };
     int trackDivisionsUI[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
@@ -181,7 +176,6 @@ public:
 
     std::atomic<int> currentGenre{ 0 };
 
-    // パターン保存スロット
     SavedPattern savedPatterns[4];
     bool isPatternSaved[4] = { false, false, false, false };
 
@@ -192,6 +186,7 @@ public:
 
     std::atomic<bool> isSyncEnabled{ false };
     std::atomic<bool> isPlayingInternal{ false };
+    std::atomic<bool> autoFollowEnabled{ true }; // ★ Auto-Follow
     std::atomic<double> internalTempo{ 120.0 };
     std::atomic<double> currentBpm{ 120.0 };
 
