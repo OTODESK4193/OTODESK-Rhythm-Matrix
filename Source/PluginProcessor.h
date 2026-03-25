@@ -62,8 +62,6 @@ public:
 
     void loadSample(int trackIndex, const juce::String& filePath);
     bool hasSampleLoaded(int trackIndex) const { return hasSample[trackIndex]; }
-
-    // ★追加：サンプルを消去する関数
     void clearSample(int trackIndex);
 
     void shiftTrackLeft(int trackIndex);

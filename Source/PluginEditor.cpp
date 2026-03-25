@@ -32,7 +32,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     tabSeqButton.onClick = [this] { currentView = SequencerView; updateViewVisibility(); resized(); repaint(); };
     tabSetupButton.onClick = [this] { currentView = SetupView; updateViewVisibility(); resized(); repaint(); };
 
-    // ★修正：CLEAR ALL のデフォルト化処理
     addAndMakeVisible(btnClearAll);
     btnClearAll.setColour(juce::TextButton::buttonColourId, juce::Colours::red.withAlpha(0.6f));
     btnClearAll.onClick = [this] {
@@ -40,23 +39,16 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             juce::MessageBoxIconType::WarningIcon, "Reset All", "Reset all settings to default (Samples will NOT be deleted)?", this,
             juce::ModalCallbackFunction::create([this](int result) {
                 if (result == 1) {
-                    // 小節数を1に
                     audioProcessor.globalBarCount = 1;
                     barCountMenu.setSelectedId(1, juce::dontSendNotification);
-
                     for (int i = 0; i < 8; ++i) {
-                        // パターン消去（サンプルは維持）
                         audioProcessor.clearTrack(i);
-                        // Divを4に
                         audioProcessor.trackDivisions[i] = 4;
                         divSelectors[i].setSelectedId(4, juce::dontSendNotification);
-                        // Cmplxを50に
                         audioProcessor.trackComplexity[i] = 50;
                         complexitySliders[i].setValue(50.0, juce::dontSendNotification);
                     }
-                    updateViewVisibility();
-                    resized();
-                    repaint();
+                    updateViewVisibility(); resized(); repaint();
                 }
                 }));
         };
@@ -99,6 +91,13 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         trackNameLabels[i].setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
         trackNameLabels[i].setColour(juce::Label::textColourId, juce::Colours::white);
         trackNameLabels[i].setColour(juce::Label::textWhenEditingColourId, juce::Colours::orange);
+        trackNameLabels[i].setMinimumHorizontalScale(1.0f);
+
+        // ★修正：audioProcessor.trackNotes ではなく自身の trackNotes を参照する
+        addChildComponent(midiKeyLabels[i]);
+        midiKeyLabels[i].setText("[" + trackNotes[i] + "]", juce::dontSendNotification);
+        midiKeyLabels[i].setColour(juce::Label::textColourId, juce::Colours::grey);
+        midiKeyLabels[i].setJustificationType(juce::Justification::centredRight);
 
         addAndMakeVisible(btnMute[i]); btnMute[i].setButtonText("M");
         addAndMakeVisible(btnSolo[i]); btnSolo[i].setButtonText("S");
@@ -190,7 +189,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             if (safeThis->audioProcessor.trackLocked[i]) continue;
             juce::Identifier trackKey("track" + juce::String(i + 1));
             if (data.hasProperty(trackKey)) {
-                auto trackObj = data[trackKey];
+                const auto& trackObj = data[trackKey];
                 if (trackObj.hasProperty("division") && trackObj.hasProperty("pattern")) {
                     int div = static_cast<int>(trackObj["division"]);
                     if (div < 1) div = 1; if (div > 9) div = 9;
@@ -231,6 +230,7 @@ void AIDrumMachineAudioProcessorEditor::updateViewVisibility()
 
         divLabels[i].setVisible(!isSeq); divSelectors[i].setVisible(!isSeq); btnDivLock[i].setVisible(!isSeq);
         compLabels[i].setVisible(!isSeq); complexitySliders[i].setVisible(!isSeq); btnCmplxLock[i].setVisible(!isSeq);
+        midiKeyLabels[i].setVisible(!isSeq);
     }
 }
 
@@ -328,15 +328,17 @@ void AIDrumMachineAudioProcessorEditor::resized()
     else {
         lockArea = juce::Rectangle<float>();
         midiDragArea = bottomArea.removeFromRight(40);
-        sampleArea = bottomArea.removeFromLeft(150);
+        sampleArea = bottomArea.removeFromLeft(140);
 
         auto setupControls = bottomArea;
         int rows = 8; float cellH = sampleArea.getHeight() / rows;
 
         for (int row = 0; row < rows; ++row) {
             int trackIndex = (rows - 1) - row;
-            juce::Rectangle<float> rowArea(sampleArea.getX(), sampleArea.getY() + row * cellH, sampleArea.getWidth(), cellH);
-            trackNameLabels[trackIndex].setBounds(rowArea.removeFromLeft(100).reduced(2).toNearestInt());
+            auto rowArea = sampleArea.withY(sampleArea.getY() + row * cellH).withHeight(cellH).reduced(2);
+
+            midiKeyLabels[trackIndex].setBounds(rowArea.removeFromLeft(35).toNearestInt());
+            trackNameLabels[trackIndex].setBounds(rowArea.removeFromLeft(100).toNearestInt());
 
             auto ctrlRow = setupControls.withY(setupControls.getY() + row * cellH).withHeight(cellH).reduced(2);
             divLabels[trackIndex].setBounds(ctrlRow.removeFromLeft(30).toNearestInt());
@@ -428,7 +430,7 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
         cellH = sampleArea.getHeight() / rows;
         for (int row = 0; row < rows; ++row) {
             int trackIndex = (rows - 1) - row;
-            juce::Rectangle<float> sArea(sampleArea.getX() + 60.0f, sampleArea.getY() + row * cellH + 2.0f, sampleArea.getWidth() - 62.0f, cellH - 4.0f);
+            juce::Rectangle<float> sArea(sampleArea.getX() + 140.0f, sampleArea.getY() + row * cellH + 2.0f, 150.0f, cellH - 4.0f);
             if (dragTargetTrack == trackIndex) g.setColour(juce::Colours::white.withAlpha(0.3f));
             else if (audioProcessor.hasSampleLoaded(trackIndex)) g.setColour(juce::Colours::lightblue.withAlpha(0.2f));
             else g.setColour(juce::Colours::darkgrey.darker(0.8f));
@@ -440,8 +442,9 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
     }
 }
 
+// ★修正：autoをconst auto&にしてコピーを防ぐ
 bool AIDrumMachineAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files) {
-    for (auto file : files) { if (file.endsWithIgnoreCase(".wav") || file.endsWithIgnoreCase(".aif") || file.endsWithIgnoreCase(".aiff") || file.endsWithIgnoreCase(".mp3")) return true; } return false;
+    for (const auto& file : files) { if (file.endsWithIgnoreCase(".wav") || file.endsWithIgnoreCase(".aif") || file.endsWithIgnoreCase(".aiff") || file.endsWithIgnoreCase(".mp3")) return true; } return false;
 }
 int AIDrumMachineAudioProcessorEditor::getTrackIndexFromMouseY(int y) {
     if (sampleArea.contains(sampleArea.getX(), (float)y)) {
@@ -457,7 +460,7 @@ void AIDrumMachineAudioProcessorEditor::fileDragExit(const juce::StringArray& fi
 void AIDrumMachineAudioProcessorEditor::filesDropped(const juce::StringArray& files, int x, int y) {
     dragTargetTrack = -1; int targetTrack = getTrackIndexFromMouseY(y);
     if (targetTrack != -1) {
-        for (auto file : files) {
+        for (const auto& file : files) {
             if (file.endsWithIgnoreCase(".wav") || file.endsWithIgnoreCase(".aif") || file.endsWithIgnoreCase(".aiff") || file.endsWithIgnoreCase(".mp3")) {
                 audioProcessor.loadSample(targetTrack, file);
                 juce::File f(file); trackNameLabels[targetTrack].setText(f.getFileNameWithoutExtension(), juce::dontSendNotification);
@@ -470,7 +473,6 @@ void AIDrumMachineAudioProcessorEditor::filesDropped(const juce::StringArray& fi
 void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
     juce::Point<float> pos = e.getPosition().toFloat(); int rows = 8;
 
-    // ★追加：右クリックでのサンプル削除（Y/N確認ダイアログ）
     if (e.mods.isRightButtonDown()) {
         if (sampleArea.contains(pos)) {
             float cellH = sampleArea.getHeight() / rows;
@@ -480,7 +482,7 @@ void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
                 if (audioProcessor.hasSampleLoaded(trackIndex)) {
                     juce::NativeMessageBox::showOkCancelBox(juce::MessageBoxIconType::WarningIcon, "Delete Sample", "Remove sample from Track " + juce::String(trackIndex + 1) + "?", this,
                         juce::ModalCallbackFunction::create([this, trackIndex](int result) {
-                            if (result == 1) { // OK
+                            if (result == 1) {
                                 audioProcessor.clearSample(trackIndex);
                                 trackNameLabels[trackIndex].setText(defaultTrackNames[trackIndex], juce::dontSendNotification);
                                 repaint();
@@ -489,7 +491,7 @@ void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
                 }
             }
         }
-        return; // 左クリックの処理には進まない
+        return;
     }
 
     if (currentView == SequencerView) {

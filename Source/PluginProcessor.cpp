@@ -78,7 +78,6 @@ void AIDrumMachineAudioProcessor::loadSample(int trackIndex, const juce::String&
     }
 }
 
-// ★追加：サンプルの消去処理（スレッドセーフ）
 void AIDrumMachineAudioProcessor::clearSample(int trackIndex) {
     if (trackIndex < 0 || trackIndex >= 8) return;
     juce::ScopedLock sl(sampleLock);

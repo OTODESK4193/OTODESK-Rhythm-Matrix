@@ -56,9 +56,12 @@ private:
     juce::TextButton tabButton4{ "Bar 4" };
     int currentViewBar = 0;
 
-    // ★追加：サンプル削除時のラベル復元用に配列をメンバ化
+    // ★修正：trackNotes を復活させました
     const juce::String defaultTrackNames[8] = { "Kick", "Snare", "CHH", "OHH", "Clap", "L.Tom", "M.Tom", "H.Tom" };
+    const juce::String trackNotes[8] = { "C1", "D1", "F#1", "A#1", "D#1", "F1", "A1", "D2" };
+
     juce::Label trackNameLabels[8];
+    juce::Label midiKeyLabels[8];
 
     juce::TextButton btnMute[8];
     juce::TextButton btnSolo[8];
