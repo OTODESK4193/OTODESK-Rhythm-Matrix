@@ -42,7 +42,14 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
                     for (int i = 0; i < 8; ++i) {
                         audioProcessor.clearTrack(i);
                         audioProcessor.trackDivisionsUI[i] = 4; divSelectors[i].setSelectedId(4, juce::dontSendNotification);
-                        audioProcessor.trackComplexity[i] = 50; complexitySliders[i].setValue(50.0, juce::dontSendNotification);
+
+                        // コアトラック(0,1,4)のリセットロジック
+                        bool isCore = (i == 0 || i == 1 || i == 4);
+                        audioProcessor.trackCmplxLocked[i] = isCore;
+                        btnCmplxLock[i].setToggleState(isCore, juce::dontSendNotification);
+                        audioProcessor.trackComplexity[i] = isCore ? 0 : 30;
+                        complexitySliders[i].setValue(audioProcessor.trackComplexity[i], juce::dontSendNotification);
+
                         audioProcessor.trackEntropy[i] = 0; entropySliders[i].setValue(0.0, juce::dontSendNotification);
                         audioProcessor.trackShiftUI[i] = 0; shiftSliders[i].setValue(0.0, juce::dontSendNotification);
                     }
@@ -98,14 +105,12 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     };
     for (int i = 0; i < genres.size(); ++i) styleMenu.addItem(genres[i], i + 1);
 
-    // ★ ジャンル選択時：トラック名と推奨拍子を更新する（UXの向上）
     styleMenu.onChange = [this] {
         int genreIndex = styleMenu.getSelectedId() - 1;
         audioProcessor.currentGenre.store(genreIndex);
 
         const auto& def = AIDrumMachineAudioProcessor::getGenreDef(genreIndex);
 
-        // 推奨拍子の更新
         timeSigDenMenu.setSelectedId(def.defaultDen, juce::dontSendNotification);
         audioProcessor.timeSigDenominator.store(def.defaultDen);
         updateTimeSigNumMenu();
@@ -114,7 +119,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
         updateDivisionMenus();
 
-        // 推奨トラック名でラベルを上書き
         for (int i = 0; i < 8; ++i) {
             trackNameLabels[i].setText(def.trackNames[i], juce::dontSendNotification);
         }
@@ -158,6 +162,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         btnShiftL[i].onClick = [this, i] { audioProcessor.shiftTrackLeft(i); repaint(); };
         btnShiftR[i].onClick = [this, i] { audioProcessor.shiftTrackRight(i); repaint(); };
 
+        // ★ 全てのLockボタンにオレンジ色の点灯色を設定
         addChildComponent(divLabels[i]); divLabels[i].setText("Div:", juce::dontSendNotification);
         addChildComponent(divSelectors[i]);
         divSelectors[i].onChange = [this, i] {
@@ -166,6 +171,8 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             repaint();
             };
         addChildComponent(btnDivLock[i]); btnDivLock[i].setButtonText("L"); btnDivLock[i].setClickingTogglesState(true);
+        btnDivLock[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
+        btnDivLock[i].setToggleState(audioProcessor.trackDivLocked[i], juce::dontSendNotification);
         btnDivLock[i].onClick = [this, i] { audioProcessor.trackDivLocked[i] = btnDivLock[i].getToggleState(); };
 
         addChildComponent(compLabels[i]); compLabels[i].setText("Cmplx:", juce::dontSendNotification);
@@ -174,6 +181,8 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         complexitySliders[i].setRange(0.0, 100.0, 1.0); complexitySliders[i].setValue(audioProcessor.trackComplexity[i], juce::dontSendNotification);
         complexitySliders[i].onValueChange = [this, i] { audioProcessor.trackComplexity[i] = static_cast<int>(complexitySliders[i].getValue()); };
         addChildComponent(btnCmplxLock[i]); btnCmplxLock[i].setButtonText("L"); btnCmplxLock[i].setClickingTogglesState(true);
+        btnCmplxLock[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
+        btnCmplxLock[i].setToggleState(audioProcessor.trackCmplxLocked[i], juce::dontSendNotification);
         btnCmplxLock[i].onClick = [this, i] { audioProcessor.trackCmplxLocked[i] = btnCmplxLock[i].getToggleState(); };
 
         addChildComponent(entrpLabels[i]); entrpLabels[i].setText("Entrp:", juce::dontSendNotification);
@@ -182,6 +191,8 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         entropySliders[i].setRange(0.0, 100.0, 1.0); entropySliders[i].setValue(audioProcessor.trackEntropy[i], juce::dontSendNotification);
         entropySliders[i].onValueChange = [this, i] { audioProcessor.trackEntropy[i] = static_cast<int>(entropySliders[i].getValue()); };
         addChildComponent(btnEntrpLock[i]); btnEntrpLock[i].setButtonText("L"); btnEntrpLock[i].setClickingTogglesState(true);
+        btnEntrpLock[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
+        btnEntrpLock[i].setToggleState(audioProcessor.trackEntrpLocked[i], juce::dontSendNotification);
         btnEntrpLock[i].onClick = [this, i] { audioProcessor.trackEntrpLocked[i] = btnEntrpLock[i].getToggleState(); };
 
         addChildComponent(shiftLabels[i]); shiftLabels[i].setText("Shift:", juce::dontSendNotification);
@@ -193,14 +204,14 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             audioProcessor.patternUpdated.store(true);
             };
         addChildComponent(btnShiftLock[i]); btnShiftLock[i].setButtonText("L"); btnShiftLock[i].setClickingTogglesState(true);
+        btnShiftLock[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
+        btnShiftLock[i].setToggleState(audioProcessor.trackShiftLocked[i], juce::dontSendNotification);
         btnShiftLock[i].onClick = [this, i] { audioProcessor.trackShiftLocked[i] = btnShiftLock[i].getToggleState(); };
     }
 
-    // 初回のジャンル反映
     styleMenu.setSelectedId(1, juce::sendNotification);
 
     juce::Component::SafePointer<AIDrumMachineAudioProcessorEditor> safeThis(this);
-    // ★ Generateボタン: パターンの再構築のみを行う（名前や拍子は保護される）
     generateButton.onClick = [safeThis, this] {
         if (safeThis == nullptr) return;
         audioProcessor.generateAllTracks();
@@ -272,7 +283,6 @@ void AIDrumMachineAudioProcessorEditor::timerCallback() {
     if (audioProcessor.isSyncEnabled.load()) tempoLabel.setText("DAW: " + juce::String(audioProcessor.currentBpm.load(), 1) + " BPM", juce::dontSendNotification);
     else if (!tempoLabel.isBeingEdited()) tempoLabel.setText(juce::String(audioProcessor.internalTempo.load(), 1) + " BPM", juce::dontSendNotification);
 
-    // Processor側でのパラメータ変更をUIに同期
     if (audioProcessor.uiNeedsUpdate.exchange(false)) {
         for (int i = 0; i < 8; ++i) {
             divSelectors[i].setSelectedId(audioProcessor.trackDivisionsUI[i], juce::dontSendNotification);

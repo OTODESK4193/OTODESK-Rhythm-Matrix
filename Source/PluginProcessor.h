@@ -8,14 +8,13 @@
 #include <array>
 #include <cstring>
 
-// 24ジャンルの設定を定義する構造体
 struct GenreDefinition {
     int defaultNum;
     int defaultDen;
     const char* trackNames[8];
-    int allowedDivs[8][4]; // 各トラック最大4つのDiv候補（0は終端）
-    int shiftMin[8];       // Micro-Shiftの下限
-    int shiftMax[8];       // Micro-Shiftの上限
+    int allowedDivs[8][4];
+    int shiftMin[8];
+    int shiftMax[8];
 };
 
 class AIDrumMachineAudioProcessor : public juce::AudioProcessor
@@ -48,24 +47,23 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    // パラメータ（UI操作用）
     std::atomic<int> timeSigNumerator{ 4 };
     std::atomic<int> timeSigDenominator{ 4 };
     std::atomic<int> globalBarCount{ 4 };
 
-    // メインバッファ（UIからはこちらを編集）
     int drumPatternUI[8][1024] = { {0} };
     int trackDivisionsUI[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
-    int trackShiftUI[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; // -50 〜 50
+    int trackShiftUI[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
-    // DSPへの転送・UI再描画フラグ
     std::atomic<bool> patternUpdated{ false };
     std::atomic<bool> uiNeedsUpdate{ false };
 
     bool trackLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackDivLocked[8] = { false, false, false, false, false, false, false, false };
-    bool trackCmplxLocked[8] = { false, false, false, false, false, false, false, false };
-    int trackComplexity[8] = { 50, 50, 50, 50, 50, 50, 50, 50 };
+
+    // ★ コアトラック（0, 1, 4）はデフォルトでCmplxをロックし、0に設定（ユークリッドの排除）
+    bool trackCmplxLocked[8] = { true, true, false, false, true, false, false, false };
+    int trackComplexity[8] = { 0, 0, 50, 50, 0, 30, 30, 30 };
 
     bool trackEntrpLocked[8] = { false, false, false, false, false, false, false, false };
     int trackEntropy[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -104,7 +102,6 @@ public:
     static const GenreDefinition& getGenreDef(int index);
 
 private:
-    // DSPオーディオスレッド用バックバッファ（スレッドセーフ）
     int drumPatternDSP[8][1024] = { {0} };
     int trackDivisionsDSP[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
     int trackShiftDSP[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };

@@ -4,7 +4,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-// ★ 24ジャンルの詳細なルックアップテーブル（資料完全準拠）
 static const std::array<GenreDefinition, 24> genreTable = { {
         // 0: Techno (Detroit/Berlin)
         { 4, 4, {"909 Kick", "909 Snare", "CHH", "OHH", "Clap", "Ride", "Tom", "Noise FX"},
@@ -152,7 +151,6 @@ void AIDrumMachineAudioProcessor::clearTrack(int trk) {
     patternUpdated.store(true);
 }
 
-// 役割とジャンル特性に基づくデータ駆動型アルゴリズム
 void AIDrumMachineAudioProcessor::generateAllTracks() {
     int genre = currentGenre.load();
     const auto& def = getGenreDef(genre);
@@ -166,7 +164,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     for (int trk = 0; trk < 8; ++trk) {
         if (trackLocked[trk]) continue;
 
-        // 1. Divisionの決定（テーブルからサンプリング）
+        // 1. Divisionの決定
         if (!trackDivLocked[trk]) {
             std::vector<int> candidates;
             for (int i = 0; i < 4; ++i) {
@@ -179,23 +177,31 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             if (newDiv > maxDiv) newDiv = maxDiv;
             trackDivisionsUI[trk] = newDiv;
 
-            // Complexityのベース調整
-            if (!isAlgorithmMode && trk >= 5) trackComplexity[trk] = 20 + random.nextInt(20);
-            else if (isAlgorithmMode) trackComplexity[trk] = 50;
-            else trackComplexity[trk] = 50;
+            // Complexity: コアトラック(0,1,4)は0に固定し、ユークリッドを排除
+            if (!isAlgorithmMode) {
+                if (trk == 0 || trk == 1 || trk == 4) {
+                    trackComplexity[trk] = 0;
+                }
+                else {
+                    trackComplexity[trk] = 20 + random.nextInt(30); // 20〜50%に抑制
+                }
+            }
+            else {
+                trackComplexity[trk] = 50;
+            }
         }
 
-        // 2. Entropyの決定
+        // 2. Entropy
         if (!trackEntrpLocked[trk]) {
             trackEntropy[trk] = isAlgorithmMode ? 50 : random.nextInt(juce::Range<int>(0, 20));
         }
 
-        // 3. Micro-Shiftの決定（テーブル準拠）
+        // 3. Micro-Shift
         if (!trackShiftLocked[trk]) {
             trackShiftUI[trk] = random.nextInt(juce::Range<int>(def.shiftMin[trk], def.shiftMax[trk] + 1));
         }
 
-        // 4. パターン生成（ユークリッド & アンカー）
+        // 4. パターン生成
         int div = trackDivisionsUI[trk];
         int n = div * num * bars;
         int cmplx = trackComplexity[trk];
@@ -211,25 +217,69 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             bool isNegativeAnchor = false;
             int anchorVel = 100;
 
-            // アンカー生成（骨格の安定化）
+            // ★ ジャンル特有のリズム（アンカー）のハードコード化
             if (!isAlgorithmMode) {
-                if (trk == 0 && stepInBar == 0) isAnchor = true; // Kickの頭
-                if (trk == 1 && (stepInBar == div || stepInBar == div * 3)) isAnchor = true; // Snareの裏
+                switch (genre) {
+                case 0: // Techno
+                case 1: // House
+                    if (trk == 0 && (stepInBar % div == 0)) isAnchor = true;
+                    if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                    if (trk == 2 && (stepInBar % div == div / 2)) isAnchor = true;
+                    break;
+                case 2: // UK Garage
+                    if (trk == 0 && (stepInBar == 0 || stepInBar == div + div / 2 || stepInBar == div * 3 + div / 2)) isAnchor = true;
+                    if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                    break;
+                case 3: // D&B
+                    if (trk == 0 && (stepInBar == 0 || stepInBar == div * 2 + div / 2)) isAnchor = true;
+                    if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                    break;
+                case 4: // Trap
+                    if (trk == 0 && (stepInBar == 0 || stepInBar == div + div / 2)) isAnchor = true;
+                    if ((trk == 1 || trk == 4) && stepInBar == div * 2) isAnchor = true; // 3拍目スネア
+                    break;
+                case 7: // Dubstep
+                    if (trk == 0 && stepInBar == 0) isAnchor = true;
+                    if ((trk == 1 || trk == 4) && stepInBar == div * 2) isAnchor = true;
+                    break;
+                case 8: // Afrobeat
+                    if (trk == 0 && (stepInBar == 0 || stepInBar == div + div / 2 || stepInBar == div * 2 || stepInBar == div * 3 + div / 2)) isAnchor = true;
+                    if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                    break;
+                case 13: // Reggaeton
+                    if (trk == 0 && (stepInBar % div == 0)) isAnchor = true;
+                    if ((trk == 1 || trk == 4) && (stepInBar == div - 1 || stepInBar == div * 2 + div / 2)) isAnchor = true; // トレシージョ
+                    break;
+                case 15: // Funk
+                case 18: // Hip Hop
+                    if (trk == 0 && (stepInBar == 0 || stepInBar == div * 2 + div / 2)) isAnchor = true;
+                    if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                    break;
+                case 19: // Math Rock (5/4)
+                    if (trk == 0 && (stepInBar == 0 || stepInBar == div * 3)) isAnchor = true;
+                    if ((trk == 1 || trk == 4) && (stepInBar == div * 2)) isAnchor = true;
+                    break;
+                default:
+                    if (trk == 0 && stepInBar == 0) isAnchor = true;
+                    if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3) && num >= 4) isAnchor = true;
+                    break;
+                }
             }
 
             if (isAnchor) {
-                int velJitter = (int)((entrp / 100.0f) * 30.0f);
+                int velJitter = (int)((entrp / 100.0f) * 20.0f); // 揺らぎを20%に抑制
                 drumPatternUI[trk][j] = anchorVel - random.nextInt(juce::Range<int>(0, velJitter + 1));
             }
             else if (isNegativeAnchor) {
                 int ghostProb = (cmplx / 3) + (entrp / 2);
                 drumPatternUI[trk][j] = (random.nextInt(100) < ghostProb) ? random.nextInt(juce::Range<int>(10, 30 + (entrp / 5))) : 0;
             }
-            else if (cmplx > 0) {
-                if (genre == 23) { // Pure Chaos
+            else if (!trackCmplxLocked[trk] && cmplx > 0) {
+                // ユークリッド生成（コアトラックがロックされている場合は実行されない）
+                if (genre == 23) {
                     drumPatternUI[trk][j] = (random.nextFloat() > (1.0f - cmplx / 100.0f)) ? random.nextInt(juce::Range<int>(40, 101)) : 0;
                 }
-                else { // Euclidean
+                else {
                     bool isHit = (((j + offset) * k) % n) < k;
                     if (entrp > 0 && random.nextInt(100) < (entrp / 3)) isHit = !isHit;
                     drumPatternUI[trk][j] = isHit ? random.nextInt(juce::Range<int>(40, 90 + (entrp / 10))) : 0;
@@ -270,7 +320,6 @@ void AIDrumMachineAudioProcessor::prepareToPlay(double sampleRate, int samplesPe
     resetPosition();
     for (int i = 0; i < 8; ++i) { trackEnv[i] = 0.0f; trackPitchEnv[i] = 0.0f; trackPhase[i] = 0.0f; samplePlayPos[i] = -1; }
 
-    // バッファ初期化
     for (int i = 0; i < 8; ++i) {
         std::memcpy(drumPatternDSP[i], drumPatternUI[i], sizeof(drumPatternUI[i]));
         trackDivisionsDSP[i] = trackDivisionsUI[i];
@@ -298,7 +347,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     auto totalNumOutputChannels = getTotalNumOutputChannels();
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i) buffer.clear(i, 0, buffer.getNumSamples());
 
-    // ★ ダブルバッファのロックフリー同期（UIからの変更をDSPに安全に適用）
     if (patternUpdated.exchange(false)) {
         for (int i = 0; i < 8; ++i) {
             std::memcpy(drumPatternDSP[i], drumPatternUI[i], sizeof(drumPatternUI[i]));
@@ -366,7 +414,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                     if (anySolo && !trackSoloed[trk]) shouldPlay = false;
                     if (trackMuted[trk] && !trackSoloed[trk]) shouldPlay = false;
 
-                    // DSPバッファから再生
                     int velocity = drumPatternDSP[trk][trackCurrentStep[trk]];
                     if (velocity > 0 && shouldPlay)
                     {
