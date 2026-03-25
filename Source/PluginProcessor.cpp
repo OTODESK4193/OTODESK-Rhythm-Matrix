@@ -4,6 +4,106 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+// ★ 24ジャンルの詳細なルックアップテーブル（資料完全準拠）
+static const std::array<GenreDefinition, 24> genreTable = { {
+        // 0: Techno (Detroit/Berlin)
+        { 4, 4, {"909 Kick", "909 Snare", "CHH", "OHH", "Clap", "Ride", "Tom", "Noise FX"},
+          {{1,2,4,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,5,7,0}, {2,4,8,0}},
+          {0,0,0,0,0,0,0,0}, {0,0,2,2,0,5,5,10} },
+          // 1: House (Deep/Acid)
+          { 4, 4, {"Deep Kick", "Rimshot", "Shuff Hat", "Open Hat", "Clap", "Conga", "Bongo", "Vocal Chop"},
+            {{1,2,4,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {4,6,8,0}, {2,3,4,0}},
+            {-2,0, 5,0,-2, -5, -5, 0}, {2,5, 15,5, 5, 10, 10, 15} },
+            // 2: UK Garage (2-step)
+            { 4, 4, {"Punch Kick", "Snare/Rim", "Garage Hat", "Ride", "Clap", "Sub Bass", "Perc 1", "Perc 2"},
+              {{2,3,4,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {2,4,0,0}, {2,3,4,0}, {3,5,0,0}, {5,7,0,0}},
+              {-5,5, 10,5, 0, -10, 0, 0}, {5,15, 25,15, 10, 10, 15, 15} },
+              // 3: Drum & Bass / Jungle
+              { 4, 4, {"Heavy Kick", "Tight Snr", "Fast Hat", "Ride", "Break Rim", "Break 1", "Break 2", "Sub"},
+                {{2,4,0,0}, {2,4,0,0}, {4,8,0,0}, {4,8,0,0}, {2,4,0,0}, {4,6,8,0}, {4,6,8,0}, {2,4,0,0}},
+                {0,0, -5,-5, 0, -10, -10, 0}, {2,2, 5,5, 5, 10, 10, 5} },
+                // 4: Trap
+                { 4, 4, {"808 Kick", "808 Snare", "Roll Hat", "Open Hat", "Clap", "Perc", "808 Bass", "FX"},
+                  {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {2,4,0,0}, {4,8,0,0}, {2,4,0,0}, {2,4,0,0}},
+                  {0,0, 0,0, 0, 0, 0, 0}, {0,0, 0,0, 0, 0, 0, 0} },
+                  // 5: Footwork / Juke
+                  { 4, 4, {"Juke Kick", "Snare", "Fast Hat", "Hat 2", "Clap", "Tom", "Vocal 1", "Vocal 2"},
+                    {{3,4,6,0}, {3,4,6,0}, {4,6,8,0}, {4,6,8,0}, {2,4,0,0}, {3,5,6,0}, {3,4,5,0}, {4,6,7,0}},
+                    {-5,-5, -5,-5, 0, -10, -5, -5}, {5,5, 5,5, 5, 10, 15, 15} },
+                    // 6: IDM (Breakcore)
+                    { 4, 4, {"Glitch Kick", "Drill Snr", "Hat 1", "Hat 2", "Noise", "Perc 1", "Perc 2", "Glitch FX"},
+                      {{4,5,7,0}, {4,6,8,0}, {5,7,9,0}, {6,8,9,0}, {3,5,7,0}, {5,7,9,0}, {4,6,8,0}, {3,5,7,0}},
+                      {-10,-10, -15,-15, -20, -20, -20, -20}, {10,10, 15,15, 20, 20, 20, 20} },
+                      // 7: Dubstep
+                      { 4, 4, {"Stomp Kick", "Fat Snare", "Hat", "Ride", "Clap", "Wobble", "Growl", "Sub"},
+                        {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,8,0}, {2,4,0,0}, {1,2,4,0}},
+                        {0,0, 0,0, 0, 0, 0, 0}, {0,0, 5,5, 0, 10, 5, 0} },
+                        // 8: Afrobeat
+                        { 4, 4, {"Acoustic Kick", "Snare", "Shaker 1", "Shaker 2", "Clave", "Conga", "Djembe", "Agogo"},
+                          {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {3,4,0,0}, {3,4,5,0}, {3,4,6,0}, {2,3,4,0}},
+                          {0,0, 3,3, 5, 5, 5, 5}, {5,10, 15,15, 20, 20, 20, 20} },
+                          // 9: Gqom
+                          { 4, 4, {"Heavy Kick", "Snare", "Hat", "Open Hat", "Clap", "Tom 1", "Tom 2", "Chant"},
+                            {{3,4,0,0}, {2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {2,3,4,0}},
+                            {-5,0, 0,0, -5, -5, -5, 0}, {0,5, 10,5, 0, 10, 10, 10} },
+                            // 10: Amapiano
+                            { 4, 4, {"Log Drum", "Snare/Rim", "Shaker", "Open Hat", "Clap", "Conga", "Woodblock", "Whistle"},
+                              {{3,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {2,3,4,0}},
+                              {0,0, 5,0, 0, 5, 5, 0}, {10,5, 15,5, 5, 15, 15, 10} },
+                              // 11: Indian Classical (7/8 Default)
+                              { 7, 8, {"Bayan", "Dayan", "Tabla", "Manjira", "Ghungroo", "Dholak 1", "Dholak 2", "Vocal"},
+                                {{2,3,4,0}, {2,3,4,5}, {2,3,4,5}, {2,3,4,0}, {3,4,5,6}, {2,3,4,0}, {2,3,4,0}, {1,2,3,0}},
+                                {-5,-5, -5, -2, -2, -5, -5, -10}, {5,5, 5, 5, 5, 5, 5, 10} },
+                                // 12: Samba / Bossa Nova
+                                { 4, 4, {"Surdo", "Caixa", "Pandeiro", "Ganza", "Tamborim", "Agogo", "Cuica", "Repique"},
+                                  {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {3,4,0,0}, {3,4,0,0}, {3,4,0,0}, {4,6,0,0}},
+                                  {0,5, 5,5, 5, 5, 5, 5}, {5,15, 20,20, 20, 20, 20, 20} },
+                                  // 13: Reggaeton / Dembow
+                                  { 4, 4, {"Kick", "Snare (Tresillo)", "Hat", "Open Hat", "Clap", "Timbales", "Perc", "Vocal FX"},
+                                    {{2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,0,0}, {2,4,0,0}},
+                                    {0,-6, 0,0, 0, 0, 0, 0}, {5,0, 5,5, 5, 10, 10, 10} },
+                                    // 14: Gamelan (8/4 Default)
+                                    { 8, 4, {"Gong", "Kempul", "Kendang", "Bonang", "Saron", "Kenong", "Kethuk", "Slenthem"},
+                                      {{1,2,0,0}, {1,2,4,0}, {2,3,4,0}, {3,4,5,6}, {2,4,6,0}, {1,2,4,0}, {2,4,0,0}, {1,2,4,0}},
+                                      {-10,-10, -5,-5, -5, -10, -5, -10}, {10,10, 10,10, 10, 10, 10, 10} },
+                                      // 15: Funk (James Brown style)
+                                      { 4, 4, {"Kick", "Snare", "Hi-Hat", "Open Hat", "Clap", "Tom", "Conga", "Tambourine"},
+                                        {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,6,0}, {4,6,0,0}},
+                                        {0,0, 5,0, 0, 0, 5, 5}, {5,10, 20,5, 5, 10, 15, 20} },
+                                        // 16: New Jack Swing
+                                        { 4, 4, {"Punch Kick", "Snare", "Swing Hat", "Open Hat", "Clap", "Tom 1", "Tom 2", "Orch Hit"},
+                                          {{2,4,0,0}, {2,4,0,0}, {6,8,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,0,0}, {1,2,0,0}},
+                                          {0,0, 15,0, 0, 0, 0, 0}, {5,5, 25,5, 5, 5, 5, 5} },
+                                          // 17: Neo Soul (J Dilla)
+                                          { 4, 4, {"Soft Kick", "Rimshot", "Loose Hat", "Ride", "Snap", "Tom", "Shaker", "Vinyl FX"},
+                                            {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {3,4,0,0}, {2,4,0,0}, {2,3,4,0}, {4,6,0,0}, {1,2,0,0}},
+                                            {-5, 10, 20, 10, 5, 0, 15, 0}, {2, 25, 40, 25, 20, 10, 30, 0} },
+                                            // 18: Hip Hop (Boom Bap)
+                                            { 4, 4, {"Gritty Kick", "Fat Snare", "Hi-Hat", "Open Hat", "Clap", "Perc", "Scratch", "Sample"},
+                                              {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {1,2,4,0}},
+                                              {2, 5, 5, 0, 0, 0, 0, 0}, {8, 12, 15, 5, 5, 10, 5, 0} },
+                                              // 19: Math Rock (5/4 Default)
+                                              { 5, 4, {"Kick", "Snare", "Hi-Hat", "Ride", "Ghost Snr", "Tom 1", "Tom 2", "Crash"},
+                                                {{2,3,4,0}, {2,3,4,0}, {4,5,6,0}, {3,4,5,0}, {4,6,8,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}},
+                                                {0,0, 0,0, 0, 0, 0, 0}, {5,5, 5,5, 5, 5, 5, 5} },
+                                                // 20: Progressive Metal (7/8 Default)
+                                                { 7, 8, {"Heavy Kick", "Fat Snare", "Hi-Hat", "China", "Ghost Snr", "Low Tom", "Mid Tom", "High Tom"},
+                                                  {{2,3,4,5}, {2,3,4,0}, {4,6,8,0}, {2,3,4,0}, {4,6,8,0}, {3,4,5,0}, {3,4,5,0}, {3,4,5,0}},
+                                                  {0,0, 0,0, 0, 0, 0, 0}, {2,2, 2,2, 5, 5, 5, 5} },
+                                                  // 21: Minimalism (Reich) (12/8 Default)
+                                                  { 12, 8, {"Clap 1", "Clap 2", "Marimba 1", "Marimba 2", "Woodblock", "Pulse", "Phase 1", "Phase 2"},
+                                                    {{2,3,4,0}, {2,3,4,0}, {3,4,5,0}, {3,4,5,0}, {2,3,4,0}, {2,3,4,0}, {3,4,5,0}, {3,4,5,0}},
+                                                    {0,0, 0,0, 0, 0, -20, 20}, {0,0, 0,0, 0, 0, -20, 20} },
+                                                    // 22: Pure Euclidean (Math)
+                                                    { 4, 4, {"Node 1", "Node 2", "Node 3", "Node 4", "Node 5", "Node 6", "Node 7", "Node 8"},
+                                                      {{2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}},
+                                                      {0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0} },
+                                                      // 23: Pure Chaos (Random)
+                                                      { 4, 4, {"Chaos 1", "Chaos 2", "Chaos 3", "Chaos 4", "Chaos 5", "Chaos 6", "Chaos 7", "Chaos 8"},
+                                                        {{1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}},
+                                                        {-20,-20,-20,-20,-20,-20,-20,-20}, {20,20,20,20,20,20,20,20} }
+                                                  } };
+
 AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
     : AudioProcessor(BusesProperties()
@@ -21,207 +121,126 @@ AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
 
 AIDrumMachineAudioProcessor::~AIDrumMachineAudioProcessor() {}
 
+const GenreDefinition& AIDrumMachineAudioProcessor::getGenreDef(int index) {
+    if (index < 0 || index >= 24) return genreTable[0];
+    return genreTable[index];
+}
+
 void AIDrumMachineAudioProcessor::shiftTrackLeft(int trk) {
     if (trk < 0 || trk >= 8 || trackLocked[trk]) return;
-    int totalSteps = trackDivisions[trk] * timeSigNumerator.load() * globalBarCount;
+    int totalSteps = trackDivisionsUI[trk] * timeSigNumerator.load() * globalBarCount.load();
     if (totalSteps <= 0) return;
-    int firstStep = drumPattern[trk][0];
-    for (int i = 0; i < totalSteps - 1; ++i) drumPattern[trk][i] = drumPattern[trk][i + 1];
-    drumPattern[trk][totalSteps - 1] = firstStep;
+    int firstStep = drumPatternUI[trk][0];
+    for (int i = 0; i < totalSteps - 1; ++i) drumPatternUI[trk][i] = drumPatternUI[trk][i + 1];
+    drumPatternUI[trk][totalSteps - 1] = firstStep;
     patternUpdated.store(true);
 }
 
 void AIDrumMachineAudioProcessor::shiftTrackRight(int trk) {
     if (trk < 0 || trk >= 8 || trackLocked[trk]) return;
-    int totalSteps = trackDivisions[trk] * timeSigNumerator.load() * globalBarCount;
+    int totalSteps = trackDivisionsUI[trk] * timeSigNumerator.load() * globalBarCount.load();
     if (totalSteps <= 0) return;
-    int lastStep = drumPattern[trk][totalSteps - 1];
-    for (int i = totalSteps - 1; i > 0; --i) drumPattern[trk][i] = drumPattern[trk][i - 1];
-    drumPattern[trk][0] = lastStep;
+    int lastStep = drumPatternUI[trk][totalSteps - 1];
+    for (int i = totalSteps - 1; i > 0; --i) drumPatternUI[trk][i] = drumPatternUI[trk][i - 1];
+    drumPatternUI[trk][0] = lastStep;
     patternUpdated.store(true);
 }
 
 void AIDrumMachineAudioProcessor::clearTrack(int trk) {
     if (trk < 0 || trk >= 8 || trackLocked[trk]) return;
-    for (int j = 0; j < 1024; ++j) drumPattern[trk][j] = 0;
+    for (int j = 0; j < 1024; ++j) drumPatternUI[trk][j] = 0;
     patternUpdated.store(true);
 }
 
-// 全24ジャンル対応 データ駆動型アルゴリズム
+// 役割とジャンル特性に基づくデータ駆動型アルゴリズム
 void AIDrumMachineAudioProcessor::generateAllTracks() {
     int genre = currentGenre.load();
+    const auto& def = getGenreDef(genre);
     bool isAlgorithmMode = (genre >= 22);
 
-    // ジャンル別 デフォルトテンポ範囲
-    const int minTempos[] = { 125, 120, 130, 160, 135, 160,  90, 135,  90, 120, 110,  80,  80,  90,  80, 100, 100,  85,  85, 120, 140, 120, 60, 60 };
-    const int maxTempos[] = { 135, 126, 135, 180, 145, 160, 180, 145, 110, 127, 115, 120, 120,  95, 120, 115, 112,  95,  95, 160, 180, 170, 200, 200 };
-
-    if (!isSyncEnabled.load()) {
-        double newBpm = (double)random.nextInt(juce::Range<int>(minTempos[genre], maxTempos[genre] + 1));
-        internalTempo.store(newBpm);
-    }
-
-    // ジャンル別 推奨拍子設定
-    int recommendedNum = 4;
-    int recommendedDen = 4;
-    switch (genre) {
-    case 11: recommendedNum = 7; recommendedDen = 8; break; // Indian Classical
-    case 14: recommendedNum = 8; recommendedDen = 4; break; // Gamelan
-    case 19: recommendedNum = 5; recommendedDen = 4; break; // Math Rock
-    case 20: recommendedNum = 7; recommendedDen = 8; break; // Prog Metal
-    case 21: recommendedNum = 12; recommendedDen = 8; break; // Minimalism
-    default: recommendedNum = 4; recommendedDen = 4; break;
-    }
-
-    timeSigNumerator.store(recommendedNum);
-    timeSigDenominator.store(recommendedDen);
-    int num = recommendedNum;
-    int den = recommendedDen;
+    int num = timeSigNumerator.load();
+    int den = timeSigDenominator.load();
     int maxDiv = (den == 16) ? 2 : ((den == 8) ? 4 : 8);
+    int bars = globalBarCount.load();
 
     for (int trk = 0; trk < 8; ++trk) {
         if (trackLocked[trk]) continue;
 
-        // 1. Divisionの決定
+        // 1. Divisionの決定（テーブルからサンプリング）
         if (!trackDivLocked[trk]) {
+            std::vector<int> candidates;
+            for (int i = 0; i < 4; ++i) {
+                if (def.allowedDivs[trk][i] > 0) candidates.push_back(def.allowedDivs[trk][i]);
+            }
             int newDiv = 4;
-            if (!isAlgorithmMode && trk >= 5) trackComplexity[trk] = 0;
-            else if (isAlgorithmMode) trackComplexity[trk] = 50;
-
-            switch (genre) {
-            case 1:  newDiv = 6; break;
-            case 2:  newDiv = (trk >= 2) ? 6 : 4; break; // Garage swing
-            case 4:  newDiv = (trk == 2) ? 8 : (random.nextBool() ? 4 : 6); break;
-            case 5:  newDiv = (trk == 0 || trk == 2) ? 6 : 4; break;
-            case 6:  newDiv = random.nextInt(juce::Range<int>(5, 10)); break;
-            case 11: newDiv = random.nextBool() ? 5 : 7; break;
-            case 13: newDiv = (trk == 1 || trk == 4) ? 8 : 4; break;
-            case 16: newDiv = 6; break;
-            case 17: newDiv = (trk == 2) ? 5 : 4; break;
-            case 19: newDiv = random.nextInt(juce::Range<int>(4, 8)); break;
-            case 20: newDiv = (trk == 0) ? 8 : 7; break;
-            case 21: newDiv = 3; break;
-            case 22: case 23: newDiv = random.nextInt(juce::Range<int>(1, 10)); break;
-            default: newDiv = 4; break;
+            if (!candidates.empty()) {
+                newDiv = candidates[random.nextInt(candidates.size())];
             }
             if (newDiv > maxDiv) newDiv = maxDiv;
-            trackDivisions[trk] = newDiv;
-        }
-        else {
-            if (trackDivisions[trk] > maxDiv) trackDivisions[trk] = maxDiv;
+            trackDivisionsUI[trk] = newDiv;
+
+            // Complexityのベース調整
+            if (!isAlgorithmMode && trk >= 5) trackComplexity[trk] = 20 + random.nextInt(20);
+            else if (isAlgorithmMode) trackComplexity[trk] = 50;
+            else trackComplexity[trk] = 50;
         }
 
         // 2. Entropyの決定
         if (!trackEntrpLocked[trk]) {
-            trackEntropy[trk] = isAlgorithmMode ? 50 : random.nextInt(juce::Range<int>(0, 15));
+            trackEntropy[trk] = isAlgorithmMode ? 50 : random.nextInt(juce::Range<int>(0, 20));
         }
 
-        // 3. Micro-Shiftの決定
+        // 3. Micro-Shiftの決定（テーブル準拠）
         if (!trackShiftLocked[trk]) {
-            int newShift = random.nextInt(juce::Range<int>(-3, 4));
-            if (genre == 17) {
-                if (trk == 0) newShift = random.nextInt(juce::Range<int>(-5, 2));
-                if (trk == 1) newShift = random.nextInt(juce::Range<int>(10, 21));
-                if (trk == 2) newShift = random.nextInt(juce::Range<int>(20, 36));
-                if (trk == 4) newShift = random.nextInt(juce::Range<int>(5, 15));
-            }
-            else if (genre == 18) {
-                if (trk == 0) newShift = random.nextInt(juce::Range<int>(2, 8));
-                if (trk == 1) newShift = random.nextInt(juce::Range<int>(5, 12));
-            }
-            else if (genre == 0 || genre == 3) {
-                if (trk == 2) newShift = random.nextInt(juce::Range<int>(-8, -2));
-            }
-            else if (genre == 13) {
-                if (trk == 1) newShift = random.nextInt(juce::Range<int>(-6, 0));
-            }
-            else if (genre == 8) {
-                if (trk == 2 || trk == 3) newShift = random.nextInt(juce::Range<int>(3, 10));
-            }
-            trackShift[trk] = newShift;
+            trackShiftUI[trk] = random.nextInt(juce::Range<int>(def.shiftMin[trk], def.shiftMax[trk] + 1));
         }
 
         // 4. パターン生成（ユークリッド & アンカー）
-        int div = trackDivisions[trk];
-        int n = div * num * globalBarCount;
+        int div = trackDivisionsUI[trk];
+        int n = div * num * bars;
         int cmplx = trackComplexity[trk];
         int entrp = trackEntropy[trk];
         int k = juce::jmax(1, (n * cmplx) / 100);
         int offset = random.nextInt(juce::Range<int>(0, juce::jmax(1, n)));
 
         for (int j = 0; j < 1024; ++j) {
-            if (j >= n) { drumPattern[trk][j] = 0; continue; }
+            if (j >= n) { drumPatternUI[trk][j] = 0; continue; }
 
             int stepInBar = j % (div * num);
             bool isAnchor = false;
             bool isNegativeAnchor = false;
             int anchorVel = 100;
 
-            switch (genre) {
-            case 0:
-                if (trk == 0 && stepInBar % div == 0) isAnchor = true;
-                if (trk == 1 && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
-                if (trk == 2 && (stepInBar % div == div / 2)) isAnchor = true;
-                break;
-            case 1:
-                if (trk == 0 && stepInBar % div == 0) isAnchor = true;
-                if (trk == 2 && div >= 2 && (stepInBar % div == div - 2)) { isAnchor = true; anchorVel = 85; }
-                break;
-            case 2:
-                if (trk == 0) {
-                    if (stepInBar == 0 || stepInBar == div * 2 + div / 2) isAnchor = true;
-                    if (stepInBar == div || stepInBar == div * 3) isNegativeAnchor = true;
-                }
-                if (trk == 1 && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
-                break;
-            case 4:
-                if (trk == 0 && stepInBar == 0) isAnchor = true;
-                if (trk == 1 && stepInBar == div * 2) isAnchor = true;
-                break;
-            case 13:
-                if (trk == 0 && stepInBar % div == 0) isAnchor = true;
-                if (trk == 1 && (stepInBar == div - 1 || stepInBar == div * 2 + div / 2)) isAnchor = true;
-                break;
-            case 15:
-                if (trk == 0 && stepInBar == 0) isAnchor = true;
-                if (trk == 1 && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
-                break;
-            case 17:
-                if (trk == 0 && stepInBar % div == 0) isAnchor = true;
-                if (trk == 2) isAnchor = true;
-                break;
-            default:
-                if (trk == 0 && stepInBar == 0) isAnchor = true;
-                break;
+            // アンカー生成（骨格の安定化）
+            if (!isAlgorithmMode) {
+                if (trk == 0 && stepInBar == 0) isAnchor = true; // Kickの頭
+                if (trk == 1 && (stepInBar == div || stepInBar == div * 3)) isAnchor = true; // Snareの裏
             }
 
             if (isAnchor) {
                 int velJitter = (int)((entrp / 100.0f) * 30.0f);
-                drumPattern[trk][j] = anchorVel - random.nextInt(juce::Range<int>(0, velJitter + 1));
+                drumPatternUI[trk][j] = anchorVel - random.nextInt(juce::Range<int>(0, velJitter + 1));
             }
             else if (isNegativeAnchor) {
                 int ghostProb = (cmplx / 3) + (entrp / 2);
-                drumPattern[trk][j] = (random.nextInt(100) < ghostProb) ? random.nextInt(juce::Range<int>(10, 30 + (entrp / 5))) : 0;
+                drumPatternUI[trk][j] = (random.nextInt(100) < ghostProb) ? random.nextInt(juce::Range<int>(10, 30 + (entrp / 5))) : 0;
             }
             else if (cmplx > 0) {
                 if (genre == 23) { // Pure Chaos
-                    drumPattern[trk][j] = (random.nextFloat() > (1.0f - cmplx / 100.0f)) ? random.nextInt(juce::Range<int>(40, 101)) : 0;
+                    drumPatternUI[trk][j] = (random.nextFloat() > (1.0f - cmplx / 100.0f)) ? random.nextInt(juce::Range<int>(40, 101)) : 0;
                 }
                 else { // Euclidean
                     bool isHit = (((j + offset) * k) % n) < k;
-                    if (entrp > 0 && random.nextInt(100) < (entrp / 3)) {
-                        isHit = !isHit;
-                    }
-                    drumPattern[trk][j] = isHit ? random.nextInt(juce::Range<int>(40, 90 + (entrp / 10))) : 0;
+                    if (entrp > 0 && random.nextInt(100) < (entrp / 3)) isHit = !isHit;
+                    drumPatternUI[trk][j] = isHit ? random.nextInt(juce::Range<int>(40, 90 + (entrp / 10))) : 0;
                 }
             }
             else {
-                drumPattern[trk][j] = 0;
+                drumPatternUI[trk][j] = 0;
             }
         }
     }
 
-    // DSP側へのコピーとUIの更新をリクエスト
     patternUpdated.store(true);
     uiNeedsUpdate.store(true);
 }
@@ -251,12 +270,15 @@ void AIDrumMachineAudioProcessor::prepareToPlay(double sampleRate, int samplesPe
     resetPosition();
     for (int i = 0; i < 8; ++i) { trackEnv[i] = 0.0f; trackPitchEnv[i] = 0.0f; trackPhase[i] = 0.0f; samplePlayPos[i] = -1; }
 
-    // 初期状態のバッファ同期
+    // バッファ初期化
     for (int i = 0; i < 8; ++i) {
-        for (int j = 0; j < 1024; ++j) {
-            drumPatternDSP[i][j] = drumPattern[i][j];
-        }
+        std::memcpy(drumPatternDSP[i], drumPatternUI[i], sizeof(drumPatternUI[i]));
+        trackDivisionsDSP[i] = trackDivisionsUI[i];
+        trackShiftDSP[i] = trackShiftUI[i];
     }
+    timeSigNumDSP = timeSigNumerator.load();
+    timeSigDenDSP = timeSigDenominator.load();
+    globalBarCountDSP = globalBarCount.load();
     patternUpdated.store(false);
 }
 
@@ -276,13 +298,16 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     auto totalNumOutputChannels = getTotalNumOutputChannels();
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i) buffer.clear(i, 0, buffer.getNumSamples());
 
-    // ★ スレッドセーフティ：UIからのパターン変更があればバックバッファにコピー（ロックフリー）
+    // ★ ダブルバッファのロックフリー同期（UIからの変更をDSPに安全に適用）
     if (patternUpdated.exchange(false)) {
         for (int i = 0; i < 8; ++i) {
-            for (int j = 0; j < 1024; ++j) {
-                drumPatternDSP[i][j] = drumPattern[i][j];
-            }
+            std::memcpy(drumPatternDSP[i], drumPatternUI[i], sizeof(drumPatternUI[i]));
+            trackDivisionsDSP[i] = trackDivisionsUI[i];
+            trackShiftDSP[i] = trackShiftUI[i];
         }
+        timeSigNumDSP = timeSigNumerator.load();
+        timeSigDenDSP = timeSigDenominator.load();
+        globalBarCountDSP = globalBarCount.load();
     }
 
     int numSamples = buffer.getNumSamples();
@@ -302,11 +327,8 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     currentBpm.store(bpm);
 
     double samplesPerQuarterNote = sampleRate * (60.0 / bpm);
-    int den = timeSigDenominator.load();
-    double samplesPerBeat = samplesPerQuarterNote * (4.0 / (double)den);
-
-    int num = timeSigNumerator.load();
-    int samplesPerLoop = (int)(samplesPerBeat * num * globalBarCount);
+    double samplesPerBeat = samplesPerQuarterNote * (4.0 / (double)timeSigDenDSP);
+    int samplesPerLoop = (int)(samplesPerBeat * timeSigNumDSP * globalBarCountDSP);
     float pi2 = juce::MathConstants<float>::twoPi;
 
     bool anySolo = false;
@@ -325,11 +347,11 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
             for (int trk = 0; trk < 8; ++trk)
             {
-                int div = trackDivisions[trk]; if (div < 1) div = 1;
-                int totalStepsInLoop = div * num * globalBarCount;
+                int div = trackDivisionsDSP[trk]; if (div < 1) div = 1;
+                int totalStepsInLoop = div * timeSigNumDSP * globalBarCountDSP;
 
                 double samplesPerStep = (double)samplesPerLoop / (double)totalStepsInLoop;
-                int shiftInSamples = (int)((trackShift[trk] / 100.0) * samplesPerStep);
+                int shiftInSamples = (int)((trackShiftDSP[trk] / 100.0) * samplesPerStep);
 
                 int virtualSamplesInLoop = samplesInLoop - shiftInSamples;
                 while (virtualSamplesInLoop < 0) virtualSamplesInLoop += samplesPerLoop;
@@ -344,7 +366,7 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                     if (anySolo && !trackSoloed[trk]) shouldPlay = false;
                     if (trackMuted[trk] && !trackSoloed[trk]) shouldPlay = false;
 
-                    // ★ DSPバッファから読み出し
+                    // DSPバッファから再生
                     int velocity = drumPatternDSP[trk][trackCurrentStep[trk]];
                     if (velocity > 0 && shouldPlay)
                     {

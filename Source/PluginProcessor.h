@@ -6,6 +6,17 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <atomic>
 #include <array>
+#include <cstring>
+
+// 24ジャンルの設定を定義する構造体
+struct GenreDefinition {
+    int defaultNum;
+    int defaultDen;
+    const char* trackNames[8];
+    int allowedDivs[8][4]; // 各トラック最大4つのDiv候補（0は終端）
+    int shiftMin[8];       // Micro-Shiftの下限
+    int shiftMax[8];       // Micro-Shiftの上限
+};
 
 class AIDrumMachineAudioProcessor : public juce::AudioProcessor
 {
@@ -37,32 +48,29 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    // パラメータ
+    // パラメータ（UI操作用）
     std::atomic<int> timeSigNumerator{ 4 };
     std::atomic<int> timeSigDenominator{ 4 };
-    int globalBarCount = 4;
+    std::atomic<int> globalBarCount{ 4 };
 
-    // エディタ用メインバッファ（UIからはこちらを編集する）
-    int drumPattern[8][1024] = { {0} };
+    // メインバッファ（UIからはこちらを編集）
+    int drumPatternUI[8][1024] = { {0} };
+    int trackDivisionsUI[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
+    int trackShiftUI[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; // -50 〜 50
 
-    // UIからの変更をDSPに通知するフラグ
+    // DSPへの転送・UI再描画フラグ
     std::atomic<bool> patternUpdated{ false };
-
-    // UI側に再描画・再同期を要求するフラグ
     std::atomic<bool> uiNeedsUpdate{ false };
 
-    int trackDivisions[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
     bool trackLocked[8] = { false, false, false, false, false, false, false, false };
-
     bool trackDivLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackCmplxLocked[8] = { false, false, false, false, false, false, false, false };
     int trackComplexity[8] = { 50, 50, 50, 50, 50, 50, 50, 50 };
 
     bool trackEntrpLocked[8] = { false, false, false, false, false, false, false, false };
-    int trackEntropy[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; // 0〜100
+    int trackEntropy[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
     bool trackShiftLocked[8] = { false, false, false, false, false, false, false, false };
-    int trackShift[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; // -50 〜 50
 
     bool trackMuted[8] = { false, false, false, false, false, false, false, false };
     bool trackSoloed[8] = { false, false, false, false, false, false, false, false };
@@ -88,15 +96,21 @@ public:
     bool hasSampleLoaded(int trackIndex) const { return hasSample[trackIndex]; }
     void clearSample(int trackIndex);
 
-    // ★リファクタリング: 一括生成アルゴリズム
     void generateAllTracks();
     void shiftTrackLeft(int trackIndex);
     void shiftTrackRight(int trackIndex);
     void clearTrack(int trackIndex);
 
+    static const GenreDefinition& getGenreDef(int index);
+
 private:
-    // DSPオーディオスレッド用バックバッファ（スレッドセーフティの確保）
+    // DSPオーディオスレッド用バックバッファ（スレッドセーフ）
     int drumPatternDSP[8][1024] = { {0} };
+    int trackDivisionsDSP[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
+    int trackShiftDSP[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    int timeSigNumDSP = 4;
+    int timeSigDenDSP = 4;
+    int globalBarCountDSP = 4;
 
     int samplesInLoop = 0;
     int trackCurrentStep[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
