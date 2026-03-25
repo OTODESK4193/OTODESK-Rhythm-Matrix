@@ -68,14 +68,15 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     addAndMakeVisible(styleMenu);
     addAndMakeVisible(statusLabel);
 
-    // ★修正：全22ジャンルのリスト [cite: 8, 16, 23, 31, 38, 45, 52, 59, 66, 74, 79, 86, 94, 99, 104, 112, 117, 121, 125, 131, 136, 140]
+    // ★追加：数学的アルゴリズムを含む全24項目のリスト
     const juce::StringArray genres = {
         "0. Techno (Detroit/Berlin)", "1. House (Deep/Acid)", "2. UK Garage (2-step)", "3. Drum & Bass / Jungle",
         "4. Trap", "5. Footwork / Juke", "6. IDM (Breakcore)", "7. Dubstep",
         "8. Afrobeat", "9. Gqom", "10. Amapiano", "11. Indian Classical",
         "12. Samba / Bossa Nova", "13. Reggaeton / Dembow", "14. Gamelan",
         "15. Funk (James Brown)", "16. New Jack Swing", "17. Neo Soul (J Dilla)",
-        "18. Hip Hop (Boom Bap)", "19. Math Rock", "20. Progressive Metal", "21. Minimalism (Reich)"
+        "18. Hip Hop (Boom Bap)", "19. Math Rock", "20. Progressive Metal", "21. Minimalism (Reich)",
+        "22. Pure Euclidean (Math)", "23. Pure Chaos (Random)"
     };
     for (int i = 0; i < genres.size(); ++i) {
         styleMenu.addItem(genres[i], i + 1);
@@ -161,11 +162,11 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         juce::Random random;
         int genreIdx = styleMenu.getSelectedId() - 1;
 
-        // ★修正：全22ジャンルに対応した推奨テンポ [cite: 10, 18, 25, 33, 40, 47, 54, 61, 68, 76, 81, 88, 96, 101, 106, 114, 119, 123, 127, 133, 138, 142]
-        const int minTempos[] = { 125, 120, 130, 160, 135, 160,  90, 135,  90, 120, 110,  80,  80,  90,  80, 100, 100,  85,  85, 120, 140, 120 };
-        const int maxTempos[] = { 135, 126, 135, 180, 145, 160, 180, 145, 110, 127, 115, 120, 120,  95, 120, 115, 112,  95,  95, 160, 180, 170 };
+        // ★修正：全24項目（ジャンル＋アルゴリズム）の推奨テンポ
+        const int minTempos[] = { 125, 120, 130, 160, 135, 160,  90, 135,  90, 120, 110,  80,  80,  90,  80, 100, 100,  85,  85, 120, 140, 120, 60, 60 };
+        const int maxTempos[] = { 135, 126, 135, 180, 145, 160, 180, 145, 110, 127, 115, 120, 120,  95, 120, 115, 112,  95,  95, 160, 180, 170, 200, 200 };
 
-        if (genreIdx >= 0 && genreIdx < 22) {
+        if (genreIdx >= 0 && genreIdx < 24) {
             if (!safeThis->audioProcessor.isSyncEnabled.load()) {
                 double newBpm = (double)random.nextInt(juce::Range<int>(minTempos[genreIdx], maxTempos[genreIdx] + 1));
                 safeThis->audioProcessor.internalTempo.store(newBpm);
