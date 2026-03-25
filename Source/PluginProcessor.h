@@ -37,7 +37,10 @@ public:
     int trackDivisions[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
     bool trackLocked[8] = { false, false, false, false, false, false, false, false };
 
-    // ★追加：Mute / Solo用フラグ
+    // ★追加：SETUP画面用の新規パラメータ
+    int trackComplexity[8] = { 50, 50, 50, 50, 50, 50, 50, 50 }; // 0〜100%
+    int globalBarCount = 4; // 1〜4小節
+
     bool trackMuted[8] = { false, false, false, false, false, false, false, false };
     bool trackSoloed[8] = { false, false, false, false, false, false, false, false };
 
@@ -59,7 +62,6 @@ public:
     void loadSample(int trackIndex, const juce::String& filePath);
     bool hasSampleLoaded(int trackIndex) const { return hasSample[trackIndex]; }
 
-    // ★追加：トラック操作のロジック関数
     void shiftTrackLeft(int trackIndex);
     void shiftTrackRight(int trackIndex);
     void clearTrack(int trackIndex);

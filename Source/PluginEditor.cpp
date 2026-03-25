@@ -32,22 +32,11 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     tabSeqButton.onClick = [this] { currentView = SequencerView; updateViewVisibility(); resized(); repaint(); };
     tabSetupButton.onClick = [this] { currentView = SetupView; updateViewVisibility(); resized(); repaint(); };
 
-    // ★追加：全体クリアボタンの初期化とY/Nダイアログ
     addAndMakeVisible(btnClearAll);
     btnClearAll.setColour(juce::TextButton::buttonColourId, juce::Colours::red.withAlpha(0.6f));
     btnClearAll.onClick = [this] {
-        juce::NativeMessageBox::showOkCancelBox(
-            juce::MessageBoxIconType::WarningIcon,
-            "Clear All",
-            "Do you really want to clear ALL tracks?",
-            this,
-            juce::ModalCallbackFunction::create([this](int result) {
-                if (result == 1) { // 1 = OK
-                    for (int i = 0; i < 8; ++i) audioProcessor.clearTrack(i);
-                    repaint();
-                }
-                })
-        );
+        juce::NativeMessageBox::showOkCancelBox(juce::MessageBoxIconType::WarningIcon, "Clear All", "Do you really want to clear ALL tracks?", this,
+            juce::ModalCallbackFunction::create([this](int result) { if (result == 1) { for (int i = 0; i < 8; ++i) audioProcessor.clearTrack(i); repaint(); } }));
         };
 
     addAndMakeVisible(generateButton);
@@ -59,25 +48,29 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     styleMenu.addItem("Offline Random (No API)", 3);
     styleMenu.setSelectedId(3);
 
-    addAndMakeVisible(tabButton1);
-    addAndMakeVisible(tabButton2);
-    addAndMakeVisible(tabButton3);
-    addAndMakeVisible(tabButton4);
+    addAndMakeVisible(tabButton1); addAndMakeVisible(tabButton2);
+    addAndMakeVisible(tabButton3); addAndMakeVisible(tabButton4);
 
     statusLabel.setJustificationType(juce::Justification::centredLeft);
     statusLabel.setText("Select style & Click Generate", juce::dontSendNotification);
 
-    auto tabClick = [this](int barIndex) {
-        currentViewBar = barIndex;
-        updateTabColors();
-        repaint();
-        };
-    tabButton1.onClick = [tabClick] { tabClick(0); };
-    tabButton2.onClick = [tabClick] { tabClick(1); };
-    tabButton3.onClick = [tabClick] { tabClick(2); };
-    tabButton4.onClick = [tabClick] { tabClick(3); };
+    auto tabClick = [this](int barIndex) { currentViewBar = barIndex; updateTabColors(); repaint(); };
+    tabButton1.onClick = [tabClick] { tabClick(0); }; tabButton2.onClick = [tabClick] { tabClick(1); };
+    tabButton3.onClick = [tabClick] { tabClick(2); }; tabButton4.onClick = [tabClick] { tabClick(3); };
 
     updateTabColors();
+
+    // ★追加：グローバルな小節数メニューの設定
+    addChildComponent(barCountLabel);
+    barCountLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    addChildComponent(barCountMenu);
+    barCountMenu.addItem("1 Bar", 1); barCountMenu.addItem("2 Bars", 2);
+    barCountMenu.addItem("3 Bars", 3); barCountMenu.addItem("4 Bars", 4);
+    barCountMenu.setSelectedId(audioProcessor.globalBarCount);
+    barCountMenu.onChange = [this] {
+        audioProcessor.globalBarCount = barCountMenu.getSelectedId();
+        repaint();
+        };
 
     juce::String defaultNames[8] = { "Kick", "Snare", "CHH", "OHH", "Clap", "L.Tom", "M.Tom", "H.Tom" };
     for (int i = 0; i < 8; ++i) {
@@ -89,74 +82,86 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         trackNameLabels[i].setColour(juce::Label::textColourId, juce::Colours::white);
         trackNameLabels[i].setColour(juce::Label::textWhenEditingColourId, juce::Colours::orange);
 
+        // Sequencer UI
         addAndMakeVisible(btnMute[i]); btnMute[i].setButtonText("M");
         addAndMakeVisible(btnSolo[i]); btnSolo[i].setButtonText("S");
         addAndMakeVisible(btnClear[i]); btnClear[i].setButtonText("C");
         addAndMakeVisible(btnShiftL[i]); btnShiftL[i].setButtonText("<");
         addAndMakeVisible(btnShiftR[i]); btnShiftR[i].setButtonText(">");
 
-        // ★修正：ON状態の時の点灯色を設定
         btnMute[i].setClickingTogglesState(true);
         btnMute[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::red);
         btnMute[i].onClick = [this, i] { audioProcessor.trackMuted[i] = btnMute[i].getToggleState(); };
 
-        // ★修正：ON状態の時の点灯色を設定
         btnSolo[i].setClickingTogglesState(true);
         btnSolo[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::blue);
         btnSolo[i].onClick = [this, i] { audioProcessor.trackSoloed[i] = btnSolo[i].getToggleState(); };
 
-        // ★修正：Cボタンを押した際のY/Nダイアログ
         btnClear[i].onClick = [this, i] {
-            juce::NativeMessageBox::showOkCancelBox(
-                juce::MessageBoxIconType::WarningIcon,
-                "Clear Track",
-                "Clear Track " + juce::String(i + 1) + " (" + trackNameLabels[i].getText() + ")?",
-                this,
-                juce::ModalCallbackFunction::create([this, i](int result) {
-                    if (result == 1) { // 1 = OK
-                        audioProcessor.clearTrack(i);
-                        repaint();
-                    }
-                    })
-            );
+            juce::NativeMessageBox::showOkCancelBox(juce::MessageBoxIconType::WarningIcon, "Clear Track", "Clear Track " + juce::String(i + 1) + "?", this,
+                juce::ModalCallbackFunction::create([this, i](int result) { if (result == 1) { audioProcessor.clearTrack(i); repaint(); } }));
             };
 
         btnShiftL[i].onClick = [this, i] { audioProcessor.shiftTrackLeft(i); repaint(); };
         btnShiftR[i].onClick = [this, i] { audioProcessor.shiftTrackRight(i); repaint(); };
+
+        // ★追加：Setup UI (Division & Complexity)
+        addChildComponent(divLabels[i]);
+        divLabels[i].setText("Div:", juce::dontSendNotification);
+        divLabels[i].setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+
+        addChildComponent(divSelectors[i]);
+        for (int d = 1; d <= 9; ++d) divSelectors[i].addItem(juce::String(d), d);
+        divSelectors[i].setSelectedId(audioProcessor.trackDivisions[i]);
+        divSelectors[i].onChange = [this, i] {
+            audioProcessor.trackDivisions[i] = divSelectors[i].getSelectedId();
+            repaint();
+            };
+
+        addChildComponent(compLabels[i]);
+        compLabels[i].setText("Cmplx:", juce::dontSendNotification);
+        compLabels[i].setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+
+        addChildComponent(complexitySliders[i]);
+        complexitySliders[i].setSliderStyle(juce::Slider::LinearHorizontal);
+        complexitySliders[i].setTextBoxStyle(juce::Slider::TextBoxRight, false, 40, 20);
+        complexitySliders[i].setRange(0.0, 100.0, 1.0);
+        complexitySliders[i].setValue(audioProcessor.trackComplexity[i]);
+        complexitySliders[i].onValueChange = [this, i] {
+            audioProcessor.trackComplexity[i] = static_cast<int>(complexitySliders[i].getValue());
+            };
     }
 
     juce::Component::SafePointer<AIDrumMachineAudioProcessorEditor> safeThis(this);
 
-    generateButton.onClick = [safeThis, this]
-        {
-            if (safeThis == nullptr) return;
-            if (styleMenu.getSelectedId() == 3) {
-                statusLabel.setText("SUCCESS! Offline Random generated.", juce::dontSendNotification);
-                juce::Random random;
-                for (int i = 0; i < 8; ++i) {
-                    if (safeThis->audioProcessor.trackLocked[i]) continue;
-                    int div = random.nextInt(juce::Range<int>(1, 10));
-                    safeThis->audioProcessor.trackDivisions[i] = div;
-                    int totalSteps = div * 4;
-                    for (int j = 0; j < 36; ++j) {
-                        if (j < totalSteps) {
-                            if (random.nextFloat() > 0.7f) safeThis->audioProcessor.drumPattern[i][j] = random.nextInt(juce::Range<int>(80, 101));
-                            else safeThis->audioProcessor.drumPattern[i][j] = 0;
-                        }
+    // AI/ランダム処理（既存のまま）
+    generateButton.onClick = [safeThis, this] {
+        if (safeThis == nullptr) return;
+        if (styleMenu.getSelectedId() == 3) {
+            statusLabel.setText("SUCCESS! Offline Random generated.", juce::dontSendNotification);
+            juce::Random random;
+            for (int i = 0; i < 8; ++i) {
+                if (safeThis->audioProcessor.trackLocked[i]) continue;
+                int div = random.nextInt(juce::Range<int>(1, 10));
+                safeThis->audioProcessor.trackDivisions[i] = div;
+                safeThis->divSelectors[i].setSelectedId(div, juce::dontSendNotification); // Setup画面も同期
+                int totalSteps = div * 4;
+                for (int j = 0; j < 36; ++j) {
+                    if (j < totalSteps) {
+                        if (random.nextFloat() > 0.7f) safeThis->audioProcessor.drumPattern[i][j] = random.nextInt(juce::Range<int>(80, 101));
                         else safeThis->audioProcessor.drumPattern[i][j] = 0;
                     }
+                    else safeThis->audioProcessor.drumPattern[i][j] = 0;
                 }
-                safeThis->currentViewBar = 0;
-                safeThis->updateTabColors();
-                safeThis->resized();
-                safeThis->repaint();
             }
-            else {
-                statusLabel.setText("Requesting Gemini (4 Bars)...", juce::dontSendNotification);
-                juce::String myKey = "AIzaSyBT2vQXyacUMdmNOF2OjkYYQ_OPtJgORtQ";
-                juce::String userPrompt = (styleMenu.getSelectedId() == 1) ? "Generate a chaotic and evolving polyrhythmic techno beat for 4 bars. Use divisions like 5 or 7 for hi-hats." : "Generate a standard 4-on-the-floor techno beat for 4 bars. CRITICAL INSTRUCTION: You MUST set 'division': 4 for ALL 8 tracks. Do NOT use any division other than 4. The 'pattern' array for each track MUST have exactly 16 items.";
-                gemini.fetchDrumPattern(userPrompt, myKey);
-            }
+            safeThis->currentViewBar = 0; safeThis->updateTabColors(); safeThis->resized(); safeThis->repaint();
+        }
+        else {
+            statusLabel.setText("Requesting Gemini (4 Bars)...", juce::dontSendNotification);
+            juce::String myKey = "AIzaSyBT2vQXyacUMdmNOF2OjkYYQ_OPtJgORtQ";
+            juce::String userPrompt = (styleMenu.getSelectedId() == 1) ? "Generate chaotic polyrhythmic techno." : "Generate standard 4-on-the-floor techno. division MUST be 4.";
+            gemini.fetchDrumPattern(userPrompt, myKey);
+        }
         };
 
     gemini.onSuccess = [safeThis, this](const juce::var& data) {
@@ -167,13 +172,12 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             juce::Identifier trackKey("track" + juce::String(i + 1));
             if (data.hasProperty(trackKey)) {
                 auto trackObj = data[trackKey];
-                juce::Identifier divKey("division");
-                juce::Identifier patKey("pattern");
-                if (trackObj.hasProperty(divKey) && trackObj.hasProperty(patKey)) {
-                    int div = static_cast<int>(trackObj[divKey]);
+                if (trackObj.hasProperty("division") && trackObj.hasProperty("pattern")) {
+                    int div = static_cast<int>(trackObj["division"]);
                     if (div < 1) div = 1; if (div > 9) div = 9;
                     safeThis->audioProcessor.trackDivisions[i] = div;
-                    auto* patternArray = trackObj[patKey].getArray();
+                    safeThis->divSelectors[i].setSelectedId(div, juce::dontSendNotification); // UI同期
+                    auto* patternArray = trackObj["pattern"].getArray();
                     if (patternArray != nullptr) {
                         int totalSteps = div * 4;
                         for (int j = 0; j < 36; ++j) {
@@ -184,12 +188,8 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
                 }
             }
         }
-        safeThis->currentViewBar = 0;
-        safeThis->updateTabColors();
-        safeThis->resized();
-        safeThis->repaint();
+        safeThis->currentViewBar = 0; safeThis->updateTabColors(); safeThis->resized(); safeThis->repaint();
         };
-
     gemini.onError = [safeThis](const juce::String& err) { if (safeThis != nullptr) safeThis->statusLabel.setText("Error: " + err, juce::dontSendNotification); };
 
     updateViewVisibility();
@@ -204,16 +204,19 @@ void AIDrumMachineAudioProcessorEditor::updateViewVisibility()
     tabSetupButton.setColour(juce::TextButton::buttonColourId, currentView == SetupView ? juce::Colours::orange : juce::Colours::darkgrey);
 
     bool isSeq = (currentView == SequencerView);
-
-    // ★追加：全体クリアボタンはSEQUENCER画面のみ表示
     btnClearAll.setVisible(isSeq);
 
+    barCountLabel.setVisible(!isSeq);
+    barCountMenu.setVisible(!isSeq);
+
     for (int i = 0; i < 8; ++i) {
-        btnMute[i].setVisible(isSeq);
-        btnSolo[i].setVisible(isSeq);
-        btnClear[i].setVisible(isSeq);
-        btnShiftL[i].setVisible(isSeq);
-        btnShiftR[i].setVisible(isSeq);
+        // Sequencer UI
+        btnMute[i].setVisible(isSeq); btnSolo[i].setVisible(isSeq);
+        btnClear[i].setVisible(isSeq); btnShiftL[i].setVisible(isSeq); btnShiftR[i].setVisible(isSeq);
+
+        // Setup UI
+        divLabels[i].setVisible(!isSeq); divSelectors[i].setVisible(!isSeq);
+        compLabels[i].setVisible(!isSeq); complexitySliders[i].setVisible(!isSeq);
     }
 }
 
@@ -255,8 +258,6 @@ void AIDrumMachineAudioProcessorEditor::resized()
     row1.removeFromLeft(20);
     tabSeqButton.setBounds(row1.removeFromLeft(100).reduced(2));
     tabSetupButton.setBounds(row1.removeFromLeft(100).reduced(2));
-
-    // ★追加：タブの右に CLEAR ALL を配置
     row1.removeFromLeft(20);
     btnClearAll.setBounds(row1.removeFromLeft(100).reduced(2));
 
@@ -290,15 +291,12 @@ void AIDrumMachineAudioProcessorEditor::resized()
         auto controlArea = bottomArea.removeFromLeft(150);
         sampleArea = bottomArea.removeFromLeft(60);
 
-        int rows = 8;
-        float cellH = sampleArea.getHeight() / rows;
+        int rows = 8; float cellH = sampleArea.getHeight() / rows;
         for (int row = 0; row < rows; ++row) {
             int trackIndex = (rows - 1) - row;
-            // Name
             juce::Rectangle<float> rowArea(sampleArea.getX(), sampleArea.getY() + row * cellH, sampleArea.getWidth(), cellH);
             trackNameLabels[trackIndex].setBounds(rowArea.removeFromLeft(50).reduced(2).toNearestInt());
 
-            // Buttons
             auto ctrlRow = controlArea.withY(controlArea.getY() + row * cellH).withHeight(cellH).reduced(1);
             btnMute[trackIndex].setBounds(ctrlRow.removeFromLeft(30).reduced(1).toNearestInt());
             btnSolo[trackIndex].setBounds(ctrlRow.removeFromLeft(30).reduced(1).toNearestInt());
@@ -310,15 +308,32 @@ void AIDrumMachineAudioProcessorEditor::resized()
         mainGridArea = bottomArea;
     }
     else {
+        // ★ SETUP VIEW のレイアウト
         lockArea = juce::Rectangle<float>();
         midiDragArea = bottomArea.removeFromRight(40);
-        sampleArea = bottomArea.removeFromLeft(200);
-        int rows = 8;
-        float cellH = sampleArea.getHeight() / rows;
+
+        auto setupTop = bottomArea.removeFromTop(30);
+        barCountLabel.setBounds(setupTop.removeFromLeft(60).toNearestInt());
+        barCountMenu.setBounds(setupTop.removeFromLeft(80).reduced(2).toNearestInt());
+
+        bottomArea.removeFromTop(10); // 余白
+        sampleArea = bottomArea.removeFromLeft(200); // D&D用にエリアを確保
+
+        int rows = 8; float cellH = sampleArea.getHeight() / rows;
         for (int row = 0; row < rows; ++row) {
             int trackIndex = (rows - 1) - row;
-            juce::Rectangle<float> rowArea(sampleArea.getX(), sampleArea.getY() + row * cellH, sampleArea.getWidth(), cellH);
-            trackNameLabels[trackIndex].setBounds(rowArea.removeFromLeft(100).reduced(2).toNearestInt());
+            auto rowArea = bottomArea.withY(bottomArea.getY() + row * cellH).withHeight(cellH).reduced(2);
+
+            // Name (SampleAreaの中の左端)
+            juce::Rectangle<float> nameRect(sampleArea.getX(), sampleArea.getY() + row * cellH, 60, cellH);
+            trackNameLabels[trackIndex].setBounds(nameRect.reduced(2).toNearestInt());
+
+            // Division & Complexity
+            divLabels[trackIndex].setBounds(rowArea.removeFromLeft(30).toNearestInt());
+            divSelectors[trackIndex].setBounds(rowArea.removeFromLeft(60).toNearestInt());
+            rowArea.removeFromLeft(20); // 余白
+            compLabels[trackIndex].setBounds(rowArea.removeFromLeft(50).toNearestInt());
+            complexitySliders[trackIndex].setBounds(rowArea.removeFromLeft(150).toNearestInt());
         }
         mainGridArea = bottomArea;
     }
@@ -363,12 +378,10 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
             g.drawText("MIDI", mDrag, juce::Justification::centred, false);
 
             int div = audioProcessor.trackDivisions[trackIndex];
-            if (div < 1) div = 1;
-            int colsToDraw = paginate ? div : (div * 4);
+            if (div < 1) div = 1; int colsToDraw = paginate ? div : (div * 4);
             float cellW = mainGridArea.getWidth() / colsToDraw;
 
-            for (int col = 0; col < colsToDraw; ++col)
-            {
+            for (int col = 0; col < colsToDraw; ++col) {
                 juce::Rectangle<float> cell(mainGridArea.getX() + col * cellW, mainGridArea.getY() + row * cellH, cellW - 2.0f, cellH - 2.0f);
                 int globalStep = paginate ? ((currentViewBar * div) + col) : col;
                 int velocity = audioProcessor.drumPattern[trackIndex][globalStep];
@@ -396,16 +409,22 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g)
         }
     }
     else {
+        // ★ SETUP VIEW 描画 (サンプラースロットをわかりやすく)
         for (int row = 0; row < rows; ++row) {
             int trackIndex = (rows - 1) - row;
-            juce::Rectangle<float> sArea(sampleArea.getX() + 2.0f, sampleArea.getY() + row * cellH + 2.0f, sampleArea.getWidth() - 4.0f, cellH - 4.0f);
+            // トラック名の右側をドロップエリアとして描画
+            juce::Rectangle<float> sArea(sampleArea.getX() + 60.0f, sampleArea.getY() + row * cellH + 2.0f, sampleArea.getWidth() - 62.0f, cellH - 4.0f);
+
             if (dragTargetTrack == trackIndex) g.setColour(juce::Colours::white.withAlpha(0.3f));
             else if (audioProcessor.hasSampleLoaded(trackIndex)) g.setColour(juce::Colours::lightblue.withAlpha(0.2f));
             else g.setColour(juce::Colours::darkgrey.darker(0.8f));
+
             g.fillRoundedRectangle(sArea, 4.0f);
+
+            g.setColour(juce::Colours::grey);
+            g.setFont(12.0f);
+            g.drawText(audioProcessor.hasSampleLoaded(trackIndex) ? "Sample Loaded" : "Drop Sample Here", sArea, juce::Justification::centred, false);
         }
-        g.setColour(juce::Colours::grey);
-        g.drawText("SETUP MODE: Controls will be added here.", mainGridArea, juce::Justification::centred);
     }
 }
 
