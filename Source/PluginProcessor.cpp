@@ -39,17 +39,35 @@ void AIDrumMachineAudioProcessor::clearTrack(int trk) {
     for (int j = 0; j < 36; ++j) drumPattern[trk][j] = 0;
 }
 
+// ★【Phase 1】ユークリッドリズム E(k, n) によるランダマイズ実装
 void AIDrumMachineAudioProcessor::randomizeTrack(int trk) {
     if (trk < 0 || trk >= 8 || trackLocked[trk]) return;
     if (!trackDivLocked[trk]) trackDivisions[trk] = random.nextInt(juce::Range<int>(1, 10));
     if (!trackCmplxLocked[trk]) trackComplexity[trk] = random.nextInt(juce::Range<int>(10, 90));
 
-    int totalSteps = trackDivisions[trk] * globalBarCount;
-    float probThreshold = 1.0f - (trackComplexity[trk] / 100.0f);
+    // n = 総ステップ数 (Division × 小節数)
+    int n = trackDivisions[trk] * globalBarCount;
+    int cmplx = trackComplexity[trk];
+
+    // k = 打点数 (Complexityを基に算出)
+    int k = juce::jmax(1, (n * cmplx) / 100);
 
     for (int j = 0; j < 36; ++j) {
-        if (j < totalSteps) drumPattern[trk][j] = (random.nextFloat() > probThreshold) ? random.nextInt(juce::Range<int>(80, 110)) : 0;
-        else drumPattern[trk][j] = 0;
+        if (j < n) {
+            // Bjorklundアルゴリズムと等価なBresenham式のユークリッド判定
+            bool isHit = ((j * k) % n) < k;
+
+            if (isHit) {
+                // ヒットする場合はヴェロシティにランダムな揺らぎを与える
+                drumPattern[trk][j] = random.nextInt(juce::Range<int>(80, 110));
+            }
+            else {
+                drumPattern[trk][j] = 0;
+            }
+        }
+        else {
+            drumPattern[trk][j] = 0;
+        }
     }
 }
 
