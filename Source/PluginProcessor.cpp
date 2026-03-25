@@ -4,6 +4,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+// ★ プレビュー最適化版＋Arp専用Pluck
 static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = { {
         // wave, freq, pDec, pAmt, aAtt, aDec, noise, fTyp, fFreq, fRes, drive, vol
         /* K_909 */      {0, 48.0f,  10.0f,  5.0f, 1.0f, 40.0f,  0.05f, 0, 2000.0f, 1.0f, 1.5f, 1.1f},
@@ -70,7 +71,8 @@ static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = { {
         {2, 293.6f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 2500.0f, 2.0f, 1.2f, 1.0f},
         {2, 349.2f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 3000.0f, 2.0f, 1.2f, 1.0f},
 
-        /* M_ArpPluck */ {2, 440.0f, 5.0f, 0.0f, 0.5f, 20.0f, 0.0f, 0, 2500.0f, 1.5f, 1.0f, 1.0f}
+        // ★ M_ArpPluck (Arp Mode 専用極短Pluck)
+        {1, 440.0f, 5.0f, 0.0f, 0.5f, 20.0f, 0.0f, 0, 2500.0f, 1.5f, 1.0f, 1.0f}
     } };
 
 static const std::array<GenreDefinition, 24> genreTable = { {
@@ -237,11 +239,11 @@ void AIDrumMachineAudioProcessor::clearTrack(int trk) {
 void AIDrumMachineAudioProcessor::generateAllTracks() {
     int genre = currentGenre.load();
     const auto& def = getGenreDef(genre);
+    bool isArp = arpMode.load();
     bool isAlgorithmMode = (genre >= 22);
     bool isSpecialEnsemble = (genre == 14 || genre == 21);
 
     int fillBar = fillBarTarget.load();
-    bool isArp = arpMode.load();
     bool isMono = arpMono.load();
     int curScale = arpScale.load();
 
@@ -253,7 +255,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     int num = timeSigNumerator.load();
     int den = timeSigDenominator.load();
 
-    if (genre == 6) {
+    if (!isArp && genre == 6) {
         const int idmSigs[6][2] = { {4,4}, {5,4}, {5,8}, {7,8}, {7,16}, {15,16} };
         int idx = random.nextInt(6);
         num = idmSigs[idx][0];
@@ -265,10 +267,48 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     int maxDiv = (den == 16) ? 2 : ((den == 8) ? 4 : 8);
     int bars = globalBarCount.load();
 
+    // ★ Arp Mode 音楽理論（度数・オクターブの割り当て）
     if (isArp) {
+        int arpPreset = currentGenre.load(); // 0〜9
         for (int trk = 0; trk < 8; ++trk) {
             if (!trackLocked[trk]) {
-                trackDegreeUI[trk] = random.nextInt(scaleLengths[curScale]);
+                switch (arpPreset) {
+                case 0: // Basic Up (3rds)
+                    trackDegreeUI[trk] = (trk * 2) % scaleLengths[curScale];
+                    trackOctaveUI[trk] = (trk < 4) ? -1 : 0;
+                    break;
+                case 1: // Basic Down (4ths)
+                    trackDegreeUI[trk] = ((7 - trk) * 3) % scaleLengths[curScale];
+                    trackOctaveUI[trk] = (trk < 4) ? 0 : -1;
+                    break;
+                case 2: // Poly Triads
+                    trackDegreeUI[trk] = (trk % 3) * 2;
+                    trackOctaveUI[trk] = (trk / 3) - 1;
+                    break;
+                case 3: // Poly 7ths
+                    trackDegreeUI[trk] = (trk % 4) * 2;
+                    trackOctaveUI[trk] = (trk / 4) - 1;
+                    break;
+                case 4: // 5th Cascades
+                    trackDegreeUI[trk] = (trk * 4) % scaleLengths[curScale];
+                    trackOctaveUI[trk] = (trk % 2 == 0) ? -1 : 0;
+                    break;
+                case 5: // 6th Leaps
+                    trackDegreeUI[trk] = (trk * 5) % scaleLengths[curScale];
+                    trackOctaveUI[trk] = (trk % 2 == 0) ? -1 : 1;
+                    break;
+                case 6: // Quartal Harmony
+                    trackDegreeUI[trk] = (trk * 3) % scaleLengths[curScale];
+                    trackOctaveUI[trk] = (trk / 3) - 1;
+                    break;
+                case 7: // Polyrhythm Plucks
+                case 8: // Euclidean Arp
+                case 9: // Chaos
+                default:
+                    trackDegreeUI[trk] = random.nextInt(scaleLengths[curScale]);
+                    trackOctaveUI[trk] = random.nextInt(3) - 1; // -1, 0, 1
+                    break;
+                }
             }
         }
     }
@@ -284,12 +324,20 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
         }
 
         if (!trackDivLocked[trk]) {
-            std::vector<int> candidates;
-            for (int i = 0; i < 4; ++i) {
-                if (def.allowedDivs[trk][i] > 0) candidates.push_back(def.allowedDivs[trk][i]);
-            }
             int newDiv = 4;
-            if (!candidates.empty()) newDiv = candidates[random.nextInt(candidates.size())];
+            if (isArp) {
+                int arpPreset = currentGenre.load();
+                if (arpPreset == 7) newDiv = (trk % 4) + 2; // Polyrhythm
+                else if (arpPreset == 8) newDiv = random.nextBool() ? 3 : 4; // Euclidean
+                else newDiv = 4;
+            }
+            else {
+                std::vector<int> candidates;
+                for (int i = 0; i < 4; ++i) {
+                    if (def.allowedDivs[trk][i] > 0) candidates.push_back(def.allowedDivs[trk][i]);
+                }
+                if (!candidates.empty()) newDiv = candidates[random.nextInt(candidates.size())];
+            }
 
             if (fillBar > 0 && !isAlgorithmMode && !isSpecialEnsemble && !isArp) {
                 if ((genre == 4 || genre == 7) && trk == 2) newDiv = maxDiv;
@@ -331,8 +379,13 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             int cmplx = trackComplexity[trk];
             int entrp = trackEntropy[trk];
 
-            if (isArp && !isMono) {
-                if (trk == 0 || trk == 2 || trk == 4) {
+            // ★ Arp Mode Anchors
+            if (isArp) {
+                int arpPreset = currentGenre.load();
+                if (arpPreset == 0 || arpPreset == 1 || arpPreset == 4 || arpPreset == 5) {
+                    if (stepInBar == trk * (div * num / 8)) isAnchor = true;
+                }
+                else if (arpPreset == 2 || arpPreset == 3 || arpPreset == 6) {
                     if (stepInBar == 0 || stepInBar == div * 2) isAnchor = true;
                 }
             }
@@ -451,6 +504,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 }
             }
 
+            // ★ Arp Mode: Mono/Poly collision check
             if (isArp) {
                 if (vel > 0) {
                     if (isMono && stepOccupied[j]) vel = 0;
@@ -523,7 +577,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     auto totalNumOutputChannels = getTotalNumOutputChannels();
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i) buffer.clear(i, 0, buffer.getNumSamples());
 
-    // ★ エラー修正：ポインタの取得
     auto* leftChannel = buffer.getWritePointer(0);
     auto* rightChannel = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
 
@@ -638,7 +691,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         if (mixOut > 1.0f) mixOut = 1.0f;
         if (mixOut < -1.0f) mixOut = -1.0f;
 
-        // ★ エラー修正：ポインタへの書き込み
         if (leftChannel != nullptr) leftChannel[i] = mixOut;
         if (rightChannel != nullptr) rightChannel[i] = mixOut;
     }

@@ -92,16 +92,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         };
 
     addAndMakeVisible(generateButton); addAndMakeVisible(styleMenu); addAndMakeVisible(statusLabel);
-    const juce::StringArray genres = {
-        "0. Techno (Detroit/Berlin)", "1. House (Deep/Acid)", "2. UK Garage (2-step)", "3. Drum & Bass / Jungle",
-        "4. Trap", "5. Footwork / Juke", "6. IDM (Breakcore)", "7. Dubstep",
-        "8. Afrobeat", "9. Gqom", "10. Amapiano", "11. Indian Classical",
-        "12. Samba / Bossa Nova", "13. Reggaeton / Dembow", "14. Gamelan",
-        "15. Funk (James Brown)", "16. New Jack Swing", "17. Neo Soul (J Dilla)",
-        "18. Hip Hop (Boom Bap)", "19. Math Rock", "20. Progressive Metal", "21. Minimalism (Reich)",
-        "22. Pure Euclidean (Math)", "23. Pure Chaos (Random)"
-    };
-    for (int i = 0; i < genres.size(); ++i) styleMenu.addItem(genres[i], i + 1);
+    updateStyleMenu(); // 初期リスト生成
 
     addAndMakeVisible(fillBarMenu);
     fillBarMenu.addItem("Fill: Off", 1);
@@ -112,14 +103,20 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     fillBarMenu.setSelectedId(audioProcessor.fillBarTarget.load() + 1, juce::dontSendNotification);
     fillBarMenu.onChange = [this] { audioProcessor.fillBarTarget.store(fillBarMenu.getSelectedId() - 1); };
 
+    // ★ FollowとArpModeボタンを点灯式(TextButton)に変更
     addAndMakeVisible(btnAutoFollow);
+    btnAutoFollow.setClickingTogglesState(true);
+    btnAutoFollow.setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
     btnAutoFollow.setToggleState(audioProcessor.autoFollowEnabled.load(), juce::dontSendNotification);
     btnAutoFollow.onClick = [this] { audioProcessor.autoFollowEnabled.store(btnAutoFollow.getToggleState()); };
 
     addAndMakeVisible(btnArpMode);
+    btnArpMode.setClickingTogglesState(true);
+    btnArpMode.setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
     btnArpMode.setToggleState(audioProcessor.arpMode.load(), juce::dontSendNotification);
     btnArpMode.onClick = [this] {
         audioProcessor.arpMode.store(btnArpMode.getToggleState());
+        updateStyleMenu(); // メニューを入れ替え
         updateTrackNames();
         };
 
@@ -143,27 +140,27 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         int genreIndex = styleMenu.getSelectedId() - 1;
         audioProcessor.currentGenre.store(genreIndex);
 
-        const auto& def = AIDrumMachineAudioProcessor::getGenreDef(genreIndex);
+        if (!audioProcessor.arpMode.load()) {
+            const auto& def = AIDrumMachineAudioProcessor::getGenreDef(genreIndex);
+            if (!audioProcessor.isSyncEnabled.load()) {
+                audioProcessor.internalTempo.store((def.minTempo + def.maxTempo) / 2.0);
+            }
+            timeSigDenMenu.setSelectedId(def.defaultDen, juce::dontSendNotification);
+            audioProcessor.timeSigDenominator.store(def.defaultDen);
+            updateTimeSigNumMenu();
+            timeSigNumMenu.setSelectedId(def.defaultNum, juce::dontSendNotification);
+            audioProcessor.timeSigNumerator.store(def.defaultNum);
 
-        if (!audioProcessor.isSyncEnabled.load()) {
-            audioProcessor.internalTempo.store((def.minTempo + def.maxTempo) / 2.0);
+            for (int i = 0; i < 8; ++i) {
+                if ((genreIndex >= 22 || genreIndex == 14 || genreIndex == 21) && (i == 0 || i == 1 || i == 4)) {
+                    audioProcessor.trackCmplxLocked[i] = false;
+                    btnCmplxLock[i].setToggleState(false, juce::dontSendNotification);
+                }
+            }
         }
-
-        timeSigDenMenu.setSelectedId(def.defaultDen, juce::dontSendNotification);
-        audioProcessor.timeSigDenominator.store(def.defaultDen);
-        updateTimeSigNumMenu();
-        timeSigNumMenu.setSelectedId(def.defaultNum, juce::dontSendNotification);
-        audioProcessor.timeSigNumerator.store(def.defaultNum);
 
         updateDivisionMenus();
         updateTrackNames();
-
-        for (int i = 0; i < 8; ++i) {
-            if ((genreIndex >= 22 || genreIndex == 14 || genreIndex == 21) && (i == 0 || i == 1 || i == 4)) {
-                audioProcessor.trackCmplxLocked[i] = false;
-                btnCmplxLock[i].setToggleState(false, juce::dontSendNotification);
-            }
-        }
         audioProcessor.patternUpdated.store(true);
         resized(); repaint();
         };
@@ -287,7 +284,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         btnShiftLock[i].setToggleState(audioProcessor.trackShiftLocked[i], juce::dontSendNotification);
         btnShiftLock[i].onClick = [this, i] { audioProcessor.trackShiftLocked[i] = btnShiftLock[i].getToggleState(); };
 
-        // ★ Arp (Setup 2) Sliders
         addChildComponent(octaveLabels[i]); octaveLabels[i].setText("Octave:", juce::dontSendNotification);
         addChildComponent(octaveSliders[i]); octaveSliders[i].setSliderStyle(juce::Slider::LinearHorizontal);
         octaveSliders[i].setTextBoxStyle(juce::Slider::TextBoxRight, false, 40, 20);
@@ -316,6 +312,32 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
 AIDrumMachineAudioProcessorEditor::~AIDrumMachineAudioProcessorEditor() { stopTimer(); }
 
+// ★ Arp時のメニュー切り替え
+void AIDrumMachineAudioProcessorEditor::updateStyleMenu() {
+    styleMenu.clear();
+    if (audioProcessor.arpMode.load()) {
+        const juce::StringArray arpGenres = {
+            "0. Basic Up (3rds)", "1. Basic Down (4ths)", "2. Poly Triads", "3. Poly 7ths",
+            "4. 5th Cascades", "5. 6th Leaps", "6. Quartal Harmony", "7. Polyrhythm Plucks",
+            "8. Euclidean Arp", "9. Chaos Melodies"
+        };
+        for (int i = 0; i < arpGenres.size(); ++i) styleMenu.addItem(arpGenres[i], i + 1);
+    }
+    else {
+        const juce::StringArray genres = {
+            "0. Techno (Detroit/Berlin)", "1. House (Deep/Acid)", "2. UK Garage (2-step)", "3. Drum & Bass / Jungle",
+            "4. Trap", "5. Footwork / Juke", "6. IDM (Breakcore)", "7. Dubstep",
+            "8. Afrobeat", "9. Gqom", "10. Amapiano", "11. Indian Classical",
+            "12. Samba / Bossa Nova", "13. Reggaeton / Dembow", "14. Gamelan",
+            "15. Funk (James Brown)", "16. New Jack Swing", "17. Neo Soul (J Dilla)",
+            "18. Hip Hop (Boom Bap)", "19. Math Rock", "20. Progressive Metal", "21. Minimalism (Reich)",
+            "22. Pure Euclidean (Math)", "23. Pure Chaos (Random)"
+        };
+        for (int i = 0; i < genres.size(); ++i) styleMenu.addItem(genres[i], i + 1);
+    }
+    styleMenu.setSelectedId(1, juce::sendNotification);
+}
+
 void AIDrumMachineAudioProcessorEditor::updateTrackNames() {
     if (audioProcessor.arpMode.load()) {
         for (int i = 0; i < 8; ++i) {
@@ -337,9 +359,14 @@ void AIDrumMachineAudioProcessorEditor::updateTimeSigNumMenu() {
     else if (den == 16) maxNum = 17;
 
     int currentGenre = audioProcessor.currentGenre.load();
-    const auto& def = AIDrumMachineAudioProcessor::getGenreDef(currentGenre);
-    if (def.defaultNum > maxNum) maxNum = def.defaultNum;
-    if (currentGenre == 6) maxNum = 17;
+    if (!audioProcessor.arpMode.load()) {
+        const auto& def = AIDrumMachineAudioProcessor::getGenreDef(currentGenre);
+        if (def.defaultNum > maxNum) maxNum = def.defaultNum;
+        if (currentGenre == 6) maxNum = 17;
+    }
+    else {
+        maxNum = 17; // Arp時は自由度を高く
+    }
 
     int currentNum = audioProcessor.timeSigNumerator.load();
     if (currentNum > maxNum) {
@@ -482,7 +509,6 @@ void AIDrumMachineAudioProcessorEditor::resized() {
 
     auto bottomArea = area.removeFromBottom(250).toFloat();
 
-    // ★ エラー修正：Setup 2 (Arp) Global Controls に toNearestInt() を適用
     if (currentView == Setup2View) {
         auto s2top = bottomArea.removeFromTop(30);
         arpKeyMenu.setBounds(s2top.removeFromLeft(100).reduced(2).toNearestInt());
@@ -617,7 +643,8 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
             }
         }
     }
-    else {
+    // ★ Setup 2 ではサンプルスロット（枠やDrop Sampleの文字）を描画しない
+    else if (currentView == Setup1View) {
         int rows = 8; float cellH = sampleArea.getHeight() / rows;
         for (int row = 0; row < rows; ++row) {
             int idx = 7 - row; juce::Rectangle<float> sArea(sampleArea.getX(), sampleArea.getY() + row * cellH + 2, sampleArea.getWidth() - 4, cellH - 4);
@@ -629,7 +656,9 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
 
 void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
     auto pos = e.getPosition().toFloat();
-    if (e.mods.isRightButtonDown() && sampleArea.contains(pos)) {
+
+    // ★ サンプルの削除判定も Setup1View と SequencerView に制限
+    if (e.mods.isRightButtonDown() && sampleArea.contains(pos) && currentView != Setup2View) {
         int idx = 7 - (int)((pos.y - sampleArea.getY()) / (sampleArea.getHeight() / 8));
         if (idx >= 0 && audioProcessor.hasSampleLoaded(idx)) {
             juce::NativeMessageBox::showOkCancelBox(juce::MessageBoxIconType::WarningIcon, "Delete", "Delete sample?", this, juce::ModalCallbackFunction::create([this, idx](int r) { if (r == 1) { audioProcessor.clearSample(idx); updateTrackNames(); repaint(); } }));
@@ -674,8 +703,12 @@ void AIDrumMachineAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e) {
     }
 }
 void AIDrumMachineAudioProcessorEditor::mouseUp(const juce::MouseEvent& e) { isDragging = false; }
-bool AIDrumMachineAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files) { for (const auto& f : files) if (f.endsWithIgnoreCase(".wav") || f.endsWithIgnoreCase(".mp3") || f.endsWithIgnoreCase(".aif")) return true; return false; }
+bool AIDrumMachineAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files) {
+    if (currentView == Setup2View) return false; // ★ Setup2 ではサンプルドロップ無効
+    for (const auto& f : files) if (f.endsWithIgnoreCase(".wav") || f.endsWithIgnoreCase(".mp3") || f.endsWithIgnoreCase(".aif")) return true; return false;
+}
 void AIDrumMachineAudioProcessorEditor::filesDropped(const juce::StringArray& files, int x, int y) {
+    if (currentView == Setup2View) return; // ★ 無効化
     int idx = 7 - (int)((y - sampleArea.getY()) / (sampleArea.getHeight() / 8));
     if (idx >= 0 && idx < 8) { for (const auto& f : files) { audioProcessor.loadSample(idx, f); trackNameLabels[idx].setText(juce::File(f).getFileNameWithoutExtension(), juce::dontSendNotification); repaint(); break; } }
 }

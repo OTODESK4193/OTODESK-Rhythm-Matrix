@@ -58,8 +58,10 @@ private:
     juce::TextButton generateButton{ "Generate" };
     juce::ComboBox styleMenu;
     juce::ComboBox fillBarMenu;
-    juce::ToggleButton btnAutoFollow{ "Follow" };
-    juce::ToggleButton btnArpMode{ "Arp Mode" };
+
+    // ★ FollowとArpボタンを点灯式のTextButtonに変更
+    juce::TextButton btnAutoFollow{ "Follow" };
+    juce::TextButton btnArpMode{ "Arp Mode" };
 
     juce::Label statusLabel;
 
@@ -119,6 +121,7 @@ private:
     void updateDivisionMenus();
     void updateTimeSigNumMenu();
     void updateTrackNames();
+    void updateStyleMenu(); // ★ スタイルメニュー更新用
 
     juce::File exportMidi(int trackIndex);
 
