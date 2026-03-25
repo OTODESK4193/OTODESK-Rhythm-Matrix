@@ -35,7 +35,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
                 if (result == 1) {
                     audioProcessor.globalBarCount = 1;
                     barCountMenu.setSelectedId(1, juce::dontSendNotification);
-                    currentViewBar = 0; // ★ Bar1タブに戻す
+                    currentViewBar = 0;
                     for (int i = 0; i < 8; ++i) {
                         audioProcessor.clearTrack(i);
                         audioProcessor.trackDivisions[i] = 4; divSelectors[i].setSelectedId(4, juce::dontSendNotification);
@@ -106,15 +106,12 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         addAndMakeVisible(btnMute[i]); addAndMakeVisible(btnSolo[i]); addAndMakeVisible(btnClear[i]); addAndMakeVisible(btnShiftL[i]); addAndMakeVisible(btnShiftR[i]);
         btnMute[i].setButtonText("M"); btnSolo[i].setButtonText("S"); btnClear[i].setButtonText("C"); btnShiftL[i].setButtonText("<"); btnShiftR[i].setButtonText(">");
         btnMute[i].setClickingTogglesState(true); btnSolo[i].setClickingTogglesState(true);
-
-        // ★ 色分けの復元 (M=赤, S=青)
         btnMute[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::red);
         btnSolo[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::blue);
 
         btnMute[i].onClick = [this, i] { audioProcessor.trackMuted[i] = btnMute[i].getToggleState(); };
         btnSolo[i].onClick = [this, i] { audioProcessor.trackSoloed[i] = btnSolo[i].getToggleState(); };
 
-        // ★ Cボタンの確認ダイアログ復元
         btnClear[i].onClick = [this, i] {
             juce::NativeMessageBox::showOkCancelBox(
                 juce::MessageBoxIconType::WarningIcon, "Clear Track", "Clear Track " + juce::String(i + 1) + "?", this,
@@ -265,16 +262,14 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     auto row2 = area.removeFromTop(30);
     generateButton.setBounds(row2.removeFromLeft(120)); row2.removeFromLeft(10); styleMenu.setBounds(row2.removeFromLeft(200)); row2.removeFromLeft(10);
 
-    // ★ コンボボックス被り問題の修正：先に右側の要素を配置してから、残りをstatusLabelに渡す
     row2.removeFromRight(10);
     barCountMenu.setBounds(row2.removeFromRight(80).reduced(2));
     barCountLabel.setBounds(row2.removeFromRight(40));
 
-    statusLabel.setBounds(row2); // これでコンボボックスに被らなくなります
+    statusLabel.setBounds(row2);
 
     auto tabArea = area.removeFromTop(40).withTrimmedTop(10); int tabW = tabArea.getWidth() / 4;
 
-    // ★ Bar数に応じたタブの表示/非表示切り替え
     int bars = audioProcessor.globalBarCount;
     tabButton1.setVisible(bars >= 1);
     tabButton2.setVisible(bars >= 2);
@@ -312,9 +307,11 @@ void AIDrumMachineAudioProcessorEditor::resized() {
 
             auto ctrlRow = setupControls.withY(setupControls.getY() + row * cellH).withHeight(cellH).reduced(2);
 
+            // ★ Divコンボボックスの幅を広げて見切れを修正 (40px -> 55px)
             ctrlRow.removeFromLeft(10);
             divLabels[idx].setBounds(ctrlRow.removeFromLeft(30).toNearestInt());
-            divSelectors[idx].setBounds(ctrlRow.removeFromLeft(40).toNearestInt());
+            divSelectors[idx].setBounds(ctrlRow.removeFromLeft(55).toNearestInt());
+            ctrlRow.removeFromLeft(5); // 余白追加
             btnDivLock[idx].setBounds(ctrlRow.removeFromLeft(20).reduced(1).toNearestInt());
 
             float remainingWidth = ctrlRow.getWidth();
