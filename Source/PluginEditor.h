@@ -40,8 +40,9 @@ private:
     juce::int64 lastStopClickTime = 0;
 
     juce::TextButton tabSeqButton{ "SEQUENCER" };
-    juce::TextButton tabSetupButton{ "SETUP" };
-    enum ViewMode { SequencerView, SetupView };
+    juce::TextButton tabSetupButton{ "SETUP 1" };
+    juce::TextButton tabSetup2Button{ "SETUP 2" };
+    enum ViewMode { SequencerView, Setup1View, Setup2View };
     ViewMode currentView = SequencerView;
 
     juce::TextButton btnClearAll{ "CLEAR ALL" };
@@ -57,7 +58,8 @@ private:
     juce::TextButton generateButton{ "Generate" };
     juce::ComboBox styleMenu;
     juce::ComboBox fillBarMenu;
-    juce::ToggleButton btnAutoFollow{ "Follow" }; // ★ Auto-Follow トグル
+    juce::ToggleButton btnAutoFollow{ "Follow" };
+    juce::ToggleButton btnArpMode{ "Arp Mode" };
 
     juce::Label statusLabel;
 
@@ -68,6 +70,12 @@ private:
     int currentViewBar = 0;
 
     juce::TextButton btnPattern[4];
+
+    juce::ComboBox arpKeyMenu;
+    juce::ComboBox arpScaleMenu;
+    juce::ToggleButton btnArpMono{ "Mono Mode" };
+    juce::Slider octaveSliders[8];
+    juce::Label octaveLabels[8];
 
     const juce::String trackNotes[8] = { "C1", "D1", "F#1", "A#1", "D#1", "F1", "A1", "D2" };
 
@@ -110,6 +118,7 @@ private:
     void updateViewVisibility();
     void updateDivisionMenus();
     void updateTimeSigNumMenu();
+    void updateTrackNames();
 
     juce::File exportMidi(int trackIndex);
 
