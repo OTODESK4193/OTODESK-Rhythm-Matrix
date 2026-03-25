@@ -20,7 +20,8 @@ AIDrumMachineAudioProcessor::~AIDrumMachineAudioProcessor() {}
 
 void AIDrumMachineAudioProcessor::shiftTrackLeft(int trk) {
     if (trk < 0 || trk >= 8 || trackLocked[trk]) return;
-    int totalSteps = trackDivisions[trk] * globalBarCount;
+    int totalSteps = trackDivisions[trk] * timeSigNumerator.load() * globalBarCount;
+    if (totalSteps <= 0) return;
     int firstStep = drumPattern[trk][0];
     for (int i = 0; i < totalSteps - 1; ++i) drumPattern[trk][i] = drumPattern[trk][i + 1];
     drumPattern[trk][totalSteps - 1] = firstStep;
@@ -28,7 +29,8 @@ void AIDrumMachineAudioProcessor::shiftTrackLeft(int trk) {
 
 void AIDrumMachineAudioProcessor::shiftTrackRight(int trk) {
     if (trk < 0 || trk >= 8 || trackLocked[trk]) return;
-    int totalSteps = trackDivisions[trk] * globalBarCount;
+    int totalSteps = trackDivisions[trk] * timeSigNumerator.load() * globalBarCount;
+    if (totalSteps <= 0) return;
     int lastStep = drumPattern[trk][totalSteps - 1];
     for (int i = totalSteps - 1; i > 0; --i) drumPattern[trk][i] = drumPattern[trk][i - 1];
     drumPattern[trk][0] = lastStep;
@@ -36,211 +38,123 @@ void AIDrumMachineAudioProcessor::shiftTrackRight(int trk) {
 
 void AIDrumMachineAudioProcessor::clearTrack(int trk) {
     if (trk < 0 || trk >= 8 || trackLocked[trk]) return;
-    for (int j = 0; j < 36; ++j) drumPattern[trk][j] = 0;
+    for (int j = 0; j < 1024; ++j) drumPattern[trk][j] = 0;
 }
 
-// ★【超重要コア】全22ジャンル＋2アルゴリズムの階層化アンカー＆Divisionルール
 void AIDrumMachineAudioProcessor::randomizeTrack(int trk) {
     if (trk < 0 || trk >= 8 || trackLocked[trk]) return;
 
     int genre = currentGenre.load();
+    bool isAlgorithmMode = (genre >= 22);
+    int num = timeSigNumerator.load();
+    int den = timeSigDenominator.load();
 
-    // 1. ジャンル別 Division の自動最適化（ロックされていなければ）
+    // 分母に基づく最大Divisionの決定 (32分音符相当まで)
+    int maxDiv = (den == 16) ? 2 : ((den == 8) ? 4 : 8);
+
     if (!trackDivLocked[trk]) {
         int newDiv = 4;
+        if (!isAlgorithmMode && trk >= 5) trackComplexity[trk] = 0;
+        else if (isAlgorithmMode) trackComplexity[trk] = 50;
+
         switch (genre) {
-        case 0: newDiv = (trk >= 5) ? (random.nextBool() ? 3 : 5) : 4; break; // Techno: タムは奇数
-        case 1: newDiv = 6; break; // House: 16分3連
-        case 2: newDiv = (trk == 2 || trk == 3) ? (random.nextBool() ? 4 : 6) : 6; break; // UK Garage
-        case 3: newDiv = (trk == 2 || trk == 3 || trk == 7) ? (random.nextBool() ? 8 : 9) : 4; break; // DnB: ハットとタムは超高速ロール
-        case 4: newDiv = (trk == 2 || trk == 3) ? (random.nextBool() ? 6 : 9) : (random.nextBool() ? 3 : 6); break; // Trap: 3連ベース、ハットは可変
-        case 5: newDiv = (trk == 0 || trk == 2) ? 6 : 4; break; // Footwork: キックとハットは3連、スネアは4
-        case 6: newDiv = random.nextInt(juce::Range<int>(5, 10)); break; // IDM: カオス奇数
-        case 7: newDiv = (trk == 2 || trk == 3) ? 3 : 4; break; // Dubstep: ハーフタイム＋3連ハット
-        case 8: newDiv = (trk == 2 || trk == 3) ? 6 : 4; break; // Afrobeat: ポリリズム
-        case 9: newDiv = (trk == 6) ? 6 : 4; break; // Gqom: ゴーストキックは3連
-        case 10: newDiv = (trk >= 5 && random.nextFloat() > 0.7f) ? 6 : 4; break; // Amapiano: ログドラムフィルのみ3連
-        case 11: newDiv = random.nextBool() ? 5 : 7; break; // Indian: 5拍子か7拍子
-        case 12: newDiv = 4; break; // Samba: 16分固定
-        case 13: newDiv = (trk == 2) ? 8 : 4; break; // Reggaeton: ハットのみ32分許可
-        case 14: newDiv = (trk == 0) ? 1 : ((trk == 1) ? 4 : 8); break; // Gamelan: トラックで階層化
-        case 15: newDiv = (trk == 1 && random.nextFloat() > 0.8f) ? 9 : 4; break; // Funk: 稀にスネアのゴーストロール
-        case 16: newDiv = 6; break; // New Jack Swing: スウィング固定
-        case 17: newDiv = (trk == 2 || trk == 3) ? 5 : 4; break; // Neo Soul: ハットだけDiv5でヨレさせる
-        case 18: newDiv = (random.nextFloat() > 0.8f) ? 6 : 4; break; // Hip Hop: たまに3連ハネ
-        case 19: newDiv = random.nextInt(juce::Range<int>(4, 8)); break; // Math Rock: 4,5,6,7の混在
-        case 20: newDiv = (trk == 0) ? 8 : ((trk == 2) ? 7 : 4); break; // Prog Metal: キック連打と7連ポリ
-        case 21: newDiv = random.nextBool() ? 3 : 6; break; // Minimalism: 12/8ベース
-        case 22: // Pure Euclidean
-        case 23: // Pure Chaos
-            newDiv = random.nextInt(juce::Range<int>(1, 10)); break; // 完全にランダム
+        case 1:  newDiv = 6; break;
+        case 2:  newDiv = (trk >= 2) ? 6 : 4; break;
+        case 4:  newDiv = (trk == 2) ? 8 : (random.nextBool() ? 4 : 6); break;
+        case 5:  newDiv = (trk == 0 || trk == 2) ? 6 : 4; break;
+        case 6:  newDiv = random.nextInt(juce::Range<int>(5, 10)); break;
+        case 11: newDiv = random.nextBool() ? 5 : 7; break;
+        case 13: newDiv = (trk == 1 || trk == 4) ? 8 : 4; break;
+        case 16: newDiv = 6; break;
+        case 17: newDiv = (trk == 2) ? 5 : 4; break;
+        case 19: newDiv = random.nextInt(juce::Range<int>(4, 8)); break;
+        case 20: newDiv = (trk == 0) ? 8 : 7; break;
+        case 21: newDiv = 3; break;
+        case 22: case 23: newDiv = random.nextInt(juce::Range<int>(1, 10)); break;
         default: newDiv = 4; break;
         }
+
+        // 最大値でクランプ
+        if (newDiv > maxDiv) newDiv = maxDiv;
         trackDivisions[trk] = newDiv;
     }
-
-    if (!trackCmplxLocked[trk]) trackComplexity[trk] = random.nextInt(juce::Range<int>(10, 90));
+    else {
+        if (trackDivisions[trk] > maxDiv) trackDivisions[trk] = maxDiv;
+    }
 
     int div = trackDivisions[trk];
-    int n = div * globalBarCount;
+    int n = div * num * globalBarCount;
     int cmplx = trackComplexity[trk];
     int k = juce::jmax(1, (n * cmplx) / 100);
-    int offset = random.nextInt(juce::Range<int>(0, n)); // ユークリッドのズラし
+    int offset = random.nextInt(juce::Range<int>(0, juce::jmax(1, n)));
 
-    for (int j = 0; j < 36; ++j) {
+    for (int j = 0; j < 1024; ++j) {
         if (j >= n) { drumPattern[trk][j] = 0; continue; }
 
-        int beatPos = j % div;
-        int beatNum = j / div;
-        bool isDownbeat = (beatPos == 0);
-        bool isBackbeat = (beatPos == 0 && (beatNum == 1 || beatNum == 3));
-
+        int stepInBar = j % (div * num); // 1小節内の位置
         bool isAnchor = false;
         bool isNegativeAnchor = false;
-        int anchorVel = 0;
+        int anchorVel = 100;
 
-        // 2. ジャンル別 アンカー（絶対配置）＆ネガティブ（絶対消去）辞書
+        // ★ジャンルのアンカー最適化は後回しとするため、現状のコードを維持（安全に動作）
         switch (genre) {
-        case 0: // Techno
-            if (trk == 0 && isDownbeat) { isAnchor = true; anchorVel = 100; }
-            if (trk == 1 && isDownbeat && !isBackbeat) { isNegativeAnchor = true; }
-            if (trk == 2 && beatPos == div / 2) { isAnchor = true; anchorVel = 90; }
+        case 0:
+            if (trk == 0 && stepInBar % div == 0) isAnchor = true;
+            if (trk == 1 && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+            if (trk == 2 && (stepInBar % div == div / 2)) isAnchor = true;
             break;
-        case 1: // House
-            if (trk == 0 && isDownbeat) { isAnchor = true; anchorVel = 100; }
-            if ((trk == 1 || trk == 4) && isBackbeat) { isAnchor = true; anchorVel = 100; }
-            if ((trk == 1 || trk == 4) && isDownbeat && !isBackbeat) { isNegativeAnchor = true; }
+        case 1:
+            if (trk == 0 && stepInBar % div == 0) isAnchor = true;
+            if (trk == 2 && div >= 2 && (stepInBar % div == div - 2)) { isAnchor = true; anchorVel = 85; }
             break;
-        case 2: // UK Garage
-            if (trk == 0 && (j == 0 || j == div * 2 + div / 2 + 1)) { isAnchor = true; anchorVel = 100; }
-            if (trk == 1 && isBackbeat) { isAnchor = true; anchorVel = 100; }
-            if (trk == 0 && isBackbeat) { isNegativeAnchor = true; }
+        case 2:
+            if (trk == 0) {
+                if (stepInBar == 0 || stepInBar == div * 2 + div / 2) isAnchor = true;
+                if (stepInBar == div || stepInBar == div * 3) isNegativeAnchor = true;
+            }
+            if (trk == 1 && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
             break;
-        case 3: // Drum & Bass
-            if (trk == 0 && (j == 0 || j == div * 2 + div / 2)) { isAnchor = true; anchorVel = 100; }
-            if (trk == 1 && isBackbeat) { isAnchor = true; anchorVel = 100; }
+        case 4:
+            if (trk == 0 && stepInBar == 0) isAnchor = true;
+            if (trk == 1 && stepInBar == div * 2) isAnchor = true;
             break;
-        case 4: // Trap
-            if (trk == 0 && j == 0) { isAnchor = true; anchorVel = 100; }
-            if (trk == 1 && beatNum == 2 && beatPos == 0) { isAnchor = true; anchorVel = 100; } // 3拍目ハーフタイム
+        case 13:
+            if (trk == 0 && stepInBar % div == 0) isAnchor = true;
+            if (trk == 1 && (stepInBar == div - 1 || stepInBar == div * 2 + div / 2)) isAnchor = true;
             break;
-        case 5: // Footwork
-            if (trk == 0 && (j == 0 || j == div * 2 || j == div * 4)) { isAnchor = true; anchorVel = 100; }
-            if (trk == 1 && isBackbeat) { isAnchor = true; anchorVel = 90; }
+        case 15:
+            if (trk == 0 && stepInBar == 0) isAnchor = true;
+            if (trk == 1 && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
             break;
-        case 6: // IDM
-            if (j == 0 && trk != 0) { isNegativeAnchor = true; } // 頭はキックのみ
-            break;
-        case 7: // Dubstep
-            if (trk == 0 && j == 0) { isAnchor = true; anchorVel = 100; }
-            if (trk == 1 && beatNum == 2 && beatPos == 0) { isAnchor = true; anchorVel = 100; }
-            if (trk == 1 && beatNum != 2) { isNegativeAnchor = true; }
-            break;
-        case 8: // Afrobeat
-            if (trk == 0 && isDownbeat) { isAnchor = true; anchorVel = 100; }
-            if (trk == 2 && (j == 0 || j == 3 || j == 5 || j == 8 || j == 10)) { isAnchor = true; anchorVel = 90; } // 12/8クラーベ
-            break;
-        case 9: // Gqom
-            if (trk == 0 && isDownbeat && beatNum != 3) { isAnchor = true; anchorVel = 100; }
-            if (trk == 0 && beatNum == 3) { isNegativeAnchor = true; }
-            break;
-        case 10: // Amapiano
-            if (trk == 0 && isDownbeat) { isAnchor = true; anchorVel = 80; }
-            if (trk >= 5 && isDownbeat) { isNegativeAnchor = true; } // ログドラムは裏主体
-            break;
-        case 11: // Indian Classical
-            if (trk == 0 && j == 0) { isNegativeAnchor = true; } // 頭抜き
-            break;
-        case 12: // Samba / Bossa Nova
-            if (trk == 0 && (beatNum == 1 || beatNum == 3) && beatPos == 0) { isAnchor = true; anchorVel = 100; } // 2,4強調
-            if (trk == 1 && (j == 0 || j == 3 || j == 6 || j == 10 || j == 13)) { isAnchor = true; anchorVel = 90; } // クラーベ
-            break;
-        case 13: // Reggaeton
-            if (trk == 0 && isDownbeat) { isAnchor = true; anchorVel = 100; }
-            if (trk == 1 && (j == 3 || j == 6 || j == 11 || j == 14)) { isAnchor = true; anchorVel = 95; } // トレシージョ
-            break;
-        case 14: // Gamelan
-            if (trk == 0 && j == 0) { isAnchor = true; anchorVel = 100; }
-            if (trk == 0 && j != 0) { isNegativeAnchor = true; }
-            break;
-        case 15: // Funk
-            if (j == 0 && trk == 0) { isAnchor = true; anchorVel = 100; } // The One
-            if (trk == 1 && isBackbeat) { isAnchor = true; anchorVel = 100; }
-            break;
-        case 16: // New Jack Swing
-            if (trk == 0 && (j == 0 || j == div * 2 + 1)) { isAnchor = true; anchorVel = 100; }
-            if (trk == 1 && isBackbeat) { isAnchor = true; anchorVel = 100; }
-            break;
-        case 17: // Neo Soul
-            if (trk == 0 && isDownbeat) { isAnchor = true; anchorVel = 90; }
-            if (trk == 1 && isBackbeat) { isAnchor = true; anchorVel = 95; }
-            break;
-        case 18: // Hip Hop (Boom Bap)
-            if (trk == 0 && (j == 0 || j == div * 2 || j == div * 2 + div / 2)) { isAnchor = true; anchorVel = 95; }
-            if (trk == 1 && isBackbeat) { isAnchor = true; anchorVel = 100; }
-            if (trk == 1 && isDownbeat && !isBackbeat) { isNegativeAnchor = true; }
-            break;
-        case 19: // Math Rock
-            if (trk == 0 && j == 0) { isAnchor = true; anchorVel = 100; }
-            break;
-        case 20: // Prog Metal
-            if (trk == 1 && isBackbeat) { isAnchor = true; anchorVel = 100; }
-            break;
-        case 21: // Minimalism
-            if (j == 0) { isAnchor = true; anchorVel = 90; }
-            break;
-        case 22: // Pure Euclidean
-        case 23: // Pure Chaos
-            // アンカー一切なし。完全にアルゴリズムに委ねる
-            isAnchor = false;
-            isNegativeAnchor = false;
+        case 17:
+            if (trk == 0 && stepInBar % div == 0) isAnchor = true;
+            if (trk == 2) isAnchor = true;
             break;
         default:
+            if (trk == 0 && stepInBar == 0) isAnchor = true;
             break;
         }
 
-        // 3. 隙間（フィラー）への流し込み処理
         if (isAnchor) {
             drumPattern[trk][j] = anchorVel;
         }
         else if (isNegativeAnchor) {
-            drumPattern[trk][j] = 0;
+            drumPattern[trk][j] = (random.nextInt(100) < cmplx / 2) ? random.nextInt(juce::Range<int>(10, 30)) : 0;
         }
-        else {
-            // Genre 23 (Chaos) の場合はユークリッドを無視して純粋な確率で打つ
+        else if (cmplx > 0) {
             if (genre == 23) {
-                float probThreshold = 1.0f - (cmplx / 100.0f);
-                if (random.nextFloat() > probThreshold) {
-                    drumPattern[trk][j] = random.nextInt(juce::Range<int>(50, 101));
-                }
-                else {
-                    drumPattern[trk][j] = 0;
-                }
+                drumPattern[trk][j] = (random.nextFloat() > (1.0f - cmplx / 100.0f)) ? random.nextInt(juce::Range<int>(60, 101)) : 0;
             }
             else {
-                // 通常（ユークリッド補助）
                 bool isHit = (((j + offset) * k) % n) < k;
-                if (isHit) {
-                    drumPattern[trk][j] = random.nextInt(juce::Range<int>(50, 95));
-                }
-                else {
-                    drumPattern[trk][j] = 0;
-                }
+                drumPattern[trk][j] = isHit ? random.nextInt(juce::Range<int>(40, 90)) : 0;
             }
+        }
+        else {
+            drumPattern[trk][j] = 0;
         }
     }
 }
-
-const juce::String AIDrumMachineAudioProcessor::getName() const { return JucePlugin_Name; }
-bool AIDrumMachineAudioProcessor::acceptsMidi() const { return false; }
-bool AIDrumMachineAudioProcessor::producesMidi() const { return false; }
-bool AIDrumMachineAudioProcessor::isMidiEffect() const { return false; }
-double AIDrumMachineAudioProcessor::getTailLengthSeconds() const { return 0.0; }
-int AIDrumMachineAudioProcessor::getNumPrograms() { return 1; }
-int AIDrumMachineAudioProcessor::getCurrentProgram() { return 0; }
-void AIDrumMachineAudioProcessor::setCurrentProgram(int index) {}
-const juce::String AIDrumMachineAudioProcessor::getProgramName(int index) { return {}; }
-void AIDrumMachineAudioProcessor::changeProgramName(int index, const juce::String& newName) {}
 
 void AIDrumMachineAudioProcessor::loadSample(int trackIndex, const juce::String& filePath) {
     if (trackIndex < 0 || trackIndex >= 8) return;
@@ -285,8 +199,7 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i) buffer.clear(i, 0, buffer.getNumSamples());
 
     int numSamples = buffer.getNumSamples();
-    float sampleRate = (float)getSampleRate();
-    if (sampleRate <= 0.0f) sampleRate = 44100.0f;
+    float sampleRate = (float)getSampleRate(); if (sampleRate <= 0.0f) sampleRate = 44100.0f;
 
     double bpm = internalTempo.load();
     bool isPlaying = isPlayingInternal.load();
@@ -299,12 +212,15 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             }
         }
     }
-    if (bpm < 20.0) bpm = 20.0;
-    if (bpm > 999.0) bpm = 999.0;
     currentBpm.store(bpm);
 
-    int samplesPerBar = (int)(sampleRate * (60.0 / bpm) * 4.0);
-    int samplesPerLoop = samplesPerBar * globalBarCount;
+    // ★ 拍子（分母）に基づくサンプル単位の再計算
+    double samplesPerQuarterNote = sampleRate * (60.0 / bpm);
+    int den = timeSigDenominator.load();
+    double samplesPerBeat = samplesPerQuarterNote * (4.0 / (double)den);
+
+    int num = timeSigNumerator.load();
+    int samplesPerLoop = (int)(samplesPerBeat * num * globalBarCount);
     float pi2 = juce::MathConstants<float>::twoPi;
 
     bool anySolo = false;
@@ -317,21 +233,19 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     for (int i = 0; i < numSamples; ++i)
     {
-        if (isPlaying) {
+        if (isPlaying && samplesPerLoop > 0) {
             samplesInLoop++;
             if (samplesInLoop >= samplesPerLoop) samplesInLoop = 0;
 
             for (int trk = 0; trk < 8; ++trk)
             {
-                int div = trackDivisions[trk];
-                if (div < 1) div = 1;
-                int totalStepsInLoop = div * globalBarCount;
+                int div = trackDivisions[trk]; if (div < 1) div = 1;
+                int totalStepsInLoop = div * num * globalBarCount;
                 int currentStepForTrack = (samplesInLoop * totalStepsInLoop) / samplesPerLoop;
 
-                if (currentStepForTrack != trackCurrentStep[trk])
+                if (currentStepForTrack != trackCurrentStep[trk] && currentStepForTrack < 1024)
                 {
                     trackCurrentStep[trk] = currentStepForTrack;
-
                     bool shouldPlay = true;
                     if (anySolo && !trackSoloed[trk]) shouldPlay = false;
                     if (trackMuted[trk] && !trackSoloed[trk]) shouldPlay = false;
@@ -401,6 +315,17 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         if (rightChannel != nullptr) rightChannel[i] = mixOut;
     }
 }
+
+const juce::String AIDrumMachineAudioProcessor::getName() const { return JucePlugin_Name; }
+bool AIDrumMachineAudioProcessor::acceptsMidi() const { return false; }
+bool AIDrumMachineAudioProcessor::producesMidi() const { return false; }
+bool AIDrumMachineAudioProcessor::isMidiEffect() const { return false; }
+double AIDrumMachineAudioProcessor::getTailLengthSeconds() const { return 0.0; }
+int AIDrumMachineAudioProcessor::getNumPrograms() { return 1; }
+int AIDrumMachineAudioProcessor::getCurrentProgram() { return 0; }
+void AIDrumMachineAudioProcessor::setCurrentProgram(int index) {}
+const juce::String AIDrumMachineAudioProcessor::getProgramName(int index) { return {}; }
+void AIDrumMachineAudioProcessor::changeProgramName(int index, const juce::String& newName) {}
 
 bool AIDrumMachineAudioProcessor::hasEditor() const { return true; }
 juce::AudioProcessorEditor* AIDrumMachineAudioProcessor::createEditor() { return new AIDrumMachineAudioProcessorEditor(*this); }

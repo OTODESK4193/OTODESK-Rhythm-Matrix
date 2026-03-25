@@ -33,7 +33,12 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    int drumPattern[8][36] = { {0} };
+    // ★拍子設定の追加
+    std::atomic<int> timeSigNumerator{ 4 };   // 拍数 (1〜32)
+    std::atomic<int> timeSigDenominator{ 4 }; // 音符単位 (4, 8, 16)
+
+    // ★最大ステップ数を大幅に拡張 (例: 32拍 × Div 8 × 4小節 = 1024)
+    int drumPattern[8][1024] = { {0} };
     int trackDivisions[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
     bool trackLocked[8] = { false, false, false, false, false, false, false, false };
 

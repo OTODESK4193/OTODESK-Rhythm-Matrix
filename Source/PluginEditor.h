@@ -43,6 +43,11 @@ private:
 
     juce::TextButton btnClearAll{ "CLEAR ALL" };
 
+    juce::Label timeSigLabel{ "", "Time Sig:" };
+    juce::ComboBox timeSigNumMenu;
+    juce::Label timeSigSlash{ "", "/" };
+    juce::ComboBox timeSigDenMenu;
+
     juce::Label barCountLabel{ "", "Bars:" };
     juce::ComboBox barCountMenu;
 
@@ -87,7 +92,9 @@ private:
 
     void updateTabColors();
     void updateViewVisibility();
-    bool needsPagination() const;
+    void updateDivisionMenus();
+    void updateTimeSigNumMenu(); // ★分子の最大値を動的に変更する関数を追加
+
     juce::File exportMidi(int trackIndex);
 
     GeminiClient gemini;
