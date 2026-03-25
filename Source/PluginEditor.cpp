@@ -7,7 +7,7 @@
 AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachineAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
-    setSize(1050, 520);
+    setSize(1080, 520); // ★ GUI幅を1080に拡張
 
     addAndMakeVisible(syncButton); addAndMakeVisible(playButton); addAndMakeVisible(stopButton); addAndMakeVisible(tempoLabel);
     syncButton.setToggleState(audioProcessor.isSyncEnabled.load(), juce::dontSendNotification);
@@ -24,6 +24,13 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         double newTempo = tempoLabel.getText().getDoubleValue();
         if (newTempo >= 20.0 && newTempo <= 999.0) audioProcessor.internalTempo = newTempo;
         };
+
+    // ★ テンポロックボタン
+    addAndMakeVisible(btnTempoLock);
+    btnTempoLock.setClickingTogglesState(true);
+    btnTempoLock.setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
+    btnTempoLock.setToggleState(audioProcessor.tempoLocked.load(), juce::dontSendNotification);
+    btnTempoLock.onClick = [this] { audioProcessor.tempoLocked.store(btnTempoLock.getToggleState()); };
 
     addAndMakeVisible(tabSeqButton); addAndMakeVisible(tabSetupButton); addAndMakeVisible(tabSetup2Button);
     tabSeqButton.onClick = [this] { currentView = SequencerView; updateViewVisibility(); resized(); repaint(); };
@@ -126,8 +133,9 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     arpKeyMenu.onChange = [this] { audioProcessor.arpKey.store(arpKeyMenu.getSelectedId() - 1); updateTrackNames(); };
 
     addAndMakeVisible(arpScaleMenu);
-    const char* scales[] = { "Major", "Natural Minor", "Pentatonic Major", "Pentatonic Minor", "Dorian", "Harmonic Minor" };
-    for (int i = 0; i < 6; ++i) arpScaleMenu.addItem(scales[i], i + 1);
+    // ★ スケール12種類
+    const char* scales[] = { "Major", "Natural Minor", "Pentatonic Major", "Pentatonic Minor", "Dorian", "Harmonic Minor", "Lydian", "Mixolydian", "Phrygian", "Locrian", "Whole Tone", "Blues" };
+    for (int i = 0; i < 12; ++i) arpScaleMenu.addItem(scales[i], i + 1);
     arpScaleMenu.setSelectedId(audioProcessor.arpScale.load() + 1, juce::dontSendNotification);
     arpScaleMenu.onChange = [this] { audioProcessor.arpScale.store(arpScaleMenu.getSelectedId() - 1); updateTrackNames(); };
 
@@ -141,7 +149,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
         if (!audioProcessor.arpMode.load()) {
             const auto& def = AIDrumMachineAudioProcessor::getGenreDef(genreIndex);
-            if (!audioProcessor.isSyncEnabled.load()) {
+            if (!audioProcessor.tempoLocked.load() && !audioProcessor.isSyncEnabled.load()) {
                 audioProcessor.internalTempo.store((def.minTempo + def.maxTempo) / 2.0);
             }
             timeSigDenMenu.setSelectedId(def.defaultDen, juce::dontSendNotification);
@@ -239,7 +247,8 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         btnMute[i].onClick = [this, i] { audioProcessor.trackMuted[i] = btnMute[i].getToggleState(); };
         btnSolo[i].onClick = [this, i] { audioProcessor.trackSoloed[i] = btnSolo[i].getToggleState(); };
         btnClear[i].onClick = [this, i] {
-            juce::NativeMessageBox::showOkCancelBox(juce::MessageBoxIconType::WarningIcon, "Clear Track", "Clear Track " + juce::String(i + 1) + "?", this,
+            juce::NativeMessageBox::showOkCancelBox(
+                juce::MessageBoxIconType::WarningIcon, "Clear Track", "Clear Track " + juce::String(i + 1) + "?", this,
                 juce::ModalCallbackFunction::create([this, i](int result) { if (result == 1) { audioProcessor.clearTrack(i); repaint(); } }));
             };
         btnShiftL[i].onClick = [this, i] { audioProcessor.shiftTrackLeft(i); repaint(); };
@@ -466,7 +475,9 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     auto row1 = area.removeFromTop(30);
     syncButton.setBounds(row1.removeFromLeft(60)); playButton.setBounds(row1.removeFromLeft(60).reduced(2)); stopButton.setBounds(row1.removeFromLeft(60).reduced(2));
     row1.removeFromLeft(10); tempoLabel.setBounds(row1.removeFromLeft(80));
-    row1.removeFromLeft(20); tabSeqButton.setBounds(row1.removeFromLeft(90).reduced(2)); tabSetupButton.setBounds(row1.removeFromLeft(90).reduced(2)); tabSetup2Button.setBounds(row1.removeFromLeft(90).reduced(2));
+    // ★ テンポロックボタンの配置
+    btnTempoLock.setBounds(row1.removeFromLeft(25).reduced(2));
+    row1.removeFromLeft(10); tabSeqButton.setBounds(row1.removeFromLeft(90).reduced(2)); tabSetupButton.setBounds(row1.removeFromLeft(90).reduced(2)); tabSetup2Button.setBounds(row1.removeFromLeft(90).reduced(2));
     row1.removeFromLeft(10); btnClearAll.setBounds(row1.removeFromLeft(80).reduced(2));
 
     row1.removeFromLeft(10);
@@ -475,7 +486,6 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     timeSigSlash.setBounds(row1.removeFromLeft(15));
     timeSigDenMenu.setBounds(row1.removeFromLeft(60).reduced(2));
 
-    // ★ GUI配置時のFloat/Int型エラーを防ぐため、int型Rectとして領域を抽出
     juce::Rectangle<int> dragAllAreaInt = row1.removeFromRight(120);
     dragAllArea = dragAllAreaInt;
 
@@ -507,7 +517,6 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     int patW = patArea.getWidth() / 4;
     for (int i = 0; i < 4; ++i) btnPattern[i].setBounds(patArea.removeFromLeft(patW).reduced(4, 0));
 
-    // ★ エラー修正：toFloat()を外し、すべてを完全に int 領域で計算
     juce::Rectangle<int> bottomAreaInt = area.removeFromBottom(250);
 
     if (currentView == Setup2View) {

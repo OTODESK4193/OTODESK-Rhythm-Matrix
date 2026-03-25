@@ -3,8 +3,8 @@
 // ==============================================================================
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <algorithm>
 
-// ★ 59種類のパッチ定義
 static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = { {
         // wave, freq, pDec, pAmt, aAtt, aDec, noise, fTyp, fFreq, fRes, drive, vol
         /* K_909 */      {0, 48.0f,  10.0f,  5.0f, 1.0f, 40.0f,  0.05f, 0, 2000.0f, 1.0f, 1.5f, 1.1f},
@@ -71,7 +71,7 @@ static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = { {
         {2, 293.6f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 2500.0f, 2.0f, 1.2f, 1.0f},
         {2, 349.2f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 3000.0f, 2.0f, 1.2f, 1.0f},
 
-        // ★ M_ArpPluck (Arp Mode 専用極短Pluck)
+        // ★ M_ArpPluck
         {1, 440.0f, 5.0f, 0.0f, 0.5f, 20.0f, 0.0f, 0, 2500.0f, 1.5f, 1.0f, 1.0f}
     } };
 
@@ -247,7 +247,8 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     bool isMono = arpMono.load();
     int curScale = arpScale.load();
 
-    if (!isSyncEnabled.load()) {
+    // ★ テンポ・ロックとArpModeでの固定
+    if (!tempoLocked.load() && !isSyncEnabled.load() && !isArp) {
         int newBpm = random.nextInt(juce::Range<int>(def.minTempo, def.maxTempo + 1));
         internalTempo.store((double)newBpm);
     }
@@ -267,30 +268,54 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     int maxDiv = (den == 16) ? 2 : ((den == 8) ? 4 : 8);
     int bars = globalBarCount.load();
 
-    // ★ Arp Mode 音楽理論・専用ジェネレーター（独立ロジック）
+    // ★ Arp Mode 音楽理論・専用ジェネレーター
     if (isArp) {
-        int arpPreset = currentGenre.load(); // 0〜9
+        int arpPreset = currentGenre.load();
+        std::vector<int> usedNotes;
 
-        // 全消去とDivの初期化
         for (int trk = 0; trk < 8; ++trk) {
             for (int j = 0; j < 1024; ++j) drumPatternUI[trk][j] = 0;
             if (!trackDivLocked[trk]) trackDivisionsUI[trk] = (arpPreset == 7) ? ((trk % 4) + 2) : 4;
 
             if (!trackLocked[trk]) {
-                switch (arpPreset) {
-                case 0: trackDegreeUI[trk] = (trk * 2) % scaleLengths[curScale]; trackOctaveUI[trk] = (trk < 4) ? -1 : 0; break;
-                case 1: trackDegreeUI[trk] = ((7 - trk) * 3) % scaleLengths[curScale]; trackOctaveUI[trk] = (trk < 4) ? 0 : -1; break;
-                case 2: trackDegreeUI[trk] = (trk % 3) * 2; trackOctaveUI[trk] = (trk / 3) - 1; break;
-                case 3: trackDegreeUI[trk] = (trk % 4) * 2; trackOctaveUI[trk] = (trk / 4) - 1; break;
-                case 4: trackDegreeUI[trk] = (trk * 4) % scaleLengths[curScale]; trackOctaveUI[trk] = (trk % 2 == 0) ? -1 : 0; break;
-                case 5: trackDegreeUI[trk] = (trk * 5) % scaleLengths[curScale]; trackOctaveUI[trk] = (trk % 2 == 0) ? -1 : 1; break;
-                case 6: trackDegreeUI[trk] = (trk * 3) % scaleLengths[curScale]; trackOctaveUI[trk] = (trk / 3) - 1; break;
-                default: trackDegreeUI[trk] = random.nextInt(scaleLengths[curScale]); trackOctaveUI[trk] = random.nextInt(3) - 1; break;
+                int degree = 0;
+                int octave = 0;
+                int attempts = 0;
+                bool unique = false;
+
+                // 重複音名の排除とオクターブランダマイズ
+                while (!unique && attempts < 50) {
+                    switch (arpPreset) {
+                    case 0: degree = (trk * 2) % scaleLengths[curScale]; octave = (trk < 4) ? -1 : 0; break;
+                    case 1: degree = ((7 - trk) * 3) % scaleLengths[curScale]; octave = (trk < 4) ? 0 : -1; break;
+                    case 2: degree = (trk % 3) * 2; octave = (trk / 3) - 1; break;
+                    case 3: degree = (trk % 4) * 2; octave = (trk / 4) - 1; break;
+                    case 4: degree = (trk * 4) % scaleLengths[curScale]; octave = (trk % 2 == 0) ? -1 : 0; break;
+                    case 5: degree = (trk * 5) % scaleLengths[curScale]; octave = (trk % 2 == 0) ? -1 : 1; break;
+                    case 6: degree = (trk * 3) % scaleLengths[curScale]; octave = (trk / 3) - 1; break;
+                    default: degree = random.nextInt(scaleLengths[curScale]); octave = random.nextInt(3) - 1; break;
+                    }
+
+                    if (random.nextInt(100) < 30) degree = (degree + random.nextInt(3)) % scaleLengths[curScale];
+                    octave += random.nextInt(juce::Range<int>(-1, 2));
+                    octave = juce::jlimit(-2, 2, octave);
+
+                    int noteVal = octave * 12 + degree;
+                    if (std::find(usedNotes.begin(), usedNotes.end(), noteVal) == usedNotes.end()) {
+                        unique = true;
+                        usedNotes.push_back(noteVal);
+                    }
+                    attempts++;
                 }
+                trackDegreeUI[trk] = degree;
+                trackOctaveUI[trk] = octave;
+            }
+            else {
+                usedNotes.push_back(trackOctaveUI[trk] * 12 + trackDegreeUI[trk]);
             }
         }
 
-        int baseDiv = 4;
+        int baseDiv = trackDivisionsUI[0];
         int n = baseDiv * num * bars;
         int currentTrk = 0;
         int currentChordBase = 0;
@@ -303,37 +328,36 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             int beatInBar = (j % (baseDiv * num)) / baseDiv;
             bool isFillPortion = (fillBar > 0) && (currentBarOfStep == (fillBar - 1)) && (beatInBar >= num - 2);
 
-            // 1Dリズム（発音するかどうか）の生成
             bool stepActive = false;
-            if (arpPreset == 8) { // Euclidean
-                int k = (n * 50) / 100;
-                stepActive = ((j * k) % n < k);
+            // ★ Euclidean Arp 修正 (毎回パターンが変化するように)
+            if (arpPreset == 8) {
+                int k = (n * (20 + random.nextInt(60))) / 100;
+                int eucOffset = random.nextInt(juce::jmax(1, n));
+                stepActive = (((j + eucOffset) * k) % n < k);
             }
             else {
                 stepActive = (random.nextInt(100) < 70);
             }
 
-            // Fill時の密度変化
             if (isFillPortion) stepActive = (arpPreset % 2 == 0) ? true : false;
             if (!stepActive) continue;
 
             int vel = 70 + random.nextInt(30);
             std::vector<int> tracksToHit;
 
-            // フレーズ・和声の進行
             switch (arpPreset) {
-            case 0: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 1) % 8; break; // Basic Up
-            case 1: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 7) % 8; break; // Basic Down
-            case 2: tracksToHit.push_back(currentChordBase % 8); tracksToHit.push_back((currentChordBase + 2) % 8); tracksToHit.push_back((currentChordBase + 4) % 8); currentChordBase = (currentChordBase + 1) % 8; break; // Triads
-            case 3: tracksToHit.push_back(currentChordBase % 8); tracksToHit.push_back((currentChordBase + 2) % 8); tracksToHit.push_back((currentChordBase + 4) % 8); tracksToHit.push_back((currentChordBase + 6) % 8); currentChordBase = (currentChordBase + 1) % 8; break; // 7ths
-            case 4: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 4) % 8; break; // 5ths
-            case 5: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 5) % 8; break; // 6ths
-            case 6: tracksToHit.push_back(currentChordBase % 8); tracksToHit.push_back((currentChordBase + 3) % 8); tracksToHit.push_back((currentChordBase + 6) % 8); currentChordBase = (currentChordBase + 1) % 8; break; // Quartal
-            case 7: break; // Polyrhythmは後で個別処理
-            case 8: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 1) % 8; break; // Euc Arp
+            case 0: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 1) % 8; break;
+            case 1: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 7) % 8; break;
+            case 2: tracksToHit.push_back(currentChordBase % 8); tracksToHit.push_back((currentChordBase + 2) % 8); tracksToHit.push_back((currentChordBase + 4) % 8); currentChordBase = (currentChordBase + 1) % 8; break;
+            case 3: tracksToHit.push_back(currentChordBase % 8); tracksToHit.push_back((currentChordBase + 2) % 8); tracksToHit.push_back((currentChordBase + 4) % 8); tracksToHit.push_back((currentChordBase + 6) % 8); currentChordBase = (currentChordBase + 1) % 8; break;
+            case 4: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 4) % 8; break;
+            case 5: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 5) % 8; break;
+            case 6: tracksToHit.push_back(currentChordBase % 8); tracksToHit.push_back((currentChordBase + 3) % 8); tracksToHit.push_back((currentChordBase + 6) % 8); currentChordBase = (currentChordBase + 1) % 8; break;
+            case 7: break;
+            case 8: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 1) % 8; break;
             default:
                 int nextTrk = random.nextInt(8);
-                while (nextTrk == currentTrk) nextTrk = random.nextInt(8); // 連続発音禁止
+                while (nextTrk == currentTrk) nextTrk = random.nextInt(8);
                 currentTrk = nextTrk;
                 tracksToHit.push_back(currentTrk);
                 break;
@@ -349,7 +373,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             }
         }
 
-        // Polyrhythm (7) 個別処理
         if (arpPreset == 7) {
             for (int trk = 0; trk < 8; ++trk) {
                 int tDiv = trackDivisionsUI[trk];
@@ -359,7 +382,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             }
         }
     }
-    // ★ ドラムマシンの通常アルゴリズム
     else {
         for (int trk = 0; trk < 8; ++trk) {
             if (trackLocked[trk]) continue;
@@ -390,8 +412,13 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 }
             }
 
-            if (!trackEntrpLocked[trk]) trackEntropy[trk] = (isAlgorithmMode) ? 50 : random.nextInt(juce::Range<int>(0, 20));
-            if (!trackShiftLocked[trk]) trackShiftUI[trk] = random.nextInt(juce::Range<int>(def.shiftMin[trk], def.shiftMax[trk] + 1));
+            // ★ エントロピーの変化
+            if (!trackEntrpLocked[trk]) {
+                trackEntropy[trk] = random.nextInt(juce::Range<int>(10, 50));
+            }
+            if (!trackShiftLocked[trk]) {
+                trackShiftUI[trk] = random.nextInt(juce::Range<int>(def.shiftMin[trk], def.shiftMax[trk] + 1));
+            }
 
             int div = trackDivisionsUI[trk];
             int n = div * num * bars;
@@ -592,7 +619,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     auto totalNumOutputChannels = getTotalNumOutputChannels();
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i) buffer.clear(i, 0, buffer.getNumSamples());
 
-    // ★ エラー修正：ポインタ取得
     auto* leftChannel = buffer.getWritePointer(0);
     auto* rightChannel = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
 
@@ -707,7 +733,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         if (mixOut > 1.0f) mixOut = 1.0f;
         if (mixOut < -1.0f) mixOut = -1.0f;
 
-        // ★ エラー修正：ポインタへの代入
         if (leftChannel != nullptr) leftChannel[i] = mixOut;
         if (rightChannel != nullptr) rightChannel[i] = mixOut;
     }

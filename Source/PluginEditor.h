@@ -37,6 +37,7 @@ private:
     juce::TextButton playButton{ "Play" };
     juce::TextButton stopButton{ "Stop" };
     juce::Label tempoLabel;
+    juce::TextButton btnTempoLock{ "L" }; // ★ テンポロックボタン
     juce::int64 lastStopClickTime = 0;
 
     juce::TextButton tabSeqButton{ "SEQUENCER" };

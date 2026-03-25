@@ -9,7 +9,6 @@
 #include <cstring>
 #include <vector>
 
-// ★ シンセサイザーのパラメータ構造体
 struct InstrumentPatch {
     int wave;
     float freq;
@@ -25,7 +24,6 @@ struct InstrumentPatch {
     float vol;
 };
 
-// ★ 59種類のパッチID（M_ArpPluckを定義に追加）
 enum PatchID {
     K_909, K_808, K_Acoustic, K_Deep, K_Punch, K_Hard, K_Soft, K_Sub, K_Click, K_FM,
     S_909, S_808, S_Tight, S_Fat, S_Rim, S_Clap, S_Snap, S_Noise, S_Lofi, S_Acoustic,
@@ -60,16 +58,22 @@ struct SavedPattern {
     int bars = 4;
 };
 
-// ★ 音楽理論（スケール定義）
-const int scalePatterns[6][7] = {
+// ★ スケール定義を12種類に拡張
+const int scalePatterns[12][7] = {
     {0, 2, 4, 5, 7, 9, 11}, // 0: Major
     {0, 2, 3, 5, 7, 8, 10}, // 1: Natural Minor
     {0, 2, 4, 7, 9, -1, -1},// 2: Pentatonic Major
     {0, 3, 5, 7, 10, -1, -1},//3: Pentatonic Minor
     {0, 2, 3, 5, 7, 9, 10}, // 4: Dorian
-    {0, 2, 3, 5, 7, 8, 11}  // 5: Harmonic Minor
+    {0, 2, 3, 5, 7, 8, 11}, // 5: Harmonic Minor
+    {0, 2, 4, 6, 7, 9, 11}, // 6: Lydian
+    {0, 2, 4, 5, 7, 9, 10}, // 7: Mixolydian
+    {0, 1, 3, 5, 7, 8, 10}, // 8: Phrygian
+    {0, 1, 3, 5, 6, 8, 10}, // 9: Locrian
+    {0, 2, 4, 6, 8, 10, -1},// 10: Whole Tone
+    {0, 3, 5, 6, 7, 10, -1} // 11: Blues
 };
-const int scaleLengths[6] = { 7, 7, 5, 5, 7, 7 };
+const int scaleLengths[12] = { 7, 7, 5, 5, 7, 7, 7, 7, 7, 7, 6, 6 };
 
 class DrumVoice {
 public:
@@ -170,7 +174,6 @@ public:
     bool trackMuted[8] = { false, false, false, false, false, false, false, false };
     bool trackSoloed[8] = { false, false, false, false, false, false, false, false };
 
-    // ★ Arp Mode Parameters
     std::atomic<bool> arpMode{ false };
     std::atomic<bool> arpMono{ true };
     std::atomic<int> arpKey{ 0 };
@@ -182,14 +185,14 @@ public:
     SavedPattern savedPatterns[4];
     bool isPatternSaved[4] = { false, false, false, false };
 
-    int getTrackCurrentStep(int trackIndex) const { return (trackIndex >= 0 && trackIndex < 8) ? trackCurrentStep[trackIndex] : 0; }
-
     std::atomic<bool> isSyncEnabled{ false };
     std::atomic<bool> isPlayingInternal{ false };
     std::atomic<bool> autoFollowEnabled{ true };
+    std::atomic<bool> tempoLocked{ false }; // ★ Tempo Lock 追加
     std::atomic<double> internalTempo{ 120.0 };
     std::atomic<double> currentBpm{ 120.0 };
 
+    int getTrackCurrentStep(int trackIndex) const { return (trackIndex >= 0 && trackIndex < 8) ? trackCurrentStep[trackIndex] : 0; }
     void resetPosition() { samplesInLoop = 0; currentPlayingBar.store(0); for (int i = 0; i < 8; ++i) trackCurrentStep[i] = -1; }
     void loadSample(int trackIndex, const juce::String& filePath);
     bool hasSampleLoaded(int trackIndex) const { return hasSample[trackIndex]; }
