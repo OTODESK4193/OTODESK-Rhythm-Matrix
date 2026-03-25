@@ -159,6 +159,7 @@ public:
     std::atomic<int> timeSigNumerator{ 4 };
     std::atomic<int> timeSigDenominator{ 4 };
     std::atomic<int> globalBarCount{ 4 };
+    std::atomic<int> fillBarTarget{ 0 }; // 0:Off, 1:Bar1, 2:Bar2, 3:Bar3, 4:Bar4
 
     int drumPatternUI[8][1024] = { {0} };
     int trackDivisionsUI[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
@@ -180,7 +181,7 @@ public:
 
     std::atomic<int> currentGenre{ 0 };
 
-    // ★ パターン保存スロット
+    // パターン保存スロット
     SavedPattern savedPatterns[4];
     bool isPatternSaved[4] = { false, false, false, false };
 

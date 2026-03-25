@@ -7,7 +7,7 @@
 AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachineAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
-    setSize(1000, 520); // ★ ボタン追加のため少し高さを広げました
+    setSize(1050, 520); // 幅を少し拡張
 
     addAndMakeVisible(syncButton); addAndMakeVisible(playButton); addAndMakeVisible(stopButton); addAndMakeVisible(tempoLabel);
     syncButton.setToggleState(audioProcessor.isSyncEnabled.load(), juce::dontSendNotification);
@@ -104,6 +104,18 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     };
     for (int i = 0; i < genres.size(); ++i) styleMenu.addItem(genres[i], i + 1);
 
+    // ★ Fillコンボボックスの設定
+    addAndMakeVisible(fillBarMenu);
+    fillBarMenu.addItem("Fill: Off", 1);
+    fillBarMenu.addItem("Fill: Bar 1", 2);
+    fillBarMenu.addItem("Fill: Bar 2", 3);
+    fillBarMenu.addItem("Fill: Bar 3", 4);
+    fillBarMenu.addItem("Fill: Bar 4", 5);
+    fillBarMenu.setSelectedId(audioProcessor.fillBarTarget.load() + 1, juce::dontSendNotification);
+    fillBarMenu.onChange = [this] {
+        audioProcessor.fillBarTarget.store(fillBarMenu.getSelectedId() - 1);
+        };
+
     styleMenu.onChange = [this] {
         int genreIndex = styleMenu.getSelectedId() - 1;
         audioProcessor.currentGenre.store(genreIndex);
@@ -126,7 +138,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         for (int i = 0; i < 8; ++i) {
             trackNameLabels[i].setText(def.trackNames[i], juce::dontSendNotification);
 
-            // アルゴリズム＆特殊アンサンブルモード時はロック解除
             if ((genreIndex >= 22 || genreIndex == 14 || genreIndex == 21) && (i == 0 || i == 1 || i == 4)) {
                 audioProcessor.trackCmplxLocked[i] = false;
                 btnCmplxLock[i].setToggleState(false, juce::dontSendNotification);
@@ -144,15 +155,14 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     tabButton3.onClick = [tabClick] { tabClick(2); }; tabButton4.onClick = [tabClick] { tabClick(3); };
     updateTabColors();
 
-    // ★ Pattern 1-4 ボタンの初期化
     for (int i = 0; i < 4; ++i) {
         addAndMakeVisible(btnPattern[i]);
         btnPattern[i].setButtonText("Pat " + juce::String(i + 1));
-        btnPattern[i].setTriggeredOnMouseDown(true); // 右クリック検出用
+        btnPattern[i].setTriggeredOnMouseDown(true);
 
         btnPattern[i].onClick = [this, i] {
             auto mods = juce::ModifierKeys::getCurrentModifiers();
-            if (mods.isPopupMenu()) { // 右クリック
+            if (mods.isPopupMenu()) {
                 if (audioProcessor.isPatternSaved[i]) {
                     juce::NativeMessageBox::showOkCancelBox(juce::MessageBoxIconType::QuestionIcon, "Clear Pattern", "Clear Pattern " + juce::String(i + 1) + "?", this,
                         juce::ModalCallbackFunction::create([this, i](int result) {
@@ -163,8 +173,8 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
                             }));
                 }
             }
-            else { // 左クリック
-                if (!audioProcessor.isPatternSaved[i]) { // 保存
+            else {
+                if (!audioProcessor.isPatternSaved[i]) {
                     SavedPattern& sp = audioProcessor.savedPatterns[i];
                     for (int t = 0; t < 8; ++t) {
                         std::memcpy(sp.drumPattern[t], audioProcessor.drumPatternUI[t], sizeof(sp.drumPattern[t]));
@@ -178,7 +188,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
                     sp.bars = audioProcessor.globalBarCount.load();
                     audioProcessor.isPatternSaved[i] = true;
                 }
-                else { // 呼び出し
+                else {
                     SavedPattern& sp = audioProcessor.savedPatterns[i];
                     for (int t = 0; t < 8; ++t) {
                         std::memcpy(audioProcessor.drumPatternUI[t], sp.drumPattern[t], sizeof(sp.drumPattern[t]));
@@ -341,7 +351,6 @@ void AIDrumMachineAudioProcessorEditor::updateViewVisibility() {
         midiKeyLabels[i].setVisible(!isSeq);
     }
 
-    // Patternボタンの表示管理
     for (int i = 0; i < 4; ++i) btnPattern[i].setVisible(isSeq);
 }
 
@@ -372,6 +381,7 @@ void AIDrumMachineAudioProcessorEditor::timerCallback() {
         updateTimeSigNumMenu();
         timeSigNumMenu.setSelectedId(audioProcessor.timeSigNumerator.load(), juce::dontSendNotification);
         barCountMenu.setSelectedId(audioProcessor.globalBarCount.load(), juce::dontSendNotification);
+        fillBarMenu.setSelectedId(audioProcessor.fillBarTarget.load() + 1, juce::dontSendNotification);
 
         for (int i = 0; i < 8; ++i) {
             updateDivisionMenus();
@@ -383,7 +393,6 @@ void AIDrumMachineAudioProcessorEditor::timerCallback() {
         resized();
     }
 
-    // ★ 自動ページ追従 (Auto-Follow)
     if (audioProcessor.isPlayingInternal.load() || audioProcessor.isSyncEnabled.load()) {
         int activeBar = audioProcessor.currentPlayingBar.load();
         if (activeBar != currentViewBar && activeBar < audioProcessor.globalBarCount.load() && activeBar >= 0) {
@@ -414,7 +423,11 @@ void AIDrumMachineAudioProcessorEditor::resized() {
 
     area.removeFromTop(10);
     auto row2 = area.removeFromTop(30);
-    generateButton.setBounds(row2.removeFromLeft(120)); row2.removeFromLeft(10); styleMenu.setBounds(row2.removeFromLeft(200)); row2.removeFromLeft(10);
+    generateButton.setBounds(row2.removeFromLeft(120));
+    row2.removeFromLeft(10);
+    styleMenu.setBounds(row2.removeFromLeft(200));
+    row2.removeFromLeft(10);
+    fillBarMenu.setBounds(row2.removeFromLeft(100)); // ★ ジャンルの横に配置
 
     row2.removeFromRight(10);
     barCountMenu.setBounds(row2.removeFromRight(80).reduced(2));
@@ -435,7 +448,6 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     if (bars >= 3) tabButton3.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
     if (bars >= 4) tabButton4.setBounds(tabArea.removeFromLeft(tabW).reduced(2));
 
-    // ★ Patternボタンの配置
     auto patArea = area.removeFromTop(40).withTrimmedTop(10).withTrimmedBottom(5);
     int patW = patArea.getWidth() / 4;
     for (int i = 0; i < 4; ++i) {

@@ -4,66 +4,66 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-// ★ Decayを大幅に短縮し、50種類に拡張したシンセパッチ・ライブラリ
+// ★ プレビュー最適化版：余韻(aDec, pDecay)を極限まで短縮、金物系音量(vol)を0.9倍
 static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = { {
         // wave(0Sin,1Tri,2Saw,3Sqr), freq, pDec, pAmt, aAtt, aDec, noise, fTyp(0LP,1HP,2BP,3Off), fFreq, fRes, drive, vol
-        /* K_909 */      {0, 48.0f,  40.0f,  5.0f, 1.0f, 180.0f, 0.05f, 0, 2000.0f, 1.0f, 1.5f, 1.1f},
-        /* K_808 */      {0, 42.0f,  30.0f,  3.0f, 2.0f, 400.0f, 0.0f,  0, 1000.0f, 1.0f, 1.8f, 1.2f},
-        /* K_Acoustic */ {1, 55.0f,  20.0f,  2.0f, 1.0f, 120.0f, 0.2f,  0, 1500.0f, 1.5f, 1.2f, 1.0f},
-        /* K_Deep */     {0, 35.0f,  30.0f,  1.5f, 3.0f, 250.0f, 0.0f,  0, 800.0f,  1.0f, 1.2f, 1.1f},
-        /* K_Punch */    {2, 60.0f,  20.0f,  5.0f, 1.0f, 100.0f, 0.1f,  0, 3000.0f, 2.0f, 2.5f, 1.0f},
-        /* K_Hard */     {3, 60.0f,  25.0f,  6.0f, 1.0f, 150.0f, 0.3f,  0, 4000.0f, 1.5f, 3.0f, 0.9f},
-        /* K_Soft */     {0, 50.0f,  30.0f,  1.0f, 3.0f, 150.0f, 0.0f,  0, 500.0f,  1.0f, 1.0f, 1.0f},
-        /* K_Sub */      {0, 30.0f,  20.0f,  1.0f, 5.0f, 500.0f, 0.0f,  0, 300.0f,  1.0f, 1.5f, 1.2f},
-        /* K_Click */    {0, 80.0f,  10.0f, 10.0f, 0.5f, 60.0f,  0.4f,  0, 5000.0f, 1.0f, 1.0f, 1.0f},
-        /* K_FM */       {2, 45.0f,  50.0f,  4.0f, 1.0f, 200.0f, 0.0f,  0, 1200.0f, 2.5f, 2.0f, 1.0f},
+        /* K_909 */      {0, 48.0f,  15.0f,  5.0f, 1.0f, 50.0f,  0.05f, 0, 2000.0f, 1.0f, 1.5f, 1.1f},
+        /* K_808 */      {0, 42.0f,  20.0f,  3.0f, 2.0f, 90.0f,  0.0f,  0, 1000.0f, 1.0f, 1.8f, 1.2f},
+        /* K_Acoustic */ {1, 55.0f,  15.0f,  2.0f, 1.0f, 40.0f,  0.2f,  0, 1500.0f, 1.5f, 1.2f, 1.0f},
+        /* K_Deep */     {0, 35.0f,  15.0f,  1.5f, 3.0f, 60.0f,  0.0f,  0, 800.0f,  1.0f, 1.2f, 1.1f},
+        /* K_Punch */    {2, 60.0f,  10.0f,  5.0f, 1.0f, 40.0f,  0.1f,  0, 3000.0f, 2.0f, 2.5f, 1.0f},
+        /* K_Hard */     {3, 60.0f,  15.0f,  6.0f, 1.0f, 50.0f,  0.3f,  0, 4000.0f, 1.5f, 3.0f, 0.9f},
+        /* K_Soft */     {0, 50.0f,  15.0f,  1.0f, 3.0f, 50.0f,  0.0f,  0, 500.0f,  1.0f, 1.0f, 1.0f},
+        /* K_Sub */      {0, 30.0f,  10.0f,  1.0f, 5.0f, 100.0f, 0.0f,  0, 300.0f,  1.0f, 1.5f, 1.2f},
+        /* K_Click */    {0, 80.0f,   5.0f, 10.0f, 0.5f, 20.0f,  0.4f,  0, 5000.0f, 1.0f, 1.0f, 1.0f},
+        /* K_FM */       {2, 45.0f,  20.0f,  4.0f, 1.0f, 60.0f,  0.0f,  0, 1200.0f, 2.5f, 2.0f, 1.0f},
 
-        /* S_909 */      {1, 180.0f, 30.0f,  1.5f, 1.0f, 150.0f, 0.8f,  1, 400.0f,  1.2f, 1.5f, 0.9f},
-        /* S_808 */      {0, 200.0f, 20.0f,  2.0f, 1.0f, 120.0f, 0.7f,  1, 600.0f,  1.0f, 1.2f, 0.9f},
-        /* S_Tight */    {0, 250.0f, 15.0f,  1.0f, 1.0f, 80.0f,  0.9f,  1, 800.0f,  1.0f, 1.8f, 0.9f},
-        /* S_Fat */      {2, 150.0f, 30.0f,  2.0f, 2.0f, 180.0f, 0.6f,  0, 5000.0f, 1.5f, 2.5f, 0.9f},
-        /* S_Rim */      {0, 400.0f, 10.0f,  1.5f, 1.0f, 40.0f,  0.1f,  2, 1200.0f, 3.0f, 1.2f, 1.0f},
-        /* S_Clap */     {2, 100.0f, 15.0f,  0.0f, 5.0f, 150.0f, 1.0f,  2, 1500.0f, 1.0f, 1.5f, 0.9f},
-        /* S_Snap */     {0, 800.0f, 5.0f,   0.0f, 1.0f, 30.0f,  0.8f,  1, 2000.0f, 1.0f, 1.0f, 0.9f},
-        /* S_Noise */    {0, 100.0f, 0.0f,   0.0f, 1.0f, 120.0f, 1.0f,  1, 1000.0f, 1.0f, 1.5f, 0.9f},
-        /* S_Lofi */     {3, 150.0f, 25.0f,  1.0f, 2.0f, 100.0f, 0.5f,  2, 800.0f,  2.0f, 3.0f, 0.8f},
-        /* S_Acoustic */ {1, 220.0f, 20.0f,  1.2f, 1.0f, 130.0f, 0.6f,  0, 6000.0f, 1.0f, 1.2f, 0.9f},
+        /* S_909 */      {1, 180.0f, 15.0f,  1.5f, 1.0f, 50.0f,  0.8f,  1, 400.0f,  1.2f, 1.5f, 0.9f},
+        /* S_808 */      {0, 200.0f, 10.0f,  2.0f, 1.0f, 40.0f,  0.7f,  1, 600.0f,  1.0f, 1.2f, 0.9f},
+        /* S_Tight */    {0, 250.0f, 10.0f,  1.0f, 1.0f, 30.0f,  0.9f,  1, 800.0f,  1.0f, 1.8f, 0.9f},
+        /* S_Fat */      {2, 150.0f, 15.0f,  2.0f, 2.0f, 60.0f,  0.6f,  0, 5000.0f, 1.5f, 2.5f, 0.9f},
+        /* S_Rim */      {0, 400.0f,  5.0f,  1.5f, 1.0f, 20.0f,  0.1f,  2, 1200.0f, 3.0f, 1.2f, 1.0f},
+        /* S_Clap */     {2, 100.0f, 10.0f,  0.0f, 5.0f, 50.0f,  1.0f,  2, 1500.0f, 1.0f, 1.5f, 0.9f},
+        /* S_Snap */     {0, 800.0f,  5.0f,  0.0f, 1.0f, 15.0f,  0.8f,  1, 2000.0f, 1.0f, 1.0f, 0.9f},
+        /* S_Noise */    {0, 100.0f,  0.0f,  0.0f, 1.0f, 40.0f,  1.0f,  1, 1000.0f, 1.0f, 1.5f, 0.9f},
+        /* S_Lofi */     {3, 150.0f, 15.0f,  1.0f, 2.0f, 40.0f,  0.5f,  2, 800.0f,  2.0f, 3.0f, 0.8f},
+        /* S_Acoustic */ {1, 220.0f, 10.0f,  1.2f, 1.0f, 40.0f,  0.6f,  0, 6000.0f, 1.0f, 1.2f, 0.9f},
 
-        /* H_Closed */   {3, 800.0f, 5.0f,   0.0f, 1.0f, 40.0f,  1.0f,  1, 4000.0f, 1.0f, 1.0f, 0.7f},
-        /* H_Open */     {3, 800.0f, 10.0f,  0.0f, 1.0f, 200.0f, 1.0f,  1, 4000.0f, 1.0f, 1.0f, 0.7f},
-        /* H_Fast */     {3, 900.0f, 3.0f,   0.0f, 1.0f, 20.0f,  1.0f,  1, 6000.0f, 1.0f, 1.0f, 0.6f},
-        /* H_Shaker */   {0, 200.0f, 0.0f,   0.0f, 15.0f, 60.0f, 1.0f,  2, 3000.0f, 1.5f, 1.0f, 0.6f},
-        /* H_Tambourine */{3, 600.0f, 0.0f,  0.0f, 5.0f, 80.0f,  0.8f,  1, 5000.0f, 2.0f, 1.5f, 0.6f},
-        /* H_Ride */     {1, 400.0f, 10.0f,  0.0f, 2.0f, 400.0f, 0.6f,  1, 3000.0f, 1.0f, 1.0f, 0.7f},
-        /* H_Crash */    {2, 300.0f, 20.0f,  0.0f, 1.0f, 500.0f, 0.9f,  1, 2000.0f, 1.0f, 1.5f, 0.7f},
-        /* H_Metallic */ {3, 1200.0f,5.0f,   0.0f, 1.0f, 100.0f, 0.4f,  2, 4500.0f, 4.0f, 1.2f, 0.6f},
+        /* H_Closed */   {3, 800.0f,  5.0f,  0.0f, 1.0f, 15.0f,  1.0f,  1, 4000.0f, 1.0f, 1.0f, 0.63f}, // vol *0.9
+        /* H_Open */     {3, 800.0f,  5.0f,  0.0f, 1.0f, 40.0f,  1.0f,  1, 4000.0f, 1.0f, 1.0f, 0.63f},
+        /* H_Fast */     {3, 900.0f,  2.0f,  0.0f, 1.0f, 10.0f,  1.0f,  1, 6000.0f, 1.0f, 1.0f, 0.54f},
+        /* H_Shaker */   {0, 200.0f,  0.0f,  0.0f, 15.0f, 25.0f, 1.0f,  2, 3000.0f, 1.5f, 1.0f, 0.54f},
+        /* H_Tambourine */{3, 600.0f, 0.0f,  0.0f, 5.0f, 30.0f,  0.8f,  1, 5000.0f, 2.0f, 1.5f, 0.54f},
+        /* H_Ride */     {1, 400.0f,  5.0f,  0.0f, 2.0f, 60.0f,  0.6f,  1, 3000.0f, 1.0f, 1.0f, 0.63f},
+        /* H_Crash */    {2, 300.0f, 10.0f,  0.0f, 1.0f, 80.0f,  0.9f,  1, 2000.0f, 1.0f, 1.5f, 0.63f},
+        /* H_Metallic */ {3, 1200.0f, 5.0f,  0.0f, 1.0f, 30.0f,  0.4f,  2, 4500.0f, 4.0f, 1.2f, 0.54f},
 
-        /* P_TomL */     {0, 80.0f,  40.0f,  2.0f, 2.0f, 250.0f, 0.0f,  0, 1000.0f, 1.0f, 1.5f, 1.1f},
-        /* P_TomM */     {0, 120.0f, 35.0f,  1.5f, 2.0f, 200.0f, 0.0f,  0, 1500.0f, 1.0f, 1.5f, 1.0f},
-        /* P_TomH */     {0, 180.0f, 30.0f,  1.2f, 2.0f, 150.0f, 0.0f,  0, 2000.0f, 1.0f, 1.5f, 1.0f},
-        /* P_Conga */    {0, 250.0f, 25.0f,  1.5f, 2.0f, 150.0f, 0.0f,  2, 500.0f,  2.0f, 1.2f, 1.0f},
-        /* P_Bongo */    {0, 400.0f, 15.0f,  1.2f, 1.0f, 100.0f, 0.0f,  2, 800.0f,  2.0f, 1.2f, 1.0f},
-        /* P_TablaL */   {0, 120.0f, 30.0f,  3.0f, 1.0f, 200.0f, 0.0f,  2, 300.0f,  3.0f, 1.5f, 1.1f},
-        /* P_TablaH */   {0, 280.0f, 20.0f,  2.0f, 1.0f, 120.0f, 0.1f,  2, 600.0f,  2.5f, 1.2f, 1.0f},
-        /* P_Wood */     {3, 600.0f, 10.0f,  0.5f, 1.0f, 30.0f,  0.1f,  2, 1000.0f, 3.0f, 1.0f, 0.9f},
-        /* P_Cowbell */  {3, 540.0f, 15.0f,  0.2f, 1.0f, 250.0f, 0.0f,  2, 800.0f,  4.0f, 1.5f, 0.9f},
-        /* P_Gong */     {2, 100.0f, 80.0f,  0.5f, 10.0f,1500.0f,0.2f,  2, 400.0f,  5.0f, 2.0f, 1.1f},
-        /* P_Clave */    {0, 2000.0f,5.0f,   0.0f, 1.0f, 20.0f,  0.0f,  3, 0.0f,    0.0f, 1.0f, 0.9f},
-        /* P_LogDrum */  {0, 65.0f,  30.0f,  1.0f, 3.0f, 400.0f, 0.05f, 0, 400.0f,  1.5f, 2.0f, 1.2f},
+        /* P_TomL */     {0, 80.0f,  20.0f,  2.0f, 2.0f, 60.0f,  0.0f,  0, 1000.0f, 1.0f, 1.5f, 1.1f},
+        /* P_TomM */     {0, 120.0f, 15.0f,  1.5f, 2.0f, 50.0f,  0.0f,  0, 1500.0f, 1.0f, 1.5f, 1.0f},
+        /* P_TomH */     {0, 180.0f, 15.0f,  1.2f, 2.0f, 40.0f,  0.0f,  0, 2000.0f, 1.0f, 1.5f, 1.0f},
+        /* P_Conga */    {0, 250.0f, 10.0f,  1.5f, 2.0f, 40.0f,  0.0f,  2, 500.0f,  2.0f, 1.2f, 1.0f},
+        /* P_Bongo */    {0, 400.0f, 10.0f,  1.2f, 1.0f, 30.0f,  0.0f,  2, 800.0f,  2.0f, 1.2f, 1.0f},
+        /* P_TablaL */   {0, 120.0f, 15.0f,  3.0f, 1.0f, 50.0f,  0.0f,  2, 300.0f,  3.0f, 1.5f, 1.1f},
+        /* P_TablaH */   {0, 280.0f, 10.0f,  2.0f, 1.0f, 40.0f,  0.1f,  2, 600.0f,  2.5f, 1.2f, 1.0f},
+        /* P_Wood */     {3, 600.0f,  5.0f,  0.5f, 1.0f, 15.0f,  0.1f,  2, 1000.0f, 3.0f, 1.0f, 0.9f},
+        /* P_Cowbell */  {3, 540.0f, 10.0f,  0.2f, 1.0f, 40.0f,  0.0f,  2, 800.0f,  4.0f, 1.5f, 0.81f}, // vol *0.9
+        /* P_Gong */     {2, 100.0f, 40.0f,  0.5f, 10.0f,100.0f, 0.2f,  2, 400.0f,  5.0f, 2.0f, 0.99f}, // vol *0.9
+        /* P_Clave */    {0, 2000.0f, 2.0f,  0.0f, 1.0f, 10.0f,  0.0f,  3, 0.0f,    0.0f, 1.0f, 0.9f},
+        /* P_LogDrum */  {0, 65.0f,  15.0f,  1.0f, 3.0f, 60.0f,  0.05f, 0, 400.0f,  1.5f, 2.0f, 1.2f},
 
-        /* F_Noise */    {0, 100.0f, 0.0f,   0.0f, 5.0f, 150.0f, 1.0f,  2, 2000.0f, 1.0f, 1.0f, 0.8f},
-        /* F_SubDrop */  {0, 60.0f,  200.0f, 2.0f, 1.0f, 800.0f, 0.0f,  0, 200.0f,  1.0f, 1.5f, 1.2f},
-        /* F_Chaos */    {2, 500.0f, 60.0f, -0.8f, 1.0f, 80.0f,  1.0f,  2, 1000.0f, 8.0f, 3.0f, 0.8f},
-        /* F_Laser */    {2, 1500.0f,80.0f,  2.0f, 1.0f, 150.0f, 0.0f,  0, 2000.0f, 2.0f, 1.5f, 0.9f},
-        /* F_Wobble */   {1, 40.0f,  100.0f, 0.5f, 20.0f,300.0f, 0.2f,  0, 800.0f,  4.0f, 3.0f, 1.1f},
-        /* F_Pluck */    {2, 440.0f, 30.0f,  0.0f, 1.0f, 100.0f, 0.0f,  0, 1500.0f, 2.0f, 1.0f, 0.9f},
-        /* F_Bell */     {0, 880.0f, 100.0f, 0.0f, 1.0f, 400.0f, 0.0f,  3, 0.0f,    0.0f, 1.0f, 0.8f},
-        /* F_Marimba */  {0, 300.0f, 40.0f,  0.0f, 1.0f, 150.0f, 0.05f, 0, 1000.0f, 1.0f, 1.0f, 1.0f},
-        /* F_Chant */    {3, 200.0f, 20.0f,  0.5f, 20.0f,150.0f, 0.3f,  2, 1000.0f, 4.0f, 1.5f, 0.9f},
-        /* F_Sweep */    {2, 100.0f, 300.0f, 2.0f, 10.0f,500.0f, 0.8f,  2, 2000.0f, 2.0f, 1.5f, 0.9f}
+        /* F_Noise */    {0, 100.0f,  0.0f,  0.0f, 5.0f, 40.0f,  1.0f,  2, 2000.0f, 1.0f, 1.0f, 0.8f},
+        /* F_SubDrop */  {0, 60.0f,  60.0f,  2.0f, 1.0f, 120.0f, 0.0f,  0, 200.0f,  1.0f, 1.5f, 1.2f},
+        /* F_Chaos */    {2, 500.0f, 20.0f, -0.8f, 1.0f, 30.0f,  1.0f,  2, 1000.0f, 8.0f, 3.0f, 0.8f},
+        /* F_Laser */    {2, 1500.0f,30.0f,  2.0f, 1.0f, 40.0f,  0.0f,  0, 2000.0f, 2.0f, 1.5f, 0.9f},
+        /* F_Wobble */   {1, 40.0f,  40.0f,  0.5f, 20.0f,80.0f,  0.2f,  0, 800.0f,  4.0f, 3.0f, 1.1f},
+        /* F_Pluck */    {2, 440.0f, 15.0f,  0.0f, 1.0f, 30.0f,  0.0f,  0, 1500.0f, 2.0f, 1.0f, 0.9f},
+        /* F_Bell */     {0, 880.0f, 40.0f,  0.0f, 1.0f, 80.0f,  0.0f,  3, 0.0f,    0.0f, 1.0f, 0.72f}, // vol *0.9
+        /* F_Marimba */  {0, 300.0f, 20.0f,  0.0f, 1.0f, 40.0f,  0.05f, 0, 1000.0f, 1.0f, 1.0f, 1.0f},
+        /* F_Chant */    {3, 200.0f, 10.0f,  0.5f, 20.0f,40.0f,  0.3f,  2, 1000.0f, 4.0f, 1.5f, 0.9f},
+        /* F_Sweep */    {2, 100.0f, 80.0f,  2.0f, 10.0f,100.0f, 0.8f,  2, 2000.0f, 2.0f, 1.5f, 0.9f}
     } };
 
-// ★ 50種類のパッチを24ジャンルに最適マッピング
+// ★ 24ジャンルの詳細定義
 static const std::array<GenreDefinition, 24> genreTable = { {
         // 0: Techno
         { 4, 4, 125, 135, {"909 Kick", "909 Snare", "CHH", "OHH", "Clap", "Ride", "Tom", "Noise FX"},
@@ -138,7 +138,7 @@ static const std::array<GenreDefinition, 24> genreTable = { {
                                     // 14: Gamelan
                                     { 8, 4, 80, 110, {"Gong", "Kempul", "Kendang", "Bonang", "Saron", "Kenong", "Kethuk", "Slenthem"},
                                       {P_Gong, P_TomL, P_TablaL, P_Cowbell, F_Marimba, P_TomM, P_Wood, K_Sub},
-                                      {{1,2,0,0}, {1,2,4,0}, {2,3,4,0}, {3,4,5,6}, {2,4,6,0}, {1,2,4,0}, {2,4,0,0}, {1,2,4,0}},
+                                      {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}}, // Divを1,2に制限
                                       {-10,-10, -5,-5, -5, -10, -5, -10}, {10,10, 10,10, 10, 10, 10, 10} },
                                       // 15: Funk
                                       { 4, 4, 100, 115, {"Kick", "Snare", "Hi-Hat", "Open Hat", "Clap", "Tom", "Conga", "Tambourine"},
@@ -173,11 +173,11 @@ static const std::array<GenreDefinition, 24> genreTable = { {
                                                   // 21: Minimalism
                                                   { 12, 8, 140, 170, {"Clap 1", "Clap 2", "Marimba 1", "Marimba 2", "Woodblock", "Pulse", "Phase 1", "Phase 2"},
                                                     {S_Clap, S_Snap, F_Marimba, F_Marimba, P_Wood, K_Soft, S_Rim, S_Rim},
-                                                    {{2,3,4,0}, {2,3,4,0}, {3,4,5,0}, {3,4,5,0}, {2,3,4,0}, {2,3,4,0}, {3,4,5,0}, {3,4,5,0}},
+                                                    {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}}, // Divを1,2に制限
                                                     {0,0, 0,0, 0, 0, -20, 20}, {0,0, 0,0, 0, 0, -20, 20} },
-                                                    // 22: Pure Euclidean
+                                                    // 22: Pure Euclidean (Melodic Plucks)
                                                     { 4, 4, 120, 150, {"Node 1", "Node 2", "Node 3", "Node 4", "Node 5", "Node 6", "Node 7", "Node 8"},
-                                                      {K_FM, S_808, F_Bell, P_TomL, S_Clap, P_Wood, P_Cowbell, F_Noise},
+                                                      {F_Pluck, F_Bell, F_Marimba, P_Wood, F_Pluck, F_Bell, F_Marimba, P_Wood}, // Pluck音でメロディックに
                                                       {{2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}},
                                                       {0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0} },
                                                       // 23: Pure Chaos
@@ -244,8 +244,9 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     int genre = currentGenre.load();
     const auto& def = getGenreDef(genre);
     bool isAlgorithmMode = (genre >= 22);
-    // ★ GamelanとMinimalismは特殊アンサンブルのためユークリッドを許可
     bool isSpecialEnsemble = (genre == 14 || genre == 21);
+
+    int fillBar = fillBarTarget.load(); // 0:Off, 1:Bar1, 2:Bar2...
 
     if (!isSyncEnabled.load()) {
         int newBpm = random.nextInt(juce::Range<int>(def.minTempo, def.maxTempo + 1));
@@ -270,10 +271,9 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     for (int trk = 0; trk < 8; ++trk) {
         if (trackLocked[trk]) continue;
 
-        // ★ アルゴリズムモードと特殊アンサンブルはロックを解除
         if (isAlgorithmMode || isSpecialEnsemble) {
             trackCmplxLocked[trk] = false;
-            trackComplexity[trk] = (isAlgorithmMode) ? 50 : (10 + random.nextInt(30));
+            trackComplexity[trk] = (isAlgorithmMode) ? 50 : (10 + random.nextInt(15)); // Minimalism等用に低く設定
         }
 
         if (!trackDivLocked[trk]) {
@@ -300,20 +300,46 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
 
         int div = trackDivisionsUI[trk];
         int n = div * num * bars;
-        int cmplx = trackComplexity[trk];
-        int entrp = trackEntropy[trk];
-        int k = juce::jmax(1, (n * cmplx) / 100);
         int offset = random.nextInt(juce::Range<int>(0, juce::jmax(1, n)));
 
         for (int j = 0; j < 1024; ++j) {
             if (j >= n) { drumPatternUI[trk][j] = 0; continue; }
+
+            int currentBarOfStep = j / (div * num);
+            bool isFillActive = (fillBar > 0) && (currentBarOfStep == (fillBar - 1));
 
             int stepInBar = j % (div * num);
             bool isAnchor = false;
             bool isNegativeAnchor = false;
             int anchorVel = 100;
 
-            if (!isAlgorithmMode) {
+            int cmplx = trackComplexity[trk];
+            int entrp = trackEntropy[trk];
+
+            // ★ フィル時の特性変化（資料準拠の確率的ロールやタム回し）
+            if (isFillActive) {
+                if (genre == 0 || genre == 1) { // Techno / House Riser
+                    if (trk == 1 || trk == 4) cmplx = 80; // Snareロール
+                    if (trk == 0 && (stepInBar % div == 0)) isAnchor = true;
+                }
+                else if (genre == 3 || genre == 4) { // D&B / Trap Ratchets
+                    if (trk == 2) cmplx = 90; // Hat高速連打
+                    if (trk == 1 && (stepInBar % (div / 2) == 0)) isAnchor = true;
+                }
+                else if (genre == 19 || genre == 20) { // Math / Prog Metal Tom Fills
+                    if (trk >= 5) cmplx = 60; // タム回し
+                    if (trk == 0 && (stepInBar % 2 == 0)) isAnchor = true;
+                }
+                else if (genre == 14 || genre == 21) { // Gamelan / Minimalism Tutti
+                    isAnchor = (stepInBar % div == 0); // 全員で拍頭を打つ
+                    cmplx = 0;
+                }
+                else {
+                    cmplx = juce::jlimit(0, 100, cmplx * 2); // 一般的なフィルの複雑度増
+                    if (trk == 0 && (stepInBar % div == 0)) isAnchor = true;
+                }
+            }
+            else if (!isAlgorithmMode) { // 通常パターン
                 switch (genre) {
                 case 0: case 1:
                     if (trk == 0 && (stepInBar % div == 0)) isAnchor = true;
@@ -340,7 +366,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                     if (trk == 0 && (stepInBar % div == 0)) isAnchor = true;
                     if ((trk == 1 || trk == 4) && (stepInBar == div - 1 || stepInBar == div * 2 + div / 2)) isAnchor = true;
                     break;
-                case 14: // ★ Gamelan 修正
+                case 14: // Gamelan 修正（確実に画面内でヒットするサイクル）
                     if (trk == 0 && stepInBar == 0) isAnchor = true;
                     if (trk == 1 && stepInBar == div * 4 && num > 4) isAnchor = true;
                     if (trk >= 2 && (stepInBar % (div * 2) == 0)) isAnchor = true;
@@ -357,7 +383,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                     if (trk == 0 && (stepInBar == 0 || stepInBar == div * 3 || stepInBar == div * 5)) isAnchor = true;
                     if ((trk == 1 || trk == 4) && (stepInBar == div * 3 || stepInBar == div * 5)) isAnchor = true;
                     break;
-                case 21: // ★ Minimalism 修正
+                case 21: // Minimalism 修正（確実に鳴るパルス）
                     if (trk == 0 && (stepInBar % (div * 3) == 0)) isAnchor = true;
                     if (trk == 1 && ((stepInBar + div) % (div * 3) == 0)) isAnchor = true;
                     if (trk >= 2 && (stepInBar % 2 == 0)) isAnchor = true;
@@ -368,7 +394,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                     break;
                 }
 
-                // Kickの裏打ちゴーストノート
+                // Kickの裏打ちゴーストノート（16分裏）
                 if (trk == 0 && !isAnchor) {
                     if (stepInBar % div == div - 1) {
                         if (random.nextInt(100) < (15 + entrp / 2)) {
@@ -379,6 +405,8 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 }
             }
 
+            int k = juce::jmax(1, (n * cmplx) / 100);
+
             if (isAnchor) {
                 int velJitter = (int)((entrp / 100.0f) * 20.0f);
                 drumPatternUI[trk][j] = anchorVel - random.nextInt(juce::Range<int>(0, velJitter + 1));
@@ -388,7 +416,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 drumPatternUI[trk][j] = (random.nextInt(100) < ghostProb) ? random.nextInt(juce::Range<int>(10, 30 + (entrp / 5))) : 0;
             }
             else if (!trackCmplxLocked[trk] && cmplx > 0) {
-                if (genre == 23) {
+                if (genre == 23 && !isSpecialEnsemble) {
                     drumPatternUI[trk][j] = (random.nextFloat() > (1.0f - cmplx / 100.0f)) ? random.nextInt(juce::Range<int>(40, 101)) : 0;
                 }
                 else {
@@ -494,7 +522,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     int samplesPerBar = (int)(samplesPerBeat * timeSigNumDSP);
     int samplesPerLoop = samplesPerBar * globalBarCountDSP;
 
-    // ★ GUI追従用
     if (samplesPerBar > 0) {
         currentPlayingBar.store((samplesInLoop / samplesPerBar) % globalBarCountDSP);
     }

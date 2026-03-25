@@ -56,6 +56,7 @@ private:
 
     juce::TextButton generateButton{ "Generate" };
     juce::ComboBox styleMenu;
+    juce::ComboBox fillBarMenu; // ★ フィル用コンボボックス
     juce::Label statusLabel;
 
     juce::TextButton tabButton1{ "Bar 1" };
@@ -64,7 +65,6 @@ private:
     juce::TextButton tabButton4{ "Bar 4" };
     int currentViewBar = 0;
 
-    // ★ パターン保存ボタン
     juce::TextButton btnPattern[4];
 
     const juce::String trackNotes[8] = { "C1", "D1", "F#1", "A#1", "D#1", "F1", "A1", "D2" };
