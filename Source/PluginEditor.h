@@ -43,6 +43,10 @@ private:
 
     juce::TextButton btnClearAll{ "CLEAR ALL" };
 
+    // ★追加：トップバーに移動したBar Count
+    juce::Label barCountLabel{ "", "Bars:" };
+    juce::ComboBox barCountMenu;
+
     juce::TextButton generateButton{ "Generate" };
     juce::ComboBox styleMenu;
     juce::Label statusLabel;
@@ -56,20 +60,20 @@ private:
     juce::Label trackNameLabels[8];
     juce::String trackNotes[8] = { "C1", "D1", "F#1", "A#1", "D#1", "F1", "A1", "D2" };
 
-    // --- Sequencer UI ---
     juce::TextButton btnMute[8];
     juce::TextButton btnSolo[8];
     juce::TextButton btnClear[8];
     juce::TextButton btnShiftL[8];
     juce::TextButton btnShiftR[8];
 
-    // --- ★追加：Setup UI ---
-    juce::Label barCountLabel{ "", "Length:" };
-    juce::ComboBox barCountMenu;
+    // --- Setup UI ---
     juce::ComboBox divSelectors[8];
     juce::Slider complexitySliders[8];
     juce::Label divLabels[8];
     juce::Label compLabels[8];
+    // ★追加：個別のロックボタン
+    juce::TextButton btnDivLock[8];
+    juce::TextButton btnCmplxLock[8];
 
     juce::Rectangle<float> dragAllArea;
     juce::Rectangle<float> lockArea;

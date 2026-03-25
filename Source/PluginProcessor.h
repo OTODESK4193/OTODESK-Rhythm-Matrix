@@ -37,9 +37,11 @@ public:
     int trackDivisions[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
     bool trackLocked[8] = { false, false, false, false, false, false, false, false };
 
-    // ★追加：SETUP画面用の新規パラメータ
-    int trackComplexity[8] = { 50, 50, 50, 50, 50, 50, 50, 50 }; // 0〜100%
-    int globalBarCount = 4; // 1〜4小節
+    // ★追加：パラメータ別のロックと設定値
+    bool trackDivLocked[8] = { false, false, false, false, false, false, false, false };
+    bool trackCmplxLocked[8] = { false, false, false, false, false, false, false, false };
+    int trackComplexity[8] = { 50, 50, 50, 50, 50, 50, 50, 50 };
+    int globalBarCount = 4; // 1〜4
 
     bool trackMuted[8] = { false, false, false, false, false, false, false, false };
     bool trackSoloed[8] = { false, false, false, false, false, false, false, false };

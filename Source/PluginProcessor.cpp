@@ -18,11 +18,10 @@ AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
 
 AIDrumMachineAudioProcessor::~AIDrumMachineAudioProcessor() {}
 
-// ★追加：シフト・クリア・ランダムのロジック実装
+// ★修正：シフトやランダムを globalBarCount に連動
 void AIDrumMachineAudioProcessor::shiftTrackLeft(int trk) {
     if (trk < 0 || trk >= 8 || trackLocked[trk]) return;
-    int div = trackDivisions[trk];
-    int totalSteps = div * 4;
+    int totalSteps = trackDivisions[trk] * globalBarCount;
     int firstStep = drumPattern[trk][0];
     for (int i = 0; i < totalSteps - 1; ++i) drumPattern[trk][i] = drumPattern[trk][i + 1];
     drumPattern[trk][totalSteps - 1] = firstStep;
@@ -30,8 +29,7 @@ void AIDrumMachineAudioProcessor::shiftTrackLeft(int trk) {
 
 void AIDrumMachineAudioProcessor::shiftTrackRight(int trk) {
     if (trk < 0 || trk >= 8 || trackLocked[trk]) return;
-    int div = trackDivisions[trk];
-    int totalSteps = div * 4;
+    int totalSteps = trackDivisions[trk] * globalBarCount;
     int lastStep = drumPattern[trk][totalSteps - 1];
     for (int i = totalSteps - 1; i > 0; --i) drumPattern[trk][i] = drumPattern[trk][i - 1];
     drumPattern[trk][0] = lastStep;
@@ -44,15 +42,19 @@ void AIDrumMachineAudioProcessor::clearTrack(int trk) {
 
 void AIDrumMachineAudioProcessor::randomizeTrack(int trk) {
     if (trk < 0 || trk >= 8 || trackLocked[trk]) return;
-    int div = trackDivisions[trk];
-    int totalSteps = div * 4;
+    if (!trackDivLocked[trk]) trackDivisions[trk] = random.nextInt(juce::Range<int>(1, 10));
+    if (!trackCmplxLocked[trk]) trackComplexity[trk] = random.nextInt(juce::Range<int>(10, 90));
+
+    int totalSteps = trackDivisions[trk] * globalBarCount;
+    float probThreshold = 1.0f - (trackComplexity[trk] / 100.0f); // 複雑さが高いほどしきい値が下がり鳴りやすくなる
+
     for (int j = 0; j < 36; ++j) {
-        if (j < totalSteps) drumPattern[trk][j] = (random.nextFloat() > 0.6f) ? random.nextInt(juce::Range<int>(80, 110)) : 0;
+        if (j < totalSteps) drumPattern[trk][j] = (random.nextFloat() > probThreshold) ? random.nextInt(juce::Range<int>(80, 110)) : 0;
         else drumPattern[trk][j] = 0;
     }
 }
 
-// (中略：getName ～ prepareToPlay までの関数は完全維持)
+// (中略：getName ～ releaseResources までの関数は完全維持)
 const juce::String AIDrumMachineAudioProcessor::getName() const { return JucePlugin_Name; }
 bool AIDrumMachineAudioProcessor::acceptsMidi() const { return false; }
 bool AIDrumMachineAudioProcessor::producesMidi() const { return false; }
@@ -118,15 +120,13 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     if (bpm > 999.0) bpm = 999.0;
     currentBpm.store(bpm);
 
+    // ★修正：4小節固定を撤廃し、globalBarCount に基づいてループ長を決定
     int samplesPerBar = (int)(sampleRate * (60.0 / bpm) * 4.0);
-    int samplesPerLoop = samplesPerBar * 4;
+    int samplesPerLoop = samplesPerBar * globalBarCount;
     float pi2 = juce::MathConstants<float>::twoPi;
 
-    // ★追加：Soloが1つでもONになっているか確認
     bool anySolo = false;
-    for (int i = 0; i < 8; ++i) {
-        if (trackSoloed[i]) { anySolo = true; break; }
-    }
+    for (int i = 0; i < 8; ++i) { if (trackSoloed[i]) { anySolo = true; break; } }
 
     auto* leftChannel = buffer.getWritePointer(0);
     auto* rightChannel = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
@@ -143,14 +143,14 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             {
                 int div = trackDivisions[trk];
                 if (div < 1) div = 1;
-                int totalStepsInLoop = div * 4;
+                // ★修正：小節数に応じてトラックの総ステップ数を計算
+                int totalStepsInLoop = div * globalBarCount;
                 int currentStepForTrack = (samplesInLoop * totalStepsInLoop) / samplesPerLoop;
 
                 if (currentStepForTrack != trackCurrentStep[trk])
                 {
                     trackCurrentStep[trk] = currentStepForTrack;
 
-                    // ★Mute/Solo判定
                     bool shouldPlay = true;
                     if (anySolo && !trackSoloed[trk]) shouldPlay = false;
                     if (trackMuted[trk] && !trackSoloed[trk]) shouldPlay = false;
