@@ -9,15 +9,112 @@
 #include <cstring>
 #include <vector>
 
+// ★ シンセサイザーのパラメータ構造体
+struct InstrumentPatch {
+    int wave;          // 0:Sine, 1:Triangle, 2:Saw, 3:Square
+    float freq;        // Base Frequency (Hz)
+    float pDecay;      // Pitch Envelope Decay (ms)
+    float pAmt;        // Pitch Envelope Amount (Multiplier)
+    float aAtt;        // Amp Envelope Attack (ms)
+    float aDec;        // Amp Envelope Decay (ms)
+    float noise;       // Noise Mix Level
+    int fType;         // Filter Type - 0:LP, 1:HP, 2:BP, 3:Off
+    float fFreq;       // Filter Cutoff (Hz)
+    float fRes;        // Filter Resonance (Q)
+    float drive;       // Saturation Drive
+    float vol;         // Output Volume
+};
+
+// パッチIDの定義
+enum PatchID {
+    K_909, K_808, K_Acoustic, K_Deep, K_Punch, K_Hard, K_Soft,
+    S_909, S_808, S_Tight, S_Fat, S_Rim, S_Clap, S_Snap,
+    H_Closed, H_Open, H_Fast, H_Shaker,
+    P_TomL, P_TomM, P_TomH, P_Conga, P_Bongo, P_Tabla, P_Wood, P_Cowbell, P_Gong,
+    P_Noise, P_Sub, P_Chaos,
+    PATCH_MAX
+};
+
 struct GenreDefinition {
     int defaultNum;
     int defaultDen;
-    int minTempo;    // ★追加: 適正テンポの下限
-    int maxTempo;    // ★追加: 適正テンポの上限
+    int minTempo;
+    int maxTempo;
     const char* trackNames[8];
+    PatchID trackPatches[8]; // ★ 各トラックの音色パッチ
     int allowedDivs[8][4];
     int shiftMin[8];
     int shiftMax[8];
+};
+
+// ★ 汎用ドラムシンセボイス
+class DrumVoice {
+public:
+    void setSampleRate(float sr) { sampleRate = sr; }
+
+    void trigger(float velocity, const InstrumentPatch& p) {
+        patch = p;
+        phase = 0.0f;
+        pEnv = 1.0f;
+        aEnv = 0.0f;
+        state = 1; // 1: Attack, 2: Decay
+        svfLp = svfHp = svfBp = 0.0f;
+        outVol = patch.vol * (velocity / 100.0f);
+    }
+
+    float process() {
+        if (state == 0) return 0.0f;
+
+        // Envelopes
+        if (state == 1) {
+            aEnv += 1000.0f / (patch.aAtt * sampleRate + 1.0f);
+            if (aEnv >= 1.0f) { aEnv = 1.0f; state = 2; }
+        }
+        else {
+            aEnv *= std::exp(-1.0f / (patch.aDec * sampleRate * 0.001f + 1.0f));
+            if (aEnv < 0.0001f) state = 0;
+        }
+        pEnv *= std::exp(-1.0f / (patch.pDecay * sampleRate * 0.001f + 1.0f));
+
+        // Oscillator
+        float currentFreq = patch.freq * (1.0f + pEnv * patch.pAmt);
+        phase += currentFreq / sampleRate;
+        if (phase > 1.0f) phase -= 1.0f;
+
+        float osc = 0.0f;
+        if (patch.wave == 0) osc = std::sin(phase * juce::MathConstants<float>::twoPi);
+        else if (patch.wave == 1) osc = 2.0f * std::abs(2.0f * phase - 1.0f) - 1.0f;
+        else if (patch.wave == 2) osc = 2.0f * phase - 1.0f;
+        else if (patch.wave == 3) osc = phase < 0.5f ? 1.0f : -1.0f;
+
+        // Noise
+        float noiseSig = ((rand() % 2000) / 1000.0f - 1.0f) * patch.noise;
+        float sig = osc + noiseSig;
+
+        // Chamberlin SVF Filter
+        if (patch.fType != 3) {
+            float f = 2.0f * std::sin(juce::MathConstants<float>::pi * patch.fFreq / sampleRate);
+            float q = 1.0f / patch.fRes;
+            svfLp += f * svfBp;
+            svfHp = sig - svfLp - q * svfBp;
+            svfBp += f * svfHp;
+
+            if (patch.fType == 0) sig = svfLp;
+            else if (patch.fType == 1) sig = svfHp;
+            else sig = svfBp;
+        }
+
+        // Saturation & Output
+        sig = std::tanh(sig * patch.drive);
+        return sig * aEnv * outVol;
+    }
+
+private:
+    float sampleRate = 48000.0f;
+    float phase = 0.0f, pEnv = 0.0f, aEnv = 0.0f, outVol = 0.0f;
+    int state = 0;
+    float svfLp = 0.0f, svfHp = 0.0f, svfBp = 0.0f;
+    InstrumentPatch patch;
 };
 
 class AIDrumMachineAudioProcessor : public juce::AudioProcessor
@@ -40,13 +137,11 @@ public:
     bool producesMidi() const override;
     bool isMidiEffect() const override;
     double getTailLengthSeconds() const override;
-
     int getNumPrograms() override;
     int getCurrentProgram() override;
     void setCurrentProgram(int index) override;
     const juce::String getProgramName(int index) override;
     void changeProgramName(int index, const juce::String& newName) override;
-
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
@@ -60,18 +155,15 @@ public:
 
     std::atomic<bool> patternUpdated{ false };
     std::atomic<bool> uiNeedsUpdate{ false };
+    std::atomic<int> currentPlayingBar{ 0 }; // ★ GUI追従用
 
     bool trackLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackDivLocked[8] = { false, false, false, false, false, false, false, false };
-
     bool trackCmplxLocked[8] = { true, true, false, false, true, false, false, false };
     int trackComplexity[8] = { 0, 0, 50, 50, 0, 30, 30, 30 };
-
     bool trackEntrpLocked[8] = { false, false, false, false, false, false, false, false };
     int trackEntropy[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-
     bool trackShiftLocked[8] = { false, false, false, false, false, false, false, false };
-
     bool trackMuted[8] = { false, false, false, false, false, false, false, false };
     bool trackSoloed[8] = { false, false, false, false, false, false, false, false };
 
@@ -89,6 +181,7 @@ public:
 
     void resetPosition() {
         samplesInLoop = 0;
+        currentPlayingBar.store(0);
         for (int i = 0; i < 8; ++i) trackCurrentStep[i] = -1;
     }
 
@@ -102,22 +195,18 @@ public:
     void clearTrack(int trackIndex);
 
     static const GenreDefinition& getGenreDef(int index);
+    static const InstrumentPatch& getPatch(PatchID id);
 
 private:
     int drumPatternDSP[8][1024] = { {0} };
     int trackDivisionsDSP[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };
     int trackShiftDSP[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-    int timeSigNumDSP = 4;
-    int timeSigDenDSP = 4;
-    int globalBarCountDSP = 4;
-
+    int timeSigNumDSP = 4, timeSigDenDSP = 4, globalBarCountDSP = 4;
     int samplesInLoop = 0;
     int trackCurrentStep[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
 
-    float trackEnv[8] = { 0.0f };
-    float trackPitchEnv[8] = { 0.0f };
-    float trackPhase[8] = { 0.0f };
     juce::Random random;
+    DrumVoice synthVoices[8]; // ★ シンセボイス
 
     juce::AudioFormatManager formatManager;
     juce::AudioSampleBuffer sampleBuffers[8];
