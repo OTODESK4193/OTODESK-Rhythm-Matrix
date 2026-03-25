@@ -43,7 +43,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
                         audioProcessor.clearTrack(i);
                         audioProcessor.trackDivisionsUI[i] = 4; divSelectors[i].setSelectedId(4, juce::dontSendNotification);
 
-                        // コアトラック(0,1,4)のリセットロジック
                         bool isCore = (i == 0 || i == 1 || i == 4);
                         audioProcessor.trackCmplxLocked[i] = isCore;
                         btnCmplxLock[i].setToggleState(isCore, juce::dontSendNotification);
@@ -105,12 +104,20 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     };
     for (int i = 0; i < genres.size(); ++i) styleMenu.addItem(genres[i], i + 1);
 
+    // ★ ジャンル変更時の処理：テンポ、拍子、トラック名を一括更新
     styleMenu.onChange = [this] {
         int genreIndex = styleMenu.getSelectedId() - 1;
         audioProcessor.currentGenre.store(genreIndex);
 
         const auto& def = AIDrumMachineAudioProcessor::getGenreDef(genreIndex);
 
+        // テンポの初期設定（適正範囲の中間値）
+        if (!audioProcessor.isSyncEnabled.load()) {
+            double initialTempo = (def.minTempo + def.maxTempo) / 2.0;
+            audioProcessor.internalTempo.store(initialTempo);
+        }
+
+        // 推奨拍子の更新
         timeSigDenMenu.setSelectedId(def.defaultDen, juce::dontSendNotification);
         audioProcessor.timeSigDenominator.store(def.defaultDen);
         updateTimeSigNumMenu();
@@ -119,6 +126,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
         updateDivisionMenus();
 
+        // 推奨トラック名でラベルを上書き
         for (int i = 0; i < 8; ++i) {
             trackNameLabels[i].setText(def.trackNames[i], juce::dontSendNotification);
         }
@@ -137,7 +145,10 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     for (int i = 0; i < 8; ++i) {
         addAndMakeVisible(trackNameLabels[i]);
         trackNameLabels[i].setEditable(true); trackNameLabels[i].setJustificationType(juce::Justification::centredLeft);
-        trackNameLabels[i].setColour(juce::Label::textColourId, juce::Colours::white); trackNameLabels[i].setMinimumHorizontalScale(1.0f);
+        trackNameLabels[i].setColour(juce::Label::textColourId, juce::Colours::white);
+        // ★ フォントサイズを13.0fに少し落として見切れを防止
+        trackNameLabels[i].setFont(juce::Font(13.0f));
+        trackNameLabels[i].setMinimumHorizontalScale(0.8f);
 
         addChildComponent(midiKeyLabels[i]); midiKeyLabels[i].setText("[" + trackNotes[i] + "]", juce::dontSendNotification);
         midiKeyLabels[i].setColour(juce::Label::textColourId, juce::Colours::grey); midiKeyLabels[i].setJustificationType(juce::Justification::centredRight);
@@ -162,7 +173,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         btnShiftL[i].onClick = [this, i] { audioProcessor.shiftTrackLeft(i); repaint(); };
         btnShiftR[i].onClick = [this, i] { audioProcessor.shiftTrackRight(i); repaint(); };
 
-        // ★ 全てのLockボタンにオレンジ色の点灯色を設定
         addChildComponent(divLabels[i]); divLabels[i].setText("Div:", juce::dontSendNotification);
         addChildComponent(divSelectors[i]);
         divSelectors[i].onChange = [this, i] {
@@ -230,6 +240,7 @@ void AIDrumMachineAudioProcessorEditor::updateTimeSigNumMenu() {
     int maxNum = 7;
     if (den == 8) maxNum = 9;
     else if (den == 16) maxNum = 17;
+    if (audioProcessor.currentGenre.load() == 6) maxNum = 17; // IDM特例
 
     int currentNum = audioProcessor.timeSigNumerator.load();
     if (currentNum > maxNum) {
@@ -283,8 +294,14 @@ void AIDrumMachineAudioProcessorEditor::timerCallback() {
     if (audioProcessor.isSyncEnabled.load()) tempoLabel.setText("DAW: " + juce::String(audioProcessor.currentBpm.load(), 1) + " BPM", juce::dontSendNotification);
     else if (!tempoLabel.isBeingEdited()) tempoLabel.setText(juce::String(audioProcessor.internalTempo.load(), 1) + " BPM", juce::dontSendNotification);
 
+    // Processor側でのパターン・拍子変更をUIに同期（IDMなど）
     if (audioProcessor.uiNeedsUpdate.exchange(false)) {
+        timeSigDenMenu.setSelectedId(audioProcessor.timeSigDenominator.load(), juce::dontSendNotification);
+        updateTimeSigNumMenu();
+        timeSigNumMenu.setSelectedId(audioProcessor.timeSigNumerator.load(), juce::dontSendNotification);
+
         for (int i = 0; i < 8; ++i) {
+            updateDivisionMenus();
             divSelectors[i].setSelectedId(audioProcessor.trackDivisionsUI[i], juce::dontSendNotification);
             complexitySliders[i].setValue(audioProcessor.trackComplexity[i], juce::dontSendNotification);
             entropySliders[i].setValue(audioProcessor.trackEntropy[i], juce::dontSendNotification);
@@ -338,19 +355,25 @@ void AIDrumMachineAudioProcessorEditor::resized() {
 
     auto bottomArea = area.removeFromBottom(250).toFloat();
     if (currentView == SequencerView) {
-        lockArea = bottomArea.removeFromLeft(30); auto controlArea = bottomArea.removeFromLeft(150); sampleArea = bottomArea.removeFromLeft(60);
+        lockArea = bottomArea.removeFromLeft(30);
+        auto controlArea = bottomArea.removeFromLeft(150);
+        // ★ トラック名が見切れないように sampleArea を拡張 (60 -> 110)
+        sampleArea = bottomArea.removeFromLeft(110);
+
         int rows = 8; float cellH = sampleArea.getHeight() / rows;
         for (int row = 0; row < rows; ++row) {
             int idx = 7 - row;
-            trackNameLabels[idx].setBounds(sampleArea.withY(sampleArea.getY() + row * cellH).withHeight(cellH).removeFromLeft(50).reduced(2).toNearestInt());
+            trackNameLabels[idx].setBounds(sampleArea.withY(sampleArea.getY() + row * cellH).withHeight(cellH).removeFromLeft(105).reduced(2).toNearestInt());
             auto ctrlRow = controlArea.withY(controlArea.getY() + row * cellH).withHeight(cellH).reduced(1);
             btnMute[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1).toNearestInt()); btnSolo[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1).toNearestInt()); btnClear[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1).toNearestInt()); btnShiftL[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1).toNearestInt()); btnShiftR[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1).toNearestInt());
         }
-        midiDragArea = bottomArea.removeFromRight(40); mainGridArea = bottomArea;
+        midiDragArea = bottomArea.removeFromRight(40);
+        mainGridArea = bottomArea; // 残りをメイングリッドに
     }
     else {
         lockArea = juce::Rectangle<float>(); midiDragArea = bottomArea.removeFromRight(40);
-        auto labelArea = bottomArea.removeFromLeft(120);
+        // ★ SetupViewでもトラック名を十分表示できるよう labelArea を拡張
+        auto labelArea = bottomArea.removeFromLeft(140);
         sampleArea = bottomArea.removeFromLeft(110);
 
         auto setupControls = bottomArea;
@@ -358,7 +381,8 @@ void AIDrumMachineAudioProcessorEditor::resized() {
         for (int row = 0; row < rows; ++row) {
             int idx = 7 - row;
             auto lRow = labelArea.withY(labelArea.getY() + row * cellH).withHeight(cellH).reduced(2);
-            midiKeyLabels[idx].setBounds(lRow.removeFromLeft(40).toNearestInt()); trackNameLabels[idx].setBounds(lRow.toNearestInt());
+            midiKeyLabels[idx].setBounds(lRow.removeFromLeft(40).toNearestInt());
+            trackNameLabels[idx].setBounds(lRow.toNearestInt());
 
             auto ctrlRow = setupControls.withY(setupControls.getY() + row * cellH).withHeight(cellH).reduced(2);
 

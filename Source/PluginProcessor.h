@@ -7,10 +7,13 @@
 #include <atomic>
 #include <array>
 #include <cstring>
+#include <vector>
 
 struct GenreDefinition {
     int defaultNum;
     int defaultDen;
+    int minTempo;    // ★追加: 適正テンポの下限
+    int maxTempo;    // ★追加: 適正テンポの上限
     const char* trackNames[8];
     int allowedDivs[8][4];
     int shiftMin[8];
@@ -61,7 +64,6 @@ public:
     bool trackLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackDivLocked[8] = { false, false, false, false, false, false, false, false };
 
-    // ★ コアトラック（0, 1, 4）はデフォルトでCmplxをロックし、0に設定（ユークリッドの排除）
     bool trackCmplxLocked[8] = { true, true, false, false, true, false, false, false };
     int trackComplexity[8] = { 0, 0, 50, 50, 0, 30, 30, 30 };
 
