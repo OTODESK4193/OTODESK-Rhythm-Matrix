@@ -6,52 +6,242 @@
 #include <algorithm>
 #include <cmath>
 
-// ★ マクロ廃止・constexpr関数による安全なパッチ生成
+// DSP安全なコンパイル時パッチ生成ヘルパー
 constexpr InstrumentPatch makePatch(int w, float fr, float pD, float pA, float aAt, float aDc, float ns, int fT, float fF, float fR, float dr, float vl) {
     return { w, fr, pD, pA, aAt, aDc, ns, fT, fF, fR, dr, vl };
 }
 
-// ★ 176独立パッチ + 9パッチ をラムダでコンパイル時生成
+// 176独立パッチ + Pluck(8) + Arp(1) = 185パッチの完全個別定義
 static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = []() {
     std::array<InstrumentPatch, PATCH_MAX> arr{};
-    for (int i = 0; i < 176; ++i) {
-        int genre = i / 8;
-        int trk = i % 8;
 
-        // Base tight templates
-        float freq = (trk == 0) ? 45.0f : (trk == 1) ? 180.0f : (trk == 2) ? 800.0f : (trk == 3) ? 600.0f : (trk == 4) ? 200.0f : (trk == 5) ? 130.0f : (trk == 6) ? 90.0f : 300.0f;
-        int wave = (trk == 2 || trk == 3) ? 3 : (trk == 1) ? 2 : 0;
-        float dec = (trk == 2) ? 6.0f : 20.0f;
-        float noise = (trk == 1 || trk >= 2) ? 0.8f : 0.0f;
-        float drive = 2.0f + (genre * 0.05f); // Unique per genre
+    // G0: Techno (909 Kick, 909 Snare, CHH, OHH, Clap, Ride, Tom, Noise FX)
+    arr[G0_T0] = makePatch(0, 48.0f, 8.0f, 5.0f, 1.0f, 25.0f, 0.05f, 0, 2000.0f, 1.0f, 2.5f, 1.1f);
+    arr[G0_T1] = makePatch(2, 180.0f, 6.0f, 1.5f, 1.0f, 18.0f, 0.8f, 0, 4000.0f, 1.2f, 3.0f, 0.9f);
+    arr[G0_T2] = makePatch(3, 800.0f, 3.0f, 0.0f, 1.0f, 6.0f, 1.0f, 1, 5000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G0_T3] = makePatch(3, 800.0f, 4.0f, 0.0f, 1.0f, 18.0f, 1.0f, 1, 4000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G0_T4] = makePatch(2, 120.0f, 6.0f, 0.0f, 2.0f, 20.0f, 1.0f, 2, 1500.0f, 1.0f, 2.5f, 0.9f);
+    arr[G0_T5] = makePatch(1, 400.0f, 4.0f, 0.0f, 1.0f, 25.0f, 0.6f, 1, 3000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G0_T6] = makePatch(0, 100.0f, 10.0f, 1.5f, 1.0f, 22.0f, 0.0f, 0, 1200.0f, 1.0f, 2.0f, 1.0f);
+    arr[G0_T7] = makePatch(0, 100.0f, 0.0f, 0.0f, 1.0f, 15.0f, 1.0f, 2, 2000.0f, 1.0f, 2.5f, 0.8f);
 
-        if (genre == 20) { // ★ Prog Metal (Portnoy Kit)
-            if (trk == 0) arr[i] = makePatch(0, 85.0f, 4.0f, 8.0f, 0.5f, 15.0f, 0.2f, 0, 6000.0f, 1.0f, 3.5f, 1.1f); // Click Kick
-            else if (trk == 1) arr[i] = makePatch(2, 190.0f, 8.0f, 2.0f, 1.0f, 18.0f, 0.5f, 0, 4000.0f, 1.5f, 4.0f, 1.0f); // Fat Snare
-            else if (trk == 2) arr[i] = makePatch(3, 1200.0f, 2.0f, 0.0f, 1.0f, 6.0f, 0.8f, 1, 6000.0f, 2.0f, 3.0f, 0.8f); // Max Stax
-            else if (trk == 3) arr[i] = makePatch(3, 800.0f, 5.0f, 0.0f, 1.0f, 15.0f, 0.9f, 1, 4000.0f, 1.0f, 1.5f, 0.7f); // Hat Bark
-            else if (trk == 4) arr[i] = makePatch(0, 220.0f, 10.0f, 1.5f, 1.0f, 25.0f, 0.0f, 0, 2000.0f, 1.0f, 2.0f, 1.1f); // High Tom
-            else if (trk == 5) arr[i] = makePatch(0, 140.0f, 12.0f, 1.5f, 1.0f, 28.0f, 0.0f, 0, 1500.0f, 1.0f, 2.0f, 1.1f); // Mid Tom
-            else if (trk == 6) arr[i] = makePatch(0, 85.0f, 15.0f, 1.5f, 1.0f, 35.0f, 0.0f, 0, 1000.0f, 1.0f, 2.0f, 1.1f); // Floor Tom
-            else if (trk == 7) arr[i] = makePatch(2, 400.0f, 10.0f, 0.0f, 1.0f, 40.0f, 1.0f, 1, 3000.0f, 1.0f, 3.0f, 0.7f); // Splash
-        }
-        else {
-            // General diversification for 176 sounds
-            arr[i] = makePatch(wave, freq + genre * 2.0f, 8.0f, 1.5f, 1.0f, dec, noise, (trk >= 2) ? 1 : 0, 2000.0f + genre * 100.0f, 1.0f, drive, 1.0f);
-            if (trk == 0 && (genre == 4 || genre == 7)) { // Trap/Dubstep Sub
-                arr[i] = makePatch(0, 45.0f, 15.0f, 4.0f, 1.0f, 45.0f, 0.0f, 0, 800.0f, 1.0f, 4.0f, 1.2f);
-            }
-            if (trk == 7 && genre == 14) { // Gamelan Gong
-                arr[i] = makePatch(2, 100.0f, 15.0f, 0.5f, 1.0f, 40.0f, 0.2f, 2, 400.0f, 5.0f, 3.0f, 0.99f);
-            }
-        }
-    }
+    // G1: House (Deep Kick, Rimshot, Shuff Hat, Open Hat, Clap, Conga, Bongo, Vocal Chop)
+    arr[G1_T0] = makePatch(0, 40.0f, 10.0f, 1.5f, 2.0f, 30.0f, 0.0f, 0, 800.0f, 1.0f, 2.0f, 1.1f);
+    arr[G1_T1] = makePatch(0, 400.0f, 4.0f, 1.5f, 1.0f, 8.0f, 0.1f, 2, 1200.0f, 3.0f, 2.0f, 1.0f);
+    arr[G1_T2] = makePatch(3, 900.0f, 2.0f, 0.0f, 1.0f, 7.0f, 0.9f, 1, 6000.0f, 1.0f, 1.5f, 0.5f);
+    arr[G1_T3] = makePatch(3, 800.0f, 4.0f, 0.0f, 1.0f, 20.0f, 0.9f, 1, 4500.0f, 1.0f, 1.5f, 0.6f);
+    arr[G1_T4] = makePatch(2, 150.0f, 5.0f, 0.0f, 3.0f, 15.0f, 0.8f, 2, 2000.0f, 1.0f, 2.0f, 0.9f);
+    arr[G1_T5] = makePatch(0, 250.0f, 6.0f, 1.5f, 1.0f, 18.0f, 0.0f, 2, 500.0f, 2.0f, 1.5f, 1.0f);
+    arr[G1_T6] = makePatch(0, 400.0f, 6.0f, 1.2f, 1.0f, 15.0f, 0.0f, 2, 800.0f, 2.0f, 1.5f, 1.0f);
+    arr[G1_T7] = makePatch(1, 300.0f, 8.0f, 0.5f, 2.0f, 15.0f, 0.2f, 2, 1200.0f, 4.0f, 2.5f, 0.9f);
+
+    // G2: UKG (Punch Kick, Snare/Rim, Garage Hat, Ride, Clap, Sub Bass, Perc 1, Perc 2)
+    arr[G2_T0] = makePatch(2, 60.0f, 6.0f, 5.0f, 1.0f, 18.0f, 0.1f, 0, 3000.0f, 2.0f, 3.5f, 1.0f);
+    arr[G2_T1] = makePatch(0, 300.0f, 5.0f, 2.0f, 1.0f, 10.0f, 0.5f, 2, 1500.0f, 2.0f, 2.5f, 0.9f);
+    arr[G2_T2] = makePatch(3, 1000.0f, 2.0f, 0.0f, 1.0f, 5.0f, 1.0f, 1, 6000.0f, 1.5f, 1.5f, 0.5f);
+    arr[G2_T3] = makePatch(1, 500.0f, 4.0f, 0.0f, 1.0f, 25.0f, 0.6f, 1, 4000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G2_T4] = makePatch(2, 180.0f, 5.0f, 0.0f, 2.0f, 12.0f, 0.9f, 2, 2500.0f, 1.0f, 2.0f, 0.9f);
+    arr[G2_T5] = makePatch(0, 35.0f, 10.0f, 1.0f, 5.0f, 40.0f, 0.0f, 0, 400.0f, 1.0f, 3.0f, 1.2f);
+    arr[G2_T6] = makePatch(3, 600.0f, 4.0f, 0.5f, 1.0f, 8.0f, 0.1f, 2, 1000.0f, 3.0f, 1.5f, 0.8f);
+    arr[G2_T7] = makePatch(0, 700.0f, 2.0f, 0.0f, 1.0f, 6.0f, 0.8f, 1, 2000.0f, 1.0f, 1.5f, 0.8f);
+
+    // G3: DnB (Heavy Kick, Tight Snr, Fast Hat, Ride, Break Rim, Break 1, Break 2, Sub)
+    arr[G3_T0] = makePatch(3, 55.0f, 8.0f, 6.0f, 1.0f, 20.0f, 0.3f, 0, 4000.0f, 1.5f, 4.0f, 1.0f);
+    arr[G3_T1] = makePatch(0, 250.0f, 4.0f, 1.0f, 1.0f, 12.0f, 0.9f, 1, 800.0f, 1.0f, 3.5f, 0.9f);
+    arr[G3_T2] = makePatch(3, 900.0f, 2.0f, 0.0f, 1.0f, 4.0f, 1.0f, 1, 6000.0f, 1.0f, 1.5f, 0.5f);
+    arr[G3_T3] = makePatch(1, 450.0f, 4.0f, 0.0f, 1.0f, 22.0f, 0.5f, 1, 3500.0f, 1.0f, 1.5f, 0.6f);
+    arr[G3_T4] = makePatch(0, 350.0f, 4.0f, 1.5f, 1.0f, 8.0f, 0.2f, 2, 1200.0f, 2.0f, 2.5f, 0.9f);
+    arr[G3_T5] = makePatch(0, 180.0f, 8.0f, 1.2f, 1.0f, 15.0f, 0.1f, 0, 2000.0f, 1.0f, 2.5f, 1.0f);
+    arr[G3_T6] = makePatch(0, 120.0f, 8.0f, 1.5f, 1.0f, 18.0f, 0.1f, 0, 1500.0f, 1.0f, 2.5f, 1.0f);
+    arr[G3_T7] = makePatch(0, 30.0f, 5.0f, 1.0f, 3.0f, 50.0f, 0.0f, 0, 300.0f, 1.0f, 3.0f, 1.2f);
+
+    // G4: Trap (808 Kick, 808 Snare, Roll Hat, Open Hat, Clap, Perc, 808 Bass, FX)
+    arr[G4_T0] = makePatch(0, 45.0f, 15.0f, 4.0f, 1.0f, 45.0f, 0.0f, 0, 800.0f, 1.0f, 4.0f, 1.2f);
+    arr[G4_T1] = makePatch(0, 200.0f, 6.0f, 2.0f, 1.0f, 15.0f, 0.7f, 1, 600.0f, 1.0f, 2.5f, 0.9f);
+    arr[G4_T2] = makePatch(3, 1100.0f, 2.0f, 0.0f, 1.0f, 5.0f, 1.0f, 1, 6000.0f, 1.0f, 1.5f, 0.5f);
+    arr[G4_T3] = makePatch(3, 850.0f, 4.0f, 0.0f, 1.0f, 15.0f, 1.0f, 1, 4500.0f, 1.0f, 1.5f, 0.6f);
+    arr[G4_T4] = makePatch(2, 120.0f, 6.0f, 0.0f, 3.0f, 15.0f, 1.0f, 2, 1500.0f, 1.0f, 2.5f, 0.9f);
+    arr[G4_T5] = makePatch(3, 650.0f, 4.0f, 0.5f, 1.0f, 8.0f, 0.1f, 2, 1000.0f, 3.0f, 1.5f, 0.8f);
+    arr[G4_T6] = makePatch(0, 35.0f, 30.0f, 1.5f, 5.0f, 60.0f, 0.0f, 0, 300.0f, 1.0f, 4.5f, 1.3f); // Sub
+    arr[G4_T7] = makePatch(2, 1500.0f, 15.0f, 2.0f, 1.0f, 15.0f, 0.0f, 0, 2000.0f, 2.0f, 2.5f, 0.9f);
+
+    // G5: Juke (Juke Kick, Snare, Fast Hat, Hat 2, Clap, Tom, Vocal 1, Vocal 2)
+    arr[G5_T0] = makePatch(0, 50.0f, 12.0f, 3.0f, 1.0f, 35.0f, 0.0f, 0, 1000.0f, 1.0f, 3.0f, 1.2f);
+    arr[G5_T1] = makePatch(1, 180.0f, 8.0f, 1.5f, 1.0f, 18.0f, 0.8f, 1, 400.0f, 1.2f, 2.5f, 0.9f);
+    arr[G5_T2] = makePatch(3, 1000.0f, 2.0f, 0.0f, 1.0f, 4.0f, 1.0f, 1, 6000.0f, 1.0f, 1.5f, 0.5f);
+    arr[G5_T3] = makePatch(3, 800.0f, 3.0f, 0.0f, 1.0f, 6.0f, 1.0f, 1, 4000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G5_T4] = makePatch(2, 110.0f, 6.0f, 0.0f, 3.0f, 12.0f, 1.0f, 2, 1500.0f, 1.0f, 2.5f, 0.9f);
+    arr[G5_T5] = makePatch(0, 140.0f, 8.0f, 1.5f, 1.0f, 18.0f, 0.0f, 0, 1500.0f, 1.0f, 2.5f, 1.0f);
+    arr[G5_T6] = makePatch(3, 200.0f, 8.0f, 0.5f, 5.0f, 15.0f, 0.3f, 2, 1000.0f, 4.0f, 2.5f, 0.9f);
+    arr[G5_T7] = makePatch(1, 250.0f, 8.0f, -0.5f, 5.0f, 15.0f, 0.2f, 2, 1200.0f, 4.0f, 2.5f, 0.9f);
+
+    // G6: IDM (Glitch Kick, Drill Snr, Hat 1, Hat 2, Noise, Perc 1, Perc 2, Glitch FX)
+    arr[G6_T0] = makePatch(3, 60.0f, 8.0f, 6.0f, 1.0f, 20.0f, 0.3f, 0, 4000.0f, 1.5f, 4.0f, 0.9f);
+    arr[G6_T1] = makePatch(0, 300.0f, 4.0f, 1.0f, 1.0f, 8.0f, 0.9f, 1, 800.0f, 1.0f, 3.0f, 0.9f);
+    arr[G6_T2] = makePatch(3, 1200.0f, 1.0f, 0.0f, 1.0f, 3.0f, 1.0f, 1, 7000.0f, 1.0f, 1.5f, 0.5f);
+    arr[G6_T3] = makePatch(3, 1500.0f, 1.0f, 0.0f, 1.0f, 5.0f, 0.4f, 2, 4500.0f, 4.0f, 2.0f, 0.5f);
+    arr[G6_T4] = makePatch(0, 100.0f, 0.0f, 0.0f, 1.0f, 10.0f, 1.0f, 2, 3000.0f, 2.0f, 2.5f, 0.8f);
+    arr[G6_T5] = makePatch(3, 700.0f, 4.0f, 0.5f, 1.0f, 6.0f, 0.1f, 2, 1000.0f, 3.0f, 1.5f, 0.9f);
+    arr[G6_T6] = makePatch(3, 540.0f, 6.0f, 0.2f, 1.0f, 10.0f, 0.0f, 2, 800.0f, 4.0f, 2.5f, 0.8f);
+    arr[G6_T7] = makePatch(2, 500.0f, 12.0f, -0.8f, 1.0f, 15.0f, 1.0f, 2, 1000.0f, 8.0f, 4.0f, 0.8f);
+
+    // G7: Dubstep (Stomp Kick, Fat Snare, Hat, Ride, Clap, Wobble, Growl, Sub)
+    arr[G7_T0] = makePatch(3, 60.0f, 8.0f, 6.0f, 1.0f, 25.0f, 0.3f, 0, 4000.0f, 1.5f, 4.5f, 1.0f);
+    arr[G7_T1] = makePatch(2, 150.0f, 8.0f, 2.0f, 1.0f, 20.0f, 0.6f, 0, 5000.0f, 1.5f, 4.0f, 0.9f);
+    arr[G7_T2] = makePatch(3, 800.0f, 3.0f, 0.0f, 1.0f, 6.0f, 1.0f, 1, 4000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G7_T3] = makePatch(1, 400.0f, 4.0f, 0.0f, 1.0f, 20.0f, 0.6f, 1, 3000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G7_T4] = makePatch(2, 120.0f, 6.0f, 0.0f, 3.0f, 20.0f, 1.0f, 2, 1500.0f, 1.0f, 3.0f, 0.9f);
+    arr[G7_T5] = makePatch(1, 45.0f, 15.0f, 0.5f, 5.0f, 30.0f, 0.2f, 0, 800.0f, 4.0f, 4.5f, 1.1f);
+    arr[G7_T6] = makePatch(2, 55.0f, 20.0f, -0.5f, 5.0f, 25.0f, 0.5f, 2, 1200.0f, 6.0f, 4.5f, 1.0f);
+    arr[G7_T7] = makePatch(0, 35.0f, 10.0f, 1.0f, 5.0f, 50.0f, 0.0f, 0, 300.0f, 1.0f, 3.5f, 1.2f); // Sub
+
+    // G8: Afrobeat (Acoustic Kick, Snare, Shaker 1, Shaker 2, Clave, Conga, Djembe, Agogo)
+    arr[G8_T0] = makePatch(1, 55.0f, 8.0f, 2.0f, 1.0f, 15.0f, 0.2f, 0, 1500.0f, 1.5f, 1.8f, 1.0f);
+    arr[G8_T1] = makePatch(0, 350.0f, 4.0f, 1.5f, 1.0f, 10.0f, 0.2f, 2, 1500.0f, 2.0f, 1.5f, 0.9f);
+    arr[G8_T2] = makePatch(0, 200.0f, 0.0f, 0.0f, 8.0f, 10.0f, 1.0f, 2, 3000.0f, 1.5f, 1.5f, 0.5f);
+    arr[G8_T3] = makePatch(0, 250.0f, 0.0f, 0.0f, 8.0f, 12.0f, 1.0f, 2, 3500.0f, 1.5f, 1.5f, 0.5f);
+    arr[G8_T4] = makePatch(0, 2000.0f, 2.0f, 0.0f, 1.0f, 5.0f, 0.0f, 3, 0.0f, 0.0f, 1.5f, 0.9f); // Clave
+    arr[G8_T5] = makePatch(0, 250.0f, 6.0f, 1.5f, 1.0f, 15.0f, 0.0f, 2, 500.0f, 2.0f, 2.0f, 1.0f); // Conga
+    arr[G8_T6] = makePatch(0, 180.0f, 8.0f, 2.0f, 1.0f, 20.0f, 0.1f, 2, 400.0f, 2.0f, 2.0f, 1.0f); // Djembe
+    arr[G8_T7] = makePatch(3, 900.0f, 6.0f, 0.2f, 1.0f, 18.0f, 0.0f, 2, 1200.0f, 4.0f, 2.5f, 0.8f); // Agogo
+
+    // G9: Gqom (Heavy Kick, Snare, Hat, Open Hat, Clap, Tom 1, Tom 2, Chant)
+    arr[G9_T0] = makePatch(0, 42.0f, 12.0f, 3.0f, 1.0f, 30.0f, 0.0f, 0, 1000.0f, 1.0f, 3.5f, 1.2f);
+    arr[G9_T1] = makePatch(0, 200.0f, 6.0f, 2.0f, 1.0f, 12.0f, 0.7f, 1, 600.0f, 1.0f, 2.5f, 0.9f);
+    arr[G9_T2] = makePatch(3, 800.0f, 3.0f, 0.0f, 1.0f, 6.0f, 1.0f, 1, 4000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G9_T3] = makePatch(3, 800.0f, 4.0f, 0.0f, 1.0f, 15.0f, 1.0f, 1, 4000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G9_T4] = makePatch(2, 110.0f, 6.0f, 0.0f, 3.0f, 15.0f, 1.0f, 2, 1500.0f, 1.0f, 2.5f, 0.9f);
+    arr[G9_T5] = makePatch(0, 100.0f, 12.0f, 2.0f, 1.0f, 25.0f, 0.0f, 0, 1000.0f, 1.0f, 3.0f, 1.1f);
+    arr[G9_T6] = makePatch(0, 80.0f, 15.0f, 2.0f, 1.0f, 30.0f, 0.0f, 0, 800.0f, 1.0f, 3.0f, 1.1f);
+    arr[G9_T7] = makePatch(3, 200.0f, 8.0f, 0.5f, 5.0f, 15.0f, 0.3f, 2, 1000.0f, 4.0f, 2.5f, 0.9f); // Chant
+
+    // G10: Amapiano (Log Drum, Snare/Rim, Shaker, Open Hat, Clap, Conga, Woodblock, Whistle)
+    arr[G10_T0] = makePatch(0, 60.0f, 8.0f, 1.5f, 2.0f, 35.0f, 0.0f, 0, 500.0f, 1.0f, 3.5f, 1.2f); // Log Drum
+    arr[G10_T1] = makePatch(0, 400.0f, 4.0f, 1.5f, 1.0f, 8.0f, 0.1f, 2, 1200.0f, 3.0f, 2.0f, 1.0f); // Rim
+    arr[G10_T2] = makePatch(0, 200.0f, 0.0f, 0.0f, 8.0f, 10.0f, 1.0f, 2, 3000.0f, 1.5f, 1.5f, 0.5f); // Shaker
+    arr[G10_T3] = makePatch(3, 800.0f, 4.0f, 0.0f, 1.0f, 15.0f, 1.0f, 1, 4000.0f, 1.0f, 1.5f, 0.6f); // OHH
+    arr[G10_T4] = makePatch(2, 130.0f, 6.0f, 0.0f, 3.0f, 15.0f, 1.0f, 2, 1500.0f, 1.0f, 2.0f, 0.9f); // Clap
+    arr[G10_T5] = makePatch(0, 250.0f, 6.0f, 1.5f, 1.0f, 15.0f, 0.0f, 2, 500.0f, 2.0f, 2.0f, 1.0f); // Conga
+    arr[G10_T6] = makePatch(3, 600.0f, 4.0f, 0.5f, 1.0f, 8.0f, 0.1f, 2, 1000.0f, 3.0f, 1.5f, 0.9f); // Woodblock
+    arr[G10_T7] = makePatch(0, 1800.0f, 5.0f, 0.2f, 5.0f, 15.0f, 0.0f, 3, 0.0f, 0.0f, 1.5f, 0.8f); // Whistle
+
+    // G11: Indian (Bayan, Dayan, Tabla, Manjira, Ghungroo, Dholak 1, Dholak 2, Vocal)
+    arr[G11_T0] = makePatch(0, 70.0f, 20.0f, 2.0f, 1.0f, 25.0f, 0.0f, 0, 800.0f, 2.0f, 1.5f, 1.1f); // Bayan
+    arr[G11_T1] = makePatch(0, 280.0f, 8.0f, 2.0f, 1.0f, 15.0f, 0.1f, 2, 600.0f, 2.5f, 2.0f, 1.0f); // Dayan
+    arr[G11_T2] = makePatch(0, 400.0f, 6.0f, 1.2f, 1.0f, 12.0f, 0.0f, 2, 800.0f, 2.0f, 2.0f, 1.0f); // Tabla (Bongo-ish)
+    arr[G11_T3] = makePatch(3, 1500.0f, 4.0f, 0.0f, 1.0f, 15.0f, 0.2f, 2, 5000.0f, 4.0f, 1.5f, 0.6f); // Manjira (Cymbal)
+    arr[G11_T4] = makePatch(0, 250.0f, 0.0f, 0.0f, 8.0f, 15.0f, 1.0f, 2, 4000.0f, 1.5f, 1.5f, 0.5f); // Ghungroo (Bells)
+    arr[G11_T5] = makePatch(0, 150.0f, 10.0f, 1.5f, 1.0f, 20.0f, 0.0f, 0, 1000.0f, 1.5f, 1.8f, 1.0f); // Dholak 1
+    arr[G11_T6] = makePatch(0, 110.0f, 12.0f, 1.8f, 1.0f, 22.0f, 0.0f, 0, 800.0f, 1.5f, 1.8f, 1.0f); // Dholak 2
+    arr[G11_T7] = makePatch(3, 220.0f, 8.0f, 0.5f, 5.0f, 15.0f, 0.3f, 2, 1000.0f, 4.0f, 2.0f, 0.9f); // Vocal
+
+    // G12: Samba (Surdo, Caixa, Pandeiro, Ganza, Tamborim, Agogo, Cuica, Repique)
+    arr[G12_T0] = makePatch(0, 45.0f, 12.0f, 1.5f, 3.0f, 35.0f, 0.0f, 0, 600.0f, 1.0f, 2.0f, 1.1f); // Surdo
+    arr[G12_T1] = makePatch(0, 250.0f, 4.0f, 1.0f, 1.0f, 10.0f, 0.9f, 1, 800.0f, 1.0f, 2.5f, 0.9f); // Caixa
+    arr[G12_T2] = makePatch(0, 350.0f, 6.0f, 1.2f, 1.0f, 12.0f, 0.1f, 2, 800.0f, 2.0f, 2.0f, 1.0f); // Pandeiro
+    arr[G12_T3] = makePatch(0, 200.0f, 0.0f, 0.0f, 8.0f, 10.0f, 1.0f, 2, 3000.0f, 1.5f, 1.5f, 0.5f); // Ganza
+    arr[G12_T4] = makePatch(3, 700.0f, 4.0f, 0.5f, 1.0f, 8.0f, 0.1f, 2, 1200.0f, 3.0f, 1.5f, 0.9f); // Tamborim
+    arr[G12_T5] = makePatch(3, 850.0f, 6.0f, 0.2f, 1.0f, 18.0f, 0.0f, 2, 1200.0f, 4.0f, 2.5f, 0.8f); // Agogo
+    arr[G12_T6] = makePatch(0, 300.0f, 25.0f, -2.0f, 2.0f, 25.0f, 0.1f, 0, 1500.0f, 2.0f, 2.5f, 1.0f); // Cuica (Pitch sweep up)
+    arr[G12_T7] = makePatch(0, 200.0f, 8.0f, 1.5f, 1.0f, 15.0f, 0.1f, 2, 1000.0f, 2.0f, 2.0f, 1.0f); // Repique
+
+    // G13: Reggaeton (Kick, Snare(Tresillo), Hat, Open Hat, Clap, Timbales, Perc, Vocal FX)
+    arr[G13_T0] = makePatch(2, 60.0f, 6.0f, 5.0f, 1.0f, 18.0f, 0.1f, 0, 3000.0f, 2.0f, 3.0f, 1.0f); // Kick
+    arr[G13_T1] = makePatch(0, 220.0f, 5.0f, 1.0f, 1.0f, 12.0f, 0.8f, 1, 800.0f, 1.0f, 3.0f, 1.0f); // Tresillo Snare
+    arr[G13_T2] = makePatch(3, 850.0f, 3.0f, 0.0f, 1.0f, 6.0f, 1.0f, 1, 5000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G13_T3] = makePatch(3, 850.0f, 4.0f, 0.0f, 1.0f, 15.0f, 1.0f, 1, 4000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G13_T4] = makePatch(2, 120.0f, 6.0f, 0.0f, 3.0f, 15.0f, 1.0f, 2, 1500.0f, 1.0f, 2.0f, 0.9f);
+    arr[G13_T5] = makePatch(0, 280.0f, 8.0f, 1.5f, 1.0f, 18.0f, 0.1f, 2, 800.0f, 2.0f, 2.0f, 1.0f); // Timbales
+    arr[G13_T6] = makePatch(3, 600.0f, 4.0f, 0.5f, 1.0f, 8.0f, 0.1f, 2, 1000.0f, 3.0f, 1.5f, 0.9f); // Perc
+    arr[G13_T7] = makePatch(3, 200.0f, 8.0f, 0.5f, 5.0f, 15.0f, 0.3f, 2, 1000.0f, 4.0f, 2.5f, 0.9f); // Vocal
+
+    // G14: Gamelan (Gong, Kempul, Kendang, Bonang, Saron, Kenong, Kethuk, Slenthem)
+    arr[G14_T0] = makePatch(2, 100.0f, 15.0f, 0.5f, 1.0f, 40.0f, 0.2f, 0, 800.0f, 3.0f, 2.0f, 1.0f); // Gong
+    arr[G14_T1] = makePatch(2, 150.0f, 12.0f, 0.5f, 1.0f, 30.0f, 0.1f, 0, 1000.0f, 2.0f, 1.8f, 1.0f); // Kempul
+    arr[G14_T2] = makePatch(0, 120.0f, 12.0f, 3.0f, 1.0f, 18.0f, 0.0f, 2, 300.0f, 3.0f, 2.5f, 1.1f); // Kendang (Tabla-like)
+    arr[G14_T3] = makePatch(3, 540.0f, 6.0f, 0.2f, 1.0f, 12.0f, 0.0f, 2, 800.0f, 4.0f, 2.5f, 0.8f); // Bonang (Cowbell-like)
+    arr[G14_T4] = makePatch(0, 300.0f, 12.0f, 0.0f, 1.0f, 18.0f, 0.05f, 0, 1000.0f, 1.0f, 1.5f, 1.0f); // Saron (Marimba-like)
+    arr[G14_T5] = makePatch(2, 250.0f, 10.0f, 0.5f, 1.0f, 25.0f, 0.1f, 0, 1200.0f, 2.0f, 1.8f, 1.0f); // Kenong
+    arr[G14_T6] = makePatch(3, 600.0f, 4.0f, 0.5f, 1.0f, 8.0f, 0.1f, 2, 1000.0f, 3.0f, 1.5f, 0.9f); // Kethuk (Wood)
+    arr[G14_T7] = makePatch(0, 50.0f, 10.0f, 1.0f, 2.0f, 30.0f, 0.0f, 0, 400.0f, 1.0f, 2.0f, 1.1f); // Slenthem (Sub-like)
+
+    // G15: Funk (Kick, Snare, Hi-Hat, Open Hat, Clap, Tom, Conga, Tambourine)
+    arr[G15_T0] = makePatch(1, 55.0f, 8.0f, 2.0f, 1.0f, 15.0f, 0.2f, 0, 1500.0f, 1.5f, 1.8f, 1.0f);
+    arr[G15_T1] = makePatch(1, 220.0f, 8.0f, 1.2f, 1.0f, 18.0f, 0.6f, 0, 6000.0f, 1.0f, 2.0f, 0.9f);
+    arr[G15_T2] = makePatch(3, 800.0f, 3.0f, 0.0f, 1.0f, 6.0f, 1.0f, 1, 4000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G15_T3] = makePatch(3, 800.0f, 4.0f, 0.0f, 1.0f, 15.0f, 1.0f, 1, 4000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G15_T4] = makePatch(2, 120.0f, 6.0f, 0.0f, 3.0f, 15.0f, 1.0f, 2, 1500.0f, 1.0f, 2.0f, 0.9f);
+    arr[G15_T5] = makePatch(0, 120.0f, 8.0f, 1.5f, 1.0f, 18.0f, 0.0f, 0, 1500.0f, 1.0f, 2.5f, 1.0f);
+    arr[G15_T6] = makePatch(0, 250.0f, 6.0f, 1.5f, 1.0f, 15.0f, 0.0f, 2, 500.0f, 2.0f, 2.0f, 1.0f);
+    arr[G15_T7] = makePatch(3, 600.0f, 0.0f, 0.0f, 3.0f, 12.0f, 0.8f, 1, 5000.0f, 2.0f, 2.0f, 0.5f); // Tambourine
+
+    // G16: New Jack Swing (Punch Kick, Snare, Swing Hat, Open Hat, Clap, Tom 1, Tom 2, Orch Hit)
+    arr[G16_T0] = makePatch(2, 60.0f, 6.0f, 5.0f, 1.0f, 15.0f, 0.1f, 0, 3000.0f, 2.0f, 3.5f, 1.0f);
+    arr[G16_T1] = makePatch(2, 150.0f, 8.0f, 2.0f, 1.0f, 20.0f, 0.6f, 0, 5000.0f, 1.5f, 3.5f, 0.9f);
+    arr[G16_T2] = makePatch(3, 900.0f, 2.0f, 0.0f, 1.0f, 5.0f, 1.0f, 1, 6000.0f, 1.0f, 1.5f, 0.5f);
+    arr[G16_T3] = makePatch(3, 900.0f, 4.0f, 0.0f, 1.0f, 15.0f, 1.0f, 1, 4000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G16_T4] = makePatch(2, 100.0f, 6.0f, 0.0f, 3.0f, 15.0f, 1.0f, 2, 1500.0f, 1.0f, 2.5f, 0.9f);
+    arr[G16_T5] = makePatch(0, 150.0f, 8.0f, 1.5f, 1.0f, 18.0f, 0.0f, 0, 1500.0f, 1.0f, 2.5f, 1.0f);
+    arr[G16_T6] = makePatch(0, 100.0f, 8.0f, 1.2f, 1.0f, 20.0f, 0.0f, 0, 1200.0f, 1.0f, 2.5f, 1.0f);
+    arr[G16_T7] = makePatch(2, 440.0f, 8.0f, 0.0f, 1.0f, 12.0f, 0.0f, 0, 1500.0f, 2.0f, 2.5f, 0.9f); // Orch Hit
+
+    // G17: Neo Soul (Soft Kick, Rimshot, Loose Hat, Ride, Snap, Tom, Shaker, Vinyl FX)
+    arr[G17_T0] = makePatch(0, 50.0f, 8.0f, 1.0f, 2.0f, 20.0f, 0.0f, 0, 500.0f, 1.0f, 1.5f, 1.0f);
+    arr[G17_T1] = makePatch(0, 400.0f, 4.0f, 1.5f, 1.0f, 8.0f, 0.1f, 2, 1200.0f, 3.0f, 2.0f, 1.0f);
+    arr[G17_T2] = makePatch(3, 800.0f, 3.0f, 0.0f, 2.0f, 8.0f, 1.0f, 1, 3500.0f, 1.0f, 1.2f, 0.6f);
+    arr[G17_T3] = makePatch(1, 400.0f, 4.0f, 0.0f, 1.0f, 20.0f, 0.6f, 1, 3000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G17_T4] = makePatch(0, 800.0f, 4.0f, 0.0f, 1.0f, 8.0f, 0.8f, 1, 2000.0f, 1.0f, 1.5f, 0.9f); // Snap
+    arr[G17_T5] = makePatch(0, 80.0f, 12.0f, 2.0f, 1.0f, 20.0f, 0.0f, 0, 1000.0f, 1.0f, 2.5f, 1.1f);
+    arr[G17_T6] = makePatch(0, 200.0f, 0.0f, 0.0f, 8.0f, 10.0f, 1.0f, 2, 3000.0f, 1.5f, 1.5f, 0.5f);
+    arr[G17_T7] = makePatch(3, 150.0f, 8.0f, 1.0f, 1.0f, 15.0f, 0.5f, 2, 800.0f, 2.0f, 4.0f, 0.8f); // Vinyl FX
+
+    // G18: Hip Hop (Gritty Kick, Fat Snare, Hi-Hat, Open Hat, Clap, Perc, Scratch, Sample)
+    arr[G18_T0] = makePatch(3, 60.0f, 8.0f, 6.0f, 1.0f, 20.0f, 0.3f, 0, 4000.0f, 1.5f, 4.0f, 0.9f);
+    arr[G18_T1] = makePatch(2, 150.0f, 8.0f, 2.0f, 1.0f, 20.0f, 0.6f, 0, 5000.0f, 1.5f, 3.5f, 0.9f);
+    arr[G18_T2] = makePatch(3, 800.0f, 3.0f, 0.0f, 1.0f, 6.0f, 1.0f, 1, 4000.0f, 1.0f, 2.0f, 0.6f);
+    arr[G18_T3] = makePatch(3, 800.0f, 4.0f, 0.0f, 1.0f, 15.0f, 1.0f, 1, 4000.0f, 1.0f, 2.0f, 0.6f);
+    arr[G18_T4] = makePatch(2, 100.0f, 6.0f, 0.0f, 3.0f, 15.0f, 1.0f, 2, 1500.0f, 1.0f, 2.5f, 0.9f);
+    arr[G18_T5] = makePatch(3, 600.0f, 4.0f, 0.5f, 1.0f, 8.0f, 0.1f, 2, 1000.0f, 3.0f, 1.5f, 0.9f);
+    arr[G18_T6] = makePatch(2, 100.0f, 40.0f, 2.0f, 5.0f, 30.0f, 0.8f, 2, 2000.0f, 2.0f, 2.5f, 0.9f); // Scratch
+    arr[G18_T7] = makePatch(3, 150.0f, 8.0f, 1.0f, 1.0f, 15.0f, 0.5f, 2, 800.0f, 2.0f, 4.0f, 0.8f); // Sample
+
+    // G19: Math Rock (Kick, Snare, Hi-Hat, Ride, Ghost Snr, Tom 1, Tom 2, Crash)
+    arr[G19_T0] = makePatch(1, 55.0f, 8.0f, 2.0f, 1.0f, 15.0f, 0.2f, 0, 1500.0f, 1.5f, 1.8f, 1.0f);
+    arr[G19_T1] = makePatch(1, 220.0f, 8.0f, 1.2f, 1.0f, 18.0f, 0.6f, 0, 6000.0f, 1.0f, 2.0f, 0.9f);
+    arr[G19_T2] = makePatch(3, 800.0f, 3.0f, 0.0f, 1.0f, 6.0f, 1.0f, 1, 4000.0f, 1.0f, 1.5f, 0.6f);
+    arr[G19_T3] = makePatch(1, 400.0f, 4.0f, 0.0f, 1.0f, 20.0f, 0.6f, 1, 3000.0f, 1.0f, 1.5f, 0.6f); // Ride
+    arr[G19_T4] = makePatch(1, 220.0f, 8.0f, 1.2f, 1.0f, 18.0f, 0.6f, 0, 6000.0f, 1.0f, 1.0f, 0.5f); // Ghost Snare
+    arr[G19_T5] = makePatch(0, 120.0f, 8.0f, 1.5f, 1.0f, 18.0f, 0.0f, 0, 1500.0f, 1.0f, 2.5f, 1.0f);
+    arr[G19_T6] = makePatch(0, 80.0f, 12.0f, 2.0f, 1.0f, 20.0f, 0.0f, 0, 1000.0f, 1.0f, 2.5f, 1.1f);
+    arr[G19_T7] = makePatch(2, 300.0f, 8.0f, 0.0f, 1.0f, 30.0f, 0.9f, 1, 2000.0f, 1.0f, 2.5f, 0.6f); // Crash
+
+    // G20: Prog Metal (Portnoy Kit: Click Kick, Fat Snare, Max Stax, Hat Bark, High Tom, Mid Tom, Floor Tom, Splash)
+    arr[G20_T0] = makePatch(0, 85.0f, 4.0f, 8.0f, 0.5f, 12.0f, 0.2f, 0, 6000.0f, 1.0f, 3.5f, 1.1f);
+    arr[G20_T1] = makePatch(2, 190.0f, 8.0f, 2.0f, 1.0f, 18.0f, 0.5f, 0, 4000.0f, 1.5f, 4.0f, 1.0f);
+    arr[G20_T2] = makePatch(3, 1200.0f, 2.0f, 0.0f, 1.0f, 6.0f, 0.8f, 1, 6000.0f, 2.0f, 3.0f, 0.8f);
+    arr[G20_T3] = makePatch(3, 800.0f, 5.0f, 0.0f, 1.0f, 15.0f, 0.9f, 1, 4000.0f, 1.0f, 1.5f, 0.7f);
+    arr[G20_T4] = makePatch(0, 220.0f, 10.0f, 1.5f, 1.0f, 25.0f, 0.0f, 0, 2000.0f, 1.0f, 2.0f, 1.1f);
+    arr[G20_T5] = makePatch(0, 140.0f, 12.0f, 1.5f, 1.0f, 28.0f, 0.0f, 0, 1500.0f, 1.0f, 2.0f, 1.1f);
+    arr[G20_T6] = makePatch(0, 85.0f, 15.0f, 1.5f, 1.0f, 35.0f, 0.0f, 0, 1000.0f, 1.0f, 2.0f, 1.1f);
+    arr[G20_T7] = makePatch(2, 400.0f, 10.0f, 0.0f, 1.0f, 40.0f, 1.0f, 1, 3000.0f, 1.0f, 3.0f, 0.7f);
+
+    // G21: Minimalism (Clap 1, Clap 2, Marimba 1, Marimba 2, Woodblock, Pulse, Phase 1, Phase 2)
+    arr[G21_T0] = makePatch(2, 100.0f, 6.0f, 0.0f, 3.0f, 15.0f, 1.0f, 2, 1500.0f, 1.0f, 2.0f, 0.9f);
+    arr[G21_T1] = makePatch(0, 800.0f, 4.0f, 0.0f, 1.0f, 8.0f, 0.8f, 1, 2000.0f, 1.0f, 1.5f, 0.9f); // Clap 2 / Snap
+    arr[G21_T2] = makePatch(0, 300.0f, 12.0f, 0.0f, 1.0f, 18.0f, 0.05f, 0, 1000.0f, 1.0f, 1.5f, 1.0f); // Marimba 1
+    arr[G21_T3] = makePatch(0, 400.0f, 12.0f, 0.0f, 1.0f, 18.0f, 0.05f, 0, 1200.0f, 1.0f, 1.5f, 1.0f); // Marimba 2
+    arr[G21_T4] = makePatch(3, 600.0f, 4.0f, 0.5f, 1.0f, 8.0f, 0.1f, 2, 1000.0f, 3.0f, 1.5f, 0.9f); // Woodblock
+    arr[G21_T5] = makePatch(0, 50.0f, 8.0f, 1.0f, 2.0f, 20.0f, 0.0f, 0, 500.0f, 1.0f, 1.5f, 1.0f); // Pulse
+    arr[G21_T6] = makePatch(0, 400.0f, 4.0f, 1.5f, 1.0f, 8.0f, 0.1f, 2, 1200.0f, 3.0f, 2.0f, 1.0f); // Phase 1
+    arr[G21_T7] = makePatch(0, 450.0f, 4.0f, 1.5f, 1.0f, 8.0f, 0.1f, 2, 1200.0f, 3.0f, 2.0f, 1.0f); // Phase 2
+
+    // Plucks & Arp
     for (int i = 176; i < 184; ++i) {
-        // ★ Narrowing Error 解消: static_cast<float>
         float f = static_cast<float>(130.81 * std::pow(1.05946, (i - 176) * 2));
         arr[i] = makePatch(2, f, 12.0f, 0.0f, 1.0f, 25.0f, 0.0f, 0, 1500.0f, 2.0f, 2.0f, 1.0f);
     }
     arr[M_ARP] = makePatch(1, 440.0f, 5.0f, 0.0f, 0.5f, 15.0f, 0.0f, 0, 2500.0f, 1.5f, 1.5f, 1.0f);
+
     return arr;
     }();
 
@@ -89,50 +279,46 @@ static const std::array<GenreDefinition, 24> genreTable = { {
     { 4, 4, 110, 115, {"Log Drum", "Snare/Rim", "Shaker", "Open Hat", "Clap", "Conga", "Woodblock", "Whistle"},
       {G10_T0, G10_T1, G10_T2, G10_T3, G10_T4, G10_T5, G10_T6, G10_T7},
       {{3,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {2,3,4,0}}, {0,0, 5,0, 0, 5, 5, 0}, {10,5, 15,5, 5, 15, 15, 10} },
-      // ★ テンポ適正化
-      { 7, 8, 40, 60, {"Bayan", "Dayan", "Tabla", "Manjira", "Ghungroo", "Dholak 1", "Dholak 2", "Vocal"},
-        {G11_T0, G11_T1, G11_T2, G11_T3, G11_T4, G11_T5, G11_T6, G11_T7},
-        {{2,3,4,0}, {2,3,4,5}, {2,3,4,5}, {2,3,4,0}, {3,4,5,6}, {2,3,4,0}, {2,3,4,0}, {1,2,3,0}}, {-5,-5, -5, -2, -2, -5, -5, -10}, {5,5, 5, 5, 5, 5, 5, 10} },
-      { 4, 4, 90, 120, {"Surdo", "Caixa", "Pandeiro", "Ganza", "Tamborim", "Agogo", "Cuica", "Repique"},
-        {G12_T0, G12_T1, G12_T2, G12_T3, G12_T4, G12_T5, G12_T6, G12_T7},
-        {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {3,4,0,0}, {3,4,0,0}, {3,4,0,0}, {4,6,0,0}}, {0,5, 5,5, 5, 5, 5, 5}, {5,15, 20,20, 20, 20, 20, 20} },
-      { 4, 4, 90, 105, {"Kick", "Snare (Tresillo)", "Hat", "Open Hat", "Clap", "Timbales", "Perc", "Vocal FX"},
-        {G13_T0, G13_T1, G13_T2, G13_T3, G13_T4, G13_T5, G13_T6, G13_T7},
-        {{2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,0,0}, {2,4,0,0}}, {0,-6, 0,0, 0, 0, 0, 0}, {5,0, 5,5, 5, 10, 10, 10} },
-        // ★ テンポ適正化
-        { 8, 4, 40, 55, {"Gong", "Kempul", "Kendang", "Bonang", "Saron", "Kenong", "Kethuk", "Slenthem"},
-          {G14_T0, G14_T1, G14_T2, G14_T3, G14_T4, G14_T5, G14_T6, G14_T7},
-          {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}}, {-10,-10, -5,-5, -5, -10, -5, -10}, {10,10, 10,10, 10, 10, 10, 10} },
-        { 4, 4, 100, 115, {"Kick", "Snare", "Hi-Hat", "Open Hat", "Clap", "Tom", "Conga", "Tambourine"},
-          {G15_T0, G15_T1, G15_T2, G15_T3, G15_T4, G15_T5, G15_T6, G15_T7},
-          {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,6,0}, {4,6,0,0}}, {0,0, 5,0, 0, 0, 5, 5}, {5,10, 20,5, 5, 10, 15, 20} },
-        { 4, 4, 100, 112, {"Punch Kick", "Snare", "Swing Hat", "Open Hat", "Clap", "Tom 1", "Tom 2", "Orch Hit"},
-          {G16_T0, G16_T1, G16_T2, G16_T3, G16_T4, G16_T5, G16_T6, G16_T7},
-          {{2,4,0,0}, {2,4,0,0}, {6,8,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,0,0}, {1,2,0,0}}, {0,0, 15,0, 0, 0, 0, 0}, {5,5, 25,5, 5, 5, 5, 5} },
-        { 4, 4, 80, 95, {"Soft Kick", "Rimshot", "Loose Hat", "Ride", "Snap", "Tom", "Shaker", "Vinyl FX"},
-          {G17_T0, G17_T1, G17_T2, G17_T3, G17_T4, G17_T5, G17_T6, G17_T7},
-          {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {3,4,0,0}, {2,4,0,0}, {2,3,4,0}, {4,6,0,0}, {1,2,0,0}}, {-5, 10, 20, 10, 5, 0, 15, 0}, {2, 25, 40, 25, 20, 10, 30, 0} },
-        { 4, 4, 85, 95, {"Gritty Kick", "Fat Snare", "Hi-Hat", "Open Hat", "Clap", "Perc", "Scratch", "Sample"},
-          {G18_T0, G18_T1, G18_T2, G18_T3, G18_T4, G18_T5, G18_T6, G18_T7},
-          {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {1,2,4,0}}, {2, 5, 5, 0, 0, 0, 0, 0}, {8, 12, 15, 5, 5, 10, 5, 0} },
-        { 5, 4, 120, 160, {"Kick", "Snare", "Hi-Hat", "Ride", "Ghost Snr", "Tom 1", "Tom 2", "Crash"},
-          {G19_T0, G19_T1, G19_T2, G19_T3, G19_T4, G19_T5, G19_T6, G19_T7},
-          {{2,3,4,0}, {2,3,4,0}, {4,5,6,0}, {3,4,5,0}, {4,6,8,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}}, {0,0, 0,0, 0, 0, 0, 0}, {5,5, 5,5, 5, 5, 5, 5} },
-          // ★ テンポ適正化: 13/8拍子 (BPM半減)
-          { 13, 8, 60, 85, {"Kick (Click)", "Snare (Fat)", "Max Stax", "Hat Bark", "High Tom", "Mid Tom", "Floor Tom", "Splash"},
-            {G20_T0, G20_T1, G20_T2, G20_T3, G20_T4, G20_T5, G20_T6, G20_T7},
-            {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}}, {0, 2, 0, 4, 1, 2, 3, 0}, {0, 2, 0, 6, 1, 2, 3, 0} },
-            // ★ テンポ適正化: 12/8拍子 (BPM適正化)
-            { 12, 8, 60, 75, {"Clap 1", "Clap 2", "Marimba 1", "Marimba 2", "Woodblock", "Pulse", "Phase 1", "Phase 2"},
-              {G21_T0, G21_T1, G21_T2, G21_T3, G21_T4, G21_T5, G21_T6, G21_T7},
-              {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}}, {0,0, 0,0, 0, 0, -20, 20}, {0,0, 0,0, 0, 0, -20, 20} },
-            { 4, 4, 120, 150, {"Node C", "Node D", "Node F", "Node G", "Node A", "Node C^", "Node D^", "Node F^"},
-              {PLUCK_1, PLUCK_2, PLUCK_3, PLUCK_4, PLUCK_5, PLUCK_6, PLUCK_7, PLUCK_8},
-              {{2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}}, {0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0} },
-            { 4, 4, 120, 150, {"Chaos C", "Chaos D", "Chaos F", "Chaos G", "Chaos A", "Chaos C^", "Chaos D^", "Chaos F^"},
-              {PLUCK_1, PLUCK_2, PLUCK_3, PLUCK_4, PLUCK_5, PLUCK_6, PLUCK_7, PLUCK_8},
-              {{1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}}, {-20,-20,-20,-20,-20,-20,-20,-20}, {20,20,20,20,20,20,20,20} }
-        } };
+    { 7, 8, 40, 60, {"Bayan", "Dayan", "Tabla", "Manjira", "Ghungroo", "Dholak 1", "Dholak 2", "Vocal"},
+      {G11_T0, G11_T1, G11_T2, G11_T3, G11_T4, G11_T5, G11_T6, G11_T7},
+      {{2,3,4,0}, {2,3,4,5}, {2,3,4,5}, {2,3,4,0}, {3,4,5,6}, {2,3,4,0}, {2,3,4,0}, {1,2,3,0}}, {-5,-5, -5, -2, -2, -5, -5, -10}, {5,5, 5, 5, 5, 5, 5, 10} },
+    { 4, 4, 90, 120, {"Surdo", "Caixa", "Pandeiro", "Ganza", "Tamborim", "Agogo", "Cuica", "Repique"},
+      {G12_T0, G12_T1, G12_T2, G12_T3, G12_T4, G12_T5, G12_T6, G12_T7},
+      {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {3,4,0,0}, {3,4,0,0}, {3,4,0,0}, {4,6,0,0}}, {0,5, 5,5, 5, 5, 5, 5}, {5,15, 20,20, 20, 20, 20, 20} },
+    { 4, 4, 90, 105, {"Kick", "Snare (Tresillo)", "Hat", "Open Hat", "Clap", "Timbales", "Perc", "Vocal FX"},
+      {G13_T0, G13_T1, G13_T2, G13_T3, G13_T4, G13_T5, G13_T6, G13_T7},
+      {{2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,0,0}, {2,4,0,0}}, {0,-6, 0,0, 0, 0, 0, 0}, {5,0, 5,5, 5, 10, 10, 10} },
+    { 8, 4, 40, 55, {"Gong", "Kempul", "Kendang", "Bonang", "Saron", "Kenong", "Kethuk", "Slenthem"},
+      {G14_T0, G14_T1, G14_T2, G14_T3, G14_T4, G14_T5, G14_T6, G14_T7},
+      {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}}, {-10,-10, -5,-5, -5, -10, -5, -10}, {10,10, 10,10, 10, 10, 10, 10} },
+    { 4, 4, 100, 115, {"Kick", "Snare", "Hi-Hat", "Open Hat", "Clap", "Tom", "Conga", "Tambourine"},
+      {G15_T0, G15_T1, G15_T2, G15_T3, G15_T4, G15_T5, G15_T6, G15_T7},
+      {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,6,0}, {4,6,0,0}}, {0,0, 5,0, 0, 0, 5, 5}, {5,10, 20,5, 5, 10, 15, 20} },
+    { 4, 4, 100, 112, {"Punch Kick", "Snare", "Swing Hat", "Open Hat", "Clap", "Tom 1", "Tom 2", "Orch Hit"},
+      {G16_T0, G16_T1, G16_T2, G16_T3, G16_T4, G16_T5, G16_T6, G16_T7},
+      {{2,4,0,0}, {2,4,0,0}, {6,8,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,0,0}, {1,2,0,0}}, {0,0, 15,0, 0, 0, 0, 0}, {5,5, 25,5, 5, 5, 5, 5} },
+    { 4, 4, 80, 95, {"Soft Kick", "Rimshot", "Loose Hat", "Ride", "Snap", "Tom", "Shaker", "Vinyl FX"},
+      {G17_T0, G17_T1, G17_T2, G17_T3, G17_T4, G17_T5, G17_T6, G17_T7},
+      {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {3,4,0,0}, {2,4,0,0}, {2,3,4,0}, {4,6,0,0}, {1,2,0,0}}, {-5, 10, 20, 10, 5, 0, 15, 0}, {2, 25, 40, 25, 20, 10, 30, 0} },
+    { 4, 4, 85, 95, {"Gritty Kick", "Fat Snare", "Hi-Hat", "Open Hat", "Clap", "Perc", "Scratch", "Sample"},
+      {G18_T0, G18_T1, G18_T2, G18_T3, G18_T4, G18_T5, G18_T6, G18_T7},
+      {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {1,2,4,0}}, {2, 5, 5, 0, 0, 0, 0, 0}, {8, 12, 15, 5, 5, 10, 5, 0} },
+    { 5, 4, 120, 160, {"Kick", "Snare", "Hi-Hat", "Ride", "Ghost Snr", "Tom 1", "Tom 2", "Crash"},
+      {G19_T0, G19_T1, G19_T2, G19_T3, G19_T4, G19_T5, G19_T6, G19_T7},
+      {{2,3,4,0}, {2,3,4,0}, {4,5,6,0}, {3,4,5,0}, {4,6,8,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}}, {0,0, 0,0, 0, 0, 0, 0}, {5,5, 5,5, 5, 5, 5, 5} },
+    { 13, 8, 60, 85, {"Kick (Click)", "Snare (Fat)", "Max Stax", "Hat Bark", "High Tom", "Mid Tom", "Floor Tom", "Splash"},
+      {G20_T0, G20_T1, G20_T2, G20_T3, G20_T4, G20_T5, G20_T6, G20_T7},
+      {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}}, {0, 2, 0, 4, 1, 2, 3, 0}, {0, 2, 0, 6, 1, 2, 3, 0} },
+    { 12, 8, 60, 75, {"Clap 1", "Clap 2", "Marimba 1", "Marimba 2", "Woodblock", "Pulse", "Phase 1", "Phase 2"},
+      {G21_T0, G21_T1, G21_T2, G21_T3, G21_T4, G21_T5, G21_T6, G21_T7},
+      {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}}, {0,0, 0,0, 0, 0, -20, 20}, {0,0, 0,0, 0, 0, -20, 20} },
+    { 4, 4, 120, 150, {"Node C", "Node D", "Node F", "Node G", "Node A", "Node C^", "Node D^", "Node F^"},
+      {PLUCK_1, PLUCK_2, PLUCK_3, PLUCK_4, PLUCK_5, PLUCK_6, PLUCK_7, PLUCK_8},
+      {{2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}}, {0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0} },
+    { 4, 4, 120, 150, {"Chaos C", "Chaos D", "Chaos F", "Chaos G", "Chaos A", "Chaos C^", "Chaos D^", "Chaos F^"},
+      {PLUCK_1, PLUCK_2, PLUCK_3, PLUCK_4, PLUCK_5, PLUCK_6, PLUCK_7, PLUCK_8},
+      {{1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}}, {-20,-20,-20,-20,-20,-20,-20,-20}, {20,20,20,20,20,20,20,20} }
+} };
 
 AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -161,7 +347,6 @@ const InstrumentPatch& AIDrumMachineAudioProcessor::getPatch(PatchID id) {
     return patchLibrary[id];
 }
 
-// ★ const 追加
 juce::String AIDrumMachineAudioProcessor::getNoteName(int trackIndex) const {
     if (trackIndex < 0 || trackIndex >= 8) return "";
     const char* notesStr[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
@@ -350,7 +535,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
         }
     }
     else {
-        // ★ フィル・タイポロジーのランダム決定
         int fillTypology = random.nextInt(4);
 
         for (int trk = 0; trk < 8; ++trk) {
@@ -393,7 +577,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                     int shiftRange = def.shiftMax[trk] - def.shiftMin[trk];
                     trackShiftUI[trk] = baseShift + (shiftRange > 0 ? random.nextInt(shiftRange + 1) : 0);
                 }
-                else if (genre == 17 || genre == 18) { // Neo Soul, Hip Hop
+                else if (genre == 17 || genre == 18) {
                     if (trk == 1 || trk == 4) trackShiftUI[trk] = random.nextInt(juce::Range<int>(5, 18));
                     else trackShiftUI[trk] = random.nextInt(juce::Range<int>(def.shiftMin[trk], def.shiftMax[trk] + 1));
                 }
@@ -422,40 +606,27 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 int cmplx = trackComplexity[trk];
                 int entrp = trackEntropy[trk];
 
-                // ★ 動的トラック・ローテーション (Scatter Fills) の統合
+                // ★ 動的トラック・ローテーション (Scatter Fills)
                 if (isFillPortion && !isAlgorithmMode) {
                     int localStep = stepInBar - div * (num - 2);
                     if (localStep < 0) localStep = stepInBar;
 
                     if (fillTypology == 0) {
-                        // Type 0: True Linear Scatter (全トラックを数学的に横断)
                         isNegativeAnchor = true; cmplx = 0;
                         int prime = 7;
                         int targetTrk = ((localStep * prime) + currentBarOfStep) % 8;
                         if (entrp > 30) targetTrk = (targetTrk + (entrp % 5)) % 8;
-
-                        if (trk == targetTrk) {
-                            isAnchor = true; anchorVel = 75 + random.nextInt(25); isNegativeAnchor = false;
-                        }
+                        if (trk == targetTrk) { isAnchor = true; anchorVel = 75 + random.nextInt(25); isNegativeAnchor = false; }
                     }
                     else if (fillTypology == 1) {
-                        // Type 1: Drop & Scatter (キック/サブを抜き、残りを散らす)
                         isNegativeAnchor = true; cmplx = 0;
-                        if (trk == 0 || trk == 5 || trk == 6) {
-                            // Silent drop
-                        }
-                        else {
-                            int targetTrk = 1 + ((localStep * 3) % 4); // 1, 2, 3, 4を散らす
-                            if (trk == targetTrk) {
-                                isAnchor = true; anchorVel = 60 + random.nextInt(40); isNegativeAnchor = false;
-                            }
-                            if (stepInBar == (div * num) - (div > 1 ? div / 2 : 1) && (trk == 1 || trk == 7)) {
-                                isAnchor = true; anchorVel = 100; isNegativeAnchor = false;
-                            }
+                        if (trk != 0 && trk != 5 && trk != 6) {
+                            int targetTrk = 1 + ((localStep * 3) % 4);
+                            if (trk == targetTrk) { isAnchor = true; anchorVel = 60 + random.nextInt(40); isNegativeAnchor = false; }
+                            if (stepInBar == (div * num) - (div > 1 ? div / 2 : 1) && (trk == 1 || trk == 7)) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
                         }
                     }
                     else if (fillTypology == 2) {
-                        // Type 2: Euclidean Scatter (特定トラック間でユークリッドヒットを交差)
                         isNegativeAnchor = true; cmplx = 0;
                         int fillLen = div * 2;
                         if (fillLen > 0) {
@@ -463,20 +634,14 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                             if ((localStep * k) % fillLen < k) {
                                 int trkChoices[] = { 1, 2, 4, 5, 7 };
                                 int chosenTrk = trkChoices[(localStep + currentBarOfStep) % 5];
-                                if (trk == chosenTrk) {
-                                    isAnchor = true; anchorVel = 80 + random.nextInt(20); isNegativeAnchor = false;
-                                }
+                                if (trk == chosenTrk) { isAnchor = true; anchorVel = 80 + random.nextInt(20); isNegativeAnchor = false; }
                             }
                         }
                     }
                     else {
-                        // Type 3: Dynamic Multi-Track Roll (スネア、ハット、タムを用いたうねるロール)
                         isNegativeAnchor = true; cmplx = 0;
-                        if (trk == 0 || trk == 6) {
-                            // Silent
-                        }
-                        else {
-                            int activeTrk = 1 + (localStep / (div > 0 ? div : 1)) % 4; // 拍ごとにトラックが切り替わる
+                        if (trk != 0 && trk != 6) {
+                            int activeTrk = 1 + (localStep / (div > 0 ? div : 1)) % 4;
                             if (trk == activeTrk) {
                                 if (stepInBar % (div > 1 ? div / 2 : 1) == 0) {
                                     isAnchor = true; isNegativeAnchor = false;
@@ -488,135 +653,168 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                     }
                 }
                 else if (!isAlgorithmMode) {
-                    // ★ 全24ジャンルの高度化アンカー
+                    // ★ 全24ジャンルの高度化アンカー (T3, T5, T6, T7 完全網羅)
                     switch (genre) {
-                    case 0: case 1:
-                        if (trk == 0 && (stepInBar % div == 0)) {
-                            isAnchor = true;
-                            if ((currentBarOfStep % 2 != 0) && beatInBar == num - 1) {
-                                if (random.nextInt(100) < 15) { isAnchor = false; isNegativeAnchor = true; cmplx = 0; }
+                    case 0: case 1: // Techno, House
+                        if (trk == 0) {
+                            if (stepInBar % div == 0) {
+                                isAnchor = true;
+                                if ((currentBarOfStep % 2 != 0) && beatInBar == num - 1 && random.nextInt(100) < 15) { isAnchor = false; isNegativeAnchor = true; cmplx = 0; }
                             }
                         }
-                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
-                        if (trk == 2 && (stepInBar % div == div / 2)) isAnchor = true;
+                        if (trk == 1 || trk == 4) { if (stepInBar == div || stepInBar == div * 3) isAnchor = true; }
+                        if (trk == 2) { if (stepInBar % div == div / 2) isAnchor = true; }
+                        if (trk == 3) { if (stepInBar % div == div / 2) { isAnchor = true; anchorVel = 90; } } // OHH on Upbeat
+                        if (trk == 5 || trk == 6) { if (stepInBar % div == (div > 1 ? div - 1 : 0) && random.nextInt(100) < 40) { isAnchor = true; anchorVel = 60; } } // Tom/Perc 16th Syncopation
+                        if (trk == 7) { if (currentBarOfStep % 4 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 80; } } // Noise FX on Bar 1
                         break;
-                    case 2:
+
+                    case 2: // UKG
                         if (trk == 0) {
                             if (stepInBar == 0) isAnchor = true;
                             int barType = currentBarOfStep % 4;
-                            if (barType == 0 || barType == 2) {
-                                if (stepInBar == div * 2 + div / 2) isAnchor = true;
-                            }
-                            else if (barType == 1) {
-                                if (stepInBar == div * 3 + div / 2) isAnchor = true;
-                            }
-                            else {
-                                if (stepInBar == div + div / 2 || stepInBar == div * 3 + div / 2) isAnchor = true;
-                            }
+                            if (barType == 0 || barType == 2) { if (stepInBar == div * 2 + div / 2) isAnchor = true; }
+                            else if (barType == 1) { if (stepInBar == div * 3 + div / 2) isAnchor = true; }
+                            else { if (stepInBar == div + div / 2 || stepInBar == div * 3 + div / 2) isAnchor = true; }
                         }
-                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) { isAnchor = true; anchorVel = 90; }
+                        if (trk == 1 || trk == 4) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 90; } }
                         if (trk == 2) {
                             if (stepInBar % div == div / 2) { isAnchor = true; anchorVel = 70; }
                             if (stepInBar % div == div - 1 && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 50; }
                         }
+                        if (trk == 3) { if (stepInBar == div * 2 + div / 2) { isAnchor = true; anchorVel = 85; } } // Ride
+                        if (trk == 5) { if (stepInBar == 0 || stepInBar == div * 2 + div / 2) { isAnchor = true; anchorVel = 90; } } // Sub Bass Follows Kick
+                        if (trk == 6 || trk == 7) { if (stepInBar == div + div / 2 || stepInBar == div * 3 + div / 2) { isAnchor = true; anchorVel = 60; } } // Perc
                         break;
-                    case 4: case 7:
+
+                    case 4: case 7: // Trap, Dubstep
                         if (trk == 0) {
                             if (stepInBar == 0) isAnchor = true;
                             if (genre == 4 && stepInBar == div + div / 2) isAnchor = true;
                             if (genre == 7 && stepInBar == div * 2 + div / 2) isAnchor = true;
                         }
-                        if ((trk == 1 || trk == 4) && stepInBar == div * 2) { isAnchor = true; anchorVel = 100; }
+                        if (trk == 1 || trk == 4) { if (stepInBar == div * 2) { isAnchor = true; anchorVel = 100; } }
                         if (genre == 4 && trk == 2) {
                             if (stepInBar % (div > 1 ? div / 2 : 1) == 0) isAnchor = true;
                             if ((currentBarOfStep % 2 != 0) && beatInBar == 3 && random.nextInt(100) < 50) { isAnchor = true; anchorVel = 80; }
                         }
+                        if (trk == 3) { if (stepInBar == 0 || stepInBar == div * 2) { isAnchor = true; anchorVel = 80; } } // OHH on mains
+                        if (trk == 5 || trk == 6) { if (stepInBar == div * 3 + div / 2) { isAnchor = true; anchorVel = 70; } } // Wobble/Perc
+                        if (trk == 7) { if (stepInBar == 0) { isAnchor = true; anchorVel = 100; } } // Sub on Beat 1
                         break;
-                    case 3:
+
+                    case 3: // DnB
                         if (trk == 0) {
                             if (stepInBar == 0) isAnchor = true;
                             if (currentBarOfStep % 2 == 0 && stepInBar == div * 2 + div / 2) isAnchor = true;
                             if (currentBarOfStep % 2 != 0 && stepInBar == div * 3) isAnchor = true;
                         }
-                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) { isAnchor = true; anchorVel = 90; }
-                        if (trk == 2 && stepInBar % div == 0) isAnchor = true;
+                        if (trk == 1 || trk == 4) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 90; } }
+                        if (trk == 2) { if (stepInBar % div == 0) isAnchor = true; }
+                        if (trk == 3) { if (stepInBar % div == div / 2) { isAnchor = true; anchorVel = 70; } } // Fast OHH
+                        if (trk == 5 || trk == 6) { if (stepInBar == div + div / 2) { isAnchor = true; anchorVel = 60; } } // Ghost Break
+                        if (trk == 7) { if (stepInBar == 0) { isAnchor = true; anchorVel = 95; } } // Sub
                         break;
-                    case 15: case 16:
+
+                    case 15: case 16: // Funk, NJS
                         if (trk == 0) {
                             if (stepInBar == 0) isAnchor = true;
                             if (currentBarOfStep % 2 == 0 && stepInBar == div * 2 + div / 2) isAnchor = true;
                             if (currentBarOfStep % 2 != 0 && stepInBar == div * 2 + div - 1) isAnchor = true;
                         }
-                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                        if (trk == 1 || trk == 4) { if (stepInBar == div || stepInBar == div * 3) isAnchor = true; }
                         if (trk == 2) {
                             if (stepInBar % div == 0) isAnchor = true;
                             else if (random.nextInt(100) < 30) { isAnchor = true; anchorVel = 40; }
                         }
+                        if (trk == 3) { if (stepInBar == div * 3 + div / 2) { isAnchor = true; anchorVel = 80; } } // OHH on 4-and
+                        if (trk == 5 || trk == 6) { if (stepInBar == div - 1 || stepInBar == div * 3 - 1) { isAnchor = true; anchorVel = 50; } } // Ghost Toms/Conga
+                        if (trk == 7) { if (currentBarOfStep % 2 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 90; } } // Orch Hit / Tambourine
                         break;
-                    case 17: case 18:
+
+                    case 17: case 18: // Neo Soul, Hip Hop
                         if (trk == 0) {
                             if (stepInBar == 0) isAnchor = true;
                             if (stepInBar == div * 2 + div / 2 && random.nextInt(100) < 70) isAnchor = true;
                         }
-                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                        if (trk == 1 || trk == 4) { if (stepInBar == div || stepInBar == div * 3) isAnchor = true; }
+                        if (trk == 3) { if (stepInBar % (div * 2) == div) { isAnchor = true; anchorVel = 60; } } // Ride / OHH Sparse
+                        if (trk == 5 || trk == 6) { if (stepInBar == div * 2 - 1) { isAnchor = true; anchorVel = 40; } } // Ghost Perc
+                        if (trk == 7) { if (currentBarOfStep % 4 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 85; } } // Vinyl / Sample 
                         break;
-                    case 8: case 12:
-                        if (trk == 0) {
-                            if (stepInBar == 0 || stepInBar == div * 2 + div / 2) isAnchor = true;
-                        }
-                        if (trk == 1 || trk == 4 || trk == 7) {
-                            if (stepInBar == 0 || stepInBar == div + div / 2 || stepInBar == div * 2 + div || stepInBar == div * 3 || stepInBar == div * 4) {
-                                isAnchor = true; anchorVel = 85;
-                            }
+
+                    case 8: case 12: // Afrobeat, Samba (Clave 3-2 / Syncopation)
+                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2 + div / 2) isAnchor = true; }
+                        if (trk == 1 || trk == 4) {
+                            if (stepInBar == 0 || stepInBar == div + div / 2 || stepInBar == div * 2 + div || stepInBar == div * 3 || stepInBar == div * 4) { isAnchor = true; anchorVel = 85; }
                         }
                         if (trk == 2) { if (stepInBar % div == 0) isAnchor = true; }
+                        if (trk == 3) { if (stepInBar % div == div / 2) { isAnchor = true; anchorVel = 75; } }
+                        if (trk >= 5 && trk <= 7) {
+                            // Conga / Agogo / Cuica polyrhythms
+                            if (stepInBar == div - 1 || stepInBar == div * 3 + div / 2) { isAnchor = true; anchorVel = 80; }
+                        }
                         break;
-                    case 9: case 10: case 13:
+
+                    case 9: case 10: case 13: // Gqom, Amapiano, Reggaeton
                         if (trk == 0) { if (stepInBar % div == 0) isAnchor = true; }
-                        if (trk == 1 || trk == 4) {
-                            if (stepInBar == div - 1 || stepInBar == div * 2 + div / 2) isAnchor = true;
+                        if (trk == 1 || trk == 4) { if (stepInBar == div - 1 || stepInBar == div * 2 + div / 2) isAnchor = true; }
+                        if (trk == 2 || trk == 3) { if (stepInBar % (div > 1 ? div / 2 : 1) == 0) { isAnchor = true; anchorVel = 70; } }
+                        if (trk == 5) { if (stepInBar == div + div / 2) { isAnchor = true; anchorVel = 80; } } // Timbales / Conga Sync
+                        if (genre == 10 && (trk == 6 || trk == 7)) { // Amapiano Log Drum Syncopation
+                            if (currentBarOfStep % 2 != 0 && (stepInBar == div * 2 + div / 2 || stepInBar == div * 3 + div / 2)) { isAnchor = true; anchorVel = 100; }
                         }
-                        if (genre == 10 && (trk == 6 || trk == 7)) {
-                            if (currentBarOfStep % 2 != 0 && (stepInBar == div * 2 + div / 2 || stepInBar == div * 3 + div / 2)) {
-                                isAnchor = true; anchorVel = 100;
-                            }
+                        else if (trk == 6 || trk == 7) {
+                            if (stepInBar == div * 3 + div / 2) { isAnchor = true; anchorVel = 80; }
                         }
                         break;
-                    case 11: case 14:
+
+                    case 11: case 14: // Indian, Gamelan (Cycles)
                         if (trk == 0) {
                             if (currentBarOfStep % 4 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 100; }
                             else { isNegativeAnchor = true; cmplx = 0; }
                         }
-                        if (trk >= 1 && trk <= 4) {
-                            if (stepInBar % (div * 2) == 0) { isAnchor = true; anchorVel = 70; }
+                        if (trk >= 1 && trk <= 4) { if (stepInBar % (div * 2) == 0) { isAnchor = true; anchorVel = 70; } }
+                        if (trk >= 5 && trk <= 7) {
+                            if (stepInBar % div == div / 2) { isAnchor = true; anchorVel = 60; }
                         }
                         break;
-                    case 19:
-                        if (trk == 0) {
-                            if (stepInBar == 0 || stepInBar == div * 3) isAnchor = true;
-                        }
-                        if (trk == 1 || trk == 4) {
-                            if (stepInBar == div * 2 || stepInBar == div * 4) isAnchor = true;
-                        }
+
+                    case 19: // Math Rock
+                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 3) isAnchor = true; }
+                        if (trk == 1 || trk == 4) { if (stepInBar == div * 2 || stepInBar == div * 4) isAnchor = true; }
                         if (trk == 2) {
                             if (stepInBar % div == 0) isAnchor = true;
                             if (random.nextInt(100) < 20) { isAnchor = true; anchorVel = 50; }
                         }
+                        if (trk == 3) { if (stepInBar == div * 3 + div / 2) { isAnchor = true; anchorVel = 80; } } // Ride Offbeat
+                        if (trk == 5 || trk == 6) { if (stepInBar == div + div / 2 || stepInBar == div * 4 + div / 2) { isAnchor = true; anchorVel = 75; } } // Syncopated Toms
+                        if (trk == 7) { if (currentBarOfStep % 2 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 90; } } // Crash
                         break;
-                    case 20:
-                        if (trk == 0 && (stepInBar == 0 || stepInBar == div * 3 || stepInBar == div * 5)) isAnchor = true;
-                        if (trk == 1 && (stepInBar == div * 2 || stepInBar == div * 4 || stepInBar == div * 6)) isAnchor = true;
-                        if (trk == 2 && (stepInBar % (div > 1 ? div / 2 : 1) == 0)) { isAnchor = true; anchorVel = 70; }
-                        if (trk == 3 && (stepInBar == div * 2 + (div > 1 ? div / 2 : 0) || stepInBar == div * 4 + (div > 1 ? div / 2 : 0))) { isAnchor = true; anchorVel = 85; }
+
+                    case 20: // Progressive Metal (Portnoy Kit)
+                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 3 || stepInBar == div * 5) isAnchor = true; } // Click Kick
+                        if (trk == 1) { if (stepInBar == div * 2 || stepInBar == div * 4 || stepInBar == div * 6) isAnchor = true; } // Fat Snare
+                        if (trk == 2) { if (stepInBar % (div > 1 ? div / 2 : 1) == 0) { isAnchor = true; anchorVel = 70; } } // Max Stax Constant
+                        if (trk == 3) { if (stepInBar == div * 2 + (div > 1 ? div / 2 : 0) || stepInBar == div * 4 + (div > 1 ? div / 2 : 0)) { isAnchor = true; anchorVel = 85; } } // Hat Bark
+                        // Melodic Tom Descending Anchors
+                        if (trk == 4) { if (currentBarOfStep % 2 == 1 && stepInBar == div * (num - 1)) { isAnchor = true; anchorVel = 90; } } // High Tom
+                        if (trk == 5) { if (currentBarOfStep % 2 == 1 && stepInBar == div * (num - 1) + (div > 1 ? div / 2 : 0)) { isAnchor = true; anchorVel = 90; } } // Mid Tom
+                        if (trk == 6) { if (currentBarOfStep % 2 == 1 && stepInBar == div * num - 1) { isAnchor = true; anchorVel = 90; } } // Low Tom
+                        if (trk == 7) { if (currentBarOfStep % 2 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 100; } } // Splash on Even Bars
                         break;
-                    case 21:
-                        if (trk == 0 && (stepInBar % (div * 3) == 0)) isAnchor = true;
-                        if (trk == 1 && ((stepInBar + div) % (div * 3) == 0)) isAnchor = true;
-                        if (trk >= 2 && (stepInBar % 2 == 0)) isAnchor = true;
+
+                    case 21: // Minimalism
+                        if (trk == 0) { if (stepInBar % (div * 3) == 0) isAnchor = true; }
+                        if (trk == 1) { if ((stepInBar + div) % (div * 3) == 0) isAnchor = true; }
+                        if (trk >= 2 && trk <= 4) { if (stepInBar % 2 == 0) isAnchor = true; }
+                        if (trk >= 5 && trk <= 7) { if (stepInBar % 3 == 0) { isAnchor = true; anchorVel = 70; } } // Phase shift
                         break;
+
                     default:
                         if (trk == 0 && stepInBar == 0) isAnchor = true;
                         if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3) && num >= 4) isAnchor = true;
+                        if (trk >= 5) { if (stepInBar == div * 2 + div / 2) { isAnchor = true; anchorVel = 60; } }
                         break;
                     }
 
