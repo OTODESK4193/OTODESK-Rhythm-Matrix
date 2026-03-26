@@ -4,175 +4,135 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include <algorithm>
+#include <cmath>
 
-static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = { {
-        // wave, freq, pDec, pAmt, aAtt, aDec, noise, fTyp, fFreq, fRes, drive, vol
-        /* K_909 */      {0, 48.0f,  10.0f,  5.0f, 1.0f, 40.0f,  0.05f, 0, 2000.0f, 1.0f, 1.5f, 1.1f},
-        /* K_808 */      {0, 42.0f,  15.0f,  3.0f, 1.0f, 80.0f,  0.0f,  0, 1000.0f, 1.0f, 1.8f, 1.2f},
-        /* K_Acoustic */ {1, 55.0f,  10.0f,  2.0f, 1.0f, 30.0f,  0.2f,  0, 1500.0f, 1.5f, 1.2f, 1.0f},
-        /* K_Deep */     {0, 35.0f,  10.0f,  1.5f, 2.0f, 50.0f,  0.0f,  0, 800.0f,  1.0f, 1.2f, 1.1f},
-        /* K_Punch */    {2, 60.0f,   8.0f,  5.0f, 1.0f, 35.0f,  0.1f,  0, 3000.0f, 2.0f, 2.5f, 1.0f},
-        /* K_Hard */     {3, 60.0f,  10.0f,  6.0f, 1.0f, 40.0f,  0.3f,  0, 4000.0f, 1.5f, 3.0f, 0.9f},
-        /* K_Soft */     {0, 50.0f,  10.0f,  1.0f, 2.0f, 40.0f,  0.0f,  0, 500.0f,  1.0f, 1.0f, 1.0f},
-        /* K_Sub */      {0, 30.0f,   5.0f,  1.0f, 3.0f, 80.0f,  0.0f,  0, 300.0f,  1.0f, 1.5f, 1.2f},
-        /* K_Click */    {0, 80.0f,   5.0f, 10.0f, 0.5f, 15.0f,  0.4f,  0, 5000.0f, 1.0f, 1.0f, 1.0f},
-        /* K_FM */       {2, 45.0f,  15.0f,  4.0f, 1.0f, 50.0f,  0.0f,  0, 1200.0f, 2.5f, 2.0f, 1.0f},
+// ★ マクロ廃止・constexpr関数による安全なパッチ生成
+constexpr InstrumentPatch makePatch(int w, float fr, float pD, float pA, float aAt, float aDc, float ns, int fT, float fF, float fR, float dr, float vl) {
+    return { w, fr, pD, pA, aAt, aDc, ns, fT, fF, fR, dr, vl };
+}
 
-        /* S_909 */      {1, 180.0f, 10.0f,  1.5f, 1.0f, 40.0f,  0.8f,  1, 400.0f,  1.2f, 1.5f, 0.9f},
-        /* S_808 */      {0, 200.0f,  8.0f,  2.0f, 1.0f, 30.0f,  0.7f,  1, 600.0f,  1.0f, 1.2f, 0.9f},
-        /* S_Tight */    {0, 250.0f,  5.0f,  1.0f, 1.0f, 20.0f,  0.9f,  1, 800.0f,  1.0f, 1.8f, 0.9f},
-        /* S_Fat */      {2, 150.0f, 10.0f,  2.0f, 1.0f, 40.0f,  0.6f,  0, 5000.0f, 1.5f, 2.5f, 0.9f},
-        /* S_Rim */      {0, 400.0f,  5.0f,  1.5f, 1.0f, 15.0f,  0.1f,  2, 1200.0f, 3.0f, 1.2f, 1.0f},
-        /* S_Clap */     {2, 100.0f,  8.0f,  0.0f, 3.0f, 35.0f,  1.0f,  2, 1500.0f, 1.0f, 1.5f, 0.9f},
-        /* S_Snap */     {0, 800.0f,  5.0f,  0.0f, 1.0f, 15.0f,  0.8f,  1, 2000.0f, 1.0f, 1.0f, 0.9f},
-        /* S_Noise */    {0, 100.0f,  0.0f,  0.0f, 1.0f, 30.0f,  1.0f,  1, 1000.0f, 1.0f, 1.5f, 0.9f},
-        /* S_Lofi */     {3, 150.0f, 10.0f,  1.0f, 1.0f, 30.0f,  0.5f,  2, 800.0f,  2.0f, 3.0f, 0.8f},
-        /* S_Acoustic */ {1, 220.0f, 10.0f,  1.2f, 1.0f, 35.0f,  0.6f,  0, 6000.0f, 1.0f, 1.2f, 0.9f},
+// ★ 176独立パッチ + 9パッチ をラムダでコンパイル時生成
+static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = []() {
+    std::array<InstrumentPatch, PATCH_MAX> arr{};
+    for (int i = 0; i < 176; ++i) {
+        int genre = i / 8;
+        int trk = i % 8;
 
-        /* H_Closed */   {3, 800.0f,  5.0f,  0.0f, 1.0f, 15.0f,  1.0f,  1, 4000.0f, 1.0f, 1.0f, 0.63f},
-        /* H_Open */     {3, 800.0f,  5.0f,  0.0f, 1.0f, 35.0f,  1.0f,  1, 4000.0f, 1.0f, 1.0f, 0.63f},
-        /* H_Fast */     {3, 900.0f,  2.0f,  0.0f, 1.0f, 10.0f,  1.0f,  1, 6000.0f, 1.0f, 1.0f, 0.54f},
-        /* H_Shaker */   {0, 200.0f,  0.0f,  0.0f, 8.0f, 20.0f,  1.0f,  2, 3000.0f, 1.5f, 1.0f, 0.54f},
-        /* H_Tambourine */{3,600.0f,  0.0f,  0.0f, 3.0f, 25.0f,  0.8f,  1, 5000.0f, 2.0f, 1.5f, 0.54f},
-        /* H_Ride */     {1, 400.0f,  5.0f,  0.0f, 1.0f, 45.0f,  0.6f,  1, 3000.0f, 1.0f, 1.0f, 0.63f},
-        /* H_Crash */    {2, 300.0f, 10.0f,  0.0f, 1.0f, 60.0f,  0.9f,  1, 2000.0f, 1.0f, 1.5f, 0.63f},
-        /* H_Metallic */ {3, 1200.0f, 5.0f,  0.0f, 1.0f, 25.0f,  0.4f,  2, 4500.0f, 4.0f, 1.2f, 0.54f},
+        // Base tight templates
+        float freq = (trk == 0) ? 45.0f : (trk == 1) ? 180.0f : (trk == 2) ? 800.0f : (trk == 3) ? 600.0f : (trk == 4) ? 200.0f : (trk == 5) ? 130.0f : (trk == 6) ? 90.0f : 300.0f;
+        int wave = (trk == 2 || trk == 3) ? 3 : (trk == 1) ? 2 : 0;
+        float dec = (trk == 2) ? 6.0f : 20.0f;
+        float noise = (trk == 1 || trk >= 2) ? 0.8f : 0.0f;
+        float drive = 2.0f + (genre * 0.05f); // Unique per genre
 
-        /* P_TomL */     {0, 80.0f,  15.0f,  2.0f, 1.0f, 40.0f,  0.0f,  0, 1000.0f, 1.0f, 1.5f, 1.1f},
-        /* P_TomM */     {0, 120.0f, 10.0f,  1.5f, 1.0f, 35.0f,  0.0f,  0, 1500.0f, 1.0f, 1.5f, 1.0f},
-        /* P_TomH */     {0, 180.0f, 10.0f,  1.2f, 1.0f, 30.0f,  0.0f,  0, 2000.0f, 1.0f, 1.5f, 1.0f},
-        /* P_Conga */    {0, 250.0f,  8.0f,  1.5f, 1.0f, 30.0f,  0.0f,  2, 500.0f,  2.0f, 1.2f, 1.0f},
-        /* P_Bongo */    {0, 400.0f,  8.0f,  1.2f, 1.0f, 25.0f,  0.0f,  2, 800.0f,  2.0f, 1.2f, 1.0f},
-        /* P_TablaL */   {0, 120.0f, 15.0f,  3.0f, 1.0f, 35.0f,  0.0f,  2, 300.0f,  3.0f, 1.5f, 1.1f},
-        /* P_TablaH */   {0, 280.0f, 10.0f,  2.0f, 1.0f, 30.0f,  0.1f,  2, 600.0f,  2.5f, 1.2f, 1.0f},
-        /* P_Wood */     {3, 600.0f,  5.0f,  0.5f, 1.0f, 15.0f,  0.1f,  2, 1000.0f, 3.0f, 1.0f, 0.9f},
-        /* P_Cowbell */  {3, 540.0f,  8.0f,  0.2f, 1.0f, 25.0f,  0.0f,  2, 800.0f,  4.0f, 1.5f, 0.81f},
-        /* P_Gong */     {2, 100.0f, 20.0f,  0.5f, 1.0f, 70.0f,  0.2f,  2, 400.0f,  5.0f, 2.0f, 0.99f},
-        /* P_Clave */    {0, 2000.0f, 2.0f,  0.0f, 1.0f, 10.0f,  0.0f,  3, 0.0f,    0.0f, 1.0f, 0.9f},
-        /* P_LogDrum */  {0, 65.0f,  10.0f,  1.0f, 1.0f, 40.0f,  0.05f, 0, 400.0f,  1.5f, 2.0f, 1.2f},
-
-        /* F_Noise */    {0, 100.0f,  0.0f,  0.0f, 2.0f, 30.0f,  1.0f,  2, 2000.0f, 1.0f, 1.0f, 0.8f},
-        /* F_SubDrop */  {0, 60.0f,  40.0f,  2.0f, 1.0f, 60.0f,  0.0f,  0, 200.0f,  1.0f, 1.5f, 1.2f},
-        /* F_Chaos */    {2, 500.0f, 15.0f, -0.8f, 1.0f, 25.0f,  1.0f,  2, 1000.0f, 8.0f, 3.0f, 0.8f},
-        /* F_Laser */    {2, 1500.0f,20.0f,  2.0f, 1.0f, 30.0f,  0.0f,  0, 2000.0f, 2.0f, 1.5f, 0.9f},
-        /* F_Wobble */   {1, 40.0f,  20.0f,  0.5f, 5.0f, 60.0f,  0.2f,  0, 800.0f,  4.0f, 3.0f, 1.1f},
-        /* F_Pluck */    {2, 440.0f, 10.0f,  0.0f, 1.0f, 25.0f,  0.0f,  0, 1500.0f, 2.0f, 1.0f, 0.9f},
-        /* F_Bell */     {0, 880.0f, 20.0f,  0.0f, 1.0f, 45.0f,  0.0f,  3, 0.0f,    0.0f, 1.0f, 0.72f},
-        /* F_Marimba */  {0, 300.0f, 15.0f,  0.0f, 1.0f, 35.0f,  0.05f, 0, 1000.0f, 1.0f, 1.0f, 1.0f},
-        /* F_Chant */    {3, 200.0f, 10.0f,  0.5f, 5.0f, 30.0f,  0.3f,  2, 1000.0f, 4.0f, 1.5f, 0.9f},
-        /* F_Sweep */    {2, 100.0f, 50.0f,  2.0f, 5.0f, 60.0f,  0.8f,  2, 2000.0f, 2.0f, 1.5f, 0.9f},
-
-        {2, 130.8f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 1200.0f, 2.0f, 1.2f, 1.0f},
-        {2, 146.8f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 1300.0f, 2.0f, 1.2f, 1.0f},
-        {2, 174.6f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 1500.0f, 2.0f, 1.2f, 1.0f},
-        {2, 196.0f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 1700.0f, 2.0f, 1.2f, 1.0f},
-        {2, 220.0f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 1900.0f, 2.0f, 1.2f, 1.0f},
-        {2, 261.6f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 2200.0f, 2.0f, 1.2f, 1.0f},
-        {2, 293.6f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 2500.0f, 2.0f, 1.2f, 1.0f},
-        {2, 349.2f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 3000.0f, 2.0f, 1.2f, 1.0f},
-
-        // M_ArpPluck
-        {1, 440.0f, 5.0f, 0.0f, 0.5f, 20.0f, 0.0f, 0, 2500.0f, 1.5f, 1.0f, 1.0f}
-    } };
+        if (genre == 20) { // ★ Prog Metal (Portnoy Kit)
+            if (trk == 0) arr[i] = makePatch(0, 85.0f, 4.0f, 8.0f, 0.5f, 15.0f, 0.2f, 0, 6000.0f, 1.0f, 3.5f, 1.1f); // Click Kick
+            else if (trk == 1) arr[i] = makePatch(2, 190.0f, 8.0f, 2.0f, 1.0f, 18.0f, 0.5f, 0, 4000.0f, 1.5f, 4.0f, 1.0f); // Fat Snare
+            else if (trk == 2) arr[i] = makePatch(3, 1200.0f, 2.0f, 0.0f, 1.0f, 6.0f, 0.8f, 1, 6000.0f, 2.0f, 3.0f, 0.8f); // Max Stax
+            else if (trk == 3) arr[i] = makePatch(3, 800.0f, 5.0f, 0.0f, 1.0f, 15.0f, 0.9f, 1, 4000.0f, 1.0f, 1.5f, 0.7f); // Hat Bark
+            else if (trk == 4) arr[i] = makePatch(0, 220.0f, 10.0f, 1.5f, 1.0f, 25.0f, 0.0f, 0, 2000.0f, 1.0f, 2.0f, 1.1f); // High Tom
+            else if (trk == 5) arr[i] = makePatch(0, 140.0f, 12.0f, 1.5f, 1.0f, 28.0f, 0.0f, 0, 1500.0f, 1.0f, 2.0f, 1.1f); // Mid Tom
+            else if (trk == 6) arr[i] = makePatch(0, 85.0f, 15.0f, 1.5f, 1.0f, 35.0f, 0.0f, 0, 1000.0f, 1.0f, 2.0f, 1.1f); // Floor Tom
+            else if (trk == 7) arr[i] = makePatch(2, 400.0f, 10.0f, 0.0f, 1.0f, 40.0f, 1.0f, 1, 3000.0f, 1.0f, 3.0f, 0.7f); // Splash
+        }
+        else {
+            // General diversification for 176 sounds
+            arr[i] = makePatch(wave, freq + genre * 2.0f, 8.0f, 1.5f, 1.0f, dec, noise, (trk >= 2) ? 1 : 0, 2000.0f + genre * 100.0f, 1.0f, drive, 1.0f);
+            if (trk == 0 && (genre == 4 || genre == 7)) { // Trap/Dubstep Sub
+                arr[i] = makePatch(0, 45.0f, 15.0f, 4.0f, 1.0f, 45.0f, 0.0f, 0, 800.0f, 1.0f, 4.0f, 1.2f);
+            }
+            if (trk == 7 && genre == 14) { // Gamelan Gong
+                arr[i] = makePatch(2, 100.0f, 15.0f, 0.5f, 1.0f, 40.0f, 0.2f, 2, 400.0f, 5.0f, 3.0f, 0.99f);
+            }
+        }
+    }
+    for (int i = 176; i < 184; ++i) {
+        // ★ Narrowing Error 解消: static_cast<float>
+        float f = static_cast<float>(130.81 * std::pow(1.05946, (i - 176) * 2));
+        arr[i] = makePatch(2, f, 12.0f, 0.0f, 1.0f, 25.0f, 0.0f, 0, 1500.0f, 2.0f, 2.0f, 1.0f);
+    }
+    arr[M_ARP] = makePatch(1, 440.0f, 5.0f, 0.0f, 0.5f, 15.0f, 0.0f, 0, 2500.0f, 1.5f, 1.5f, 1.0f);
+    return arr;
+    }();
 
 static const std::array<GenreDefinition, 24> genreTable = { {
     { 4, 4, 125, 135, {"909 Kick", "909 Snare", "CHH", "OHH", "Clap", "Ride", "Tom", "Noise FX"},
-      {K_909, S_909, H_Closed, H_Open, S_Clap, H_Ride, P_TomL, F_Noise},
-      {{1,2,4,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,5,7,0}, {2,4,8,0}},
-      {0,0,0,0,0,0,0,0}, {0,0,2,2,0,5,5,10} },
+      {G0_T0, G0_T1, G0_T2, G0_T3, G0_T4, G0_T5, G0_T6, G0_T7},
+      {{1,2,4,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,5,7,0}, {2,4,8,0}}, {0,0,0,0,0,0,0,0}, {0,0,2,2,0,5,5,10} },
     { 4, 4, 120, 126, {"Deep Kick", "Rimshot", "Shuff Hat", "Open Hat", "Clap", "Conga", "Bongo", "Vocal Chop"},
-      {K_Deep, S_Rim, H_Closed, H_Open, S_Clap, P_Conga, P_Bongo, F_Chant},
-      {{1,2,4,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {4,6,8,0}, {2,3,4,0}},
-      {-2,0, 5,0,-2, -5, -5, 0}, {2,5, 15,5, 5, 10, 10, 15} },
+      {G1_T0, G1_T1, G1_T2, G1_T3, G1_T4, G1_T5, G1_T6, G1_T7},
+      {{1,2,4,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {4,6,8,0}, {2,3,4,0}}, {-2,0, 5,0,-2, -5, -5, 0}, {2,5, 15,5, 5, 10, 10, 15} },
     { 4, 4, 130, 138, {"Punch Kick", "Snare/Rim", "Garage Hat", "Ride", "Clap", "Sub Bass", "Perc 1", "Perc 2"},
-      {K_Punch, S_Rim, H_Fast, H_Open, S_Clap, K_Sub, P_Wood, H_Shaker},
-      {{2,3,4,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {2,4,0,0}, {2,3,4,0}, {3,5,0,0}, {5,7,0,0}},
-      {-5,5, 10,5, 0, -10, 0, 0}, {5,15, 25,15, 10, 10, 15, 15} },
+      {G2_T0, G2_T1, G2_T2, G2_T3, G2_T4, G2_T5, G2_T6, G2_T7},
+      {{2,3,4,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {2,4,0,0}, {2,3,4,0}, {3,5,0,0}, {5,7,0,0}}, {-5,5, 10,5, 0, -10, 0, 0}, {5,15, 25,15, 10, 10, 15, 15} },
     { 4, 4, 165, 175, {"Heavy Kick", "Tight Snr", "Fast Hat", "Ride", "Break Rim", "Break 1", "Break 2", "Sub"},
-      {K_Hard, S_Tight, H_Fast, H_Ride, S_Rim, P_TomH, P_TomM, F_SubDrop},
-      {{2,4,0,0}, {2,4,0,0}, {4,8,0,0}, {4,8,0,0}, {2,4,0,0}, {4,6,8,0}, {4,6,8,0}, {2,4,0,0}},
-      {0,0, -5,-5, 0, -10, -10, 0}, {2,2, 5,5, 5, 10, 10, 5} },
+      {G3_T0, G3_T1, G3_T2, G3_T3, G3_T4, G3_T5, G3_T6, G3_T7},
+      {{2,4,0,0}, {2,4,0,0}, {4,8,0,0}, {4,8,0,0}, {2,4,0,0}, {4,6,8,0}, {4,6,8,0}, {2,4,0,0}}, {0,0, -5,-5, 0, -10, -10, 0}, {2,2, 5,5, 5, 10, 10, 5} },
     { 4, 4, 135, 150, {"808 Kick", "808 Snare", "Roll Hat", "Open Hat", "Clap", "Perc", "808 Bass", "FX"},
-      {K_808, S_808, H_Fast, H_Open, S_Clap, P_Wood, K_Sub, F_Laser},
-      {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {2,4,0,0}, {4,8,0,0}, {2,4,0,0}, {2,4,0,0}},
-      {0,0, 0,0, 0, 0, 0, 0}, {0,0, 0,0, 0, 0, 0, 0} },
+      {G4_T0, G4_T1, G4_T2, G4_T3, G4_T4, G4_T5, G4_T6, G4_T7},
+      {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {2,4,0,0}, {4,8,0,0}, {2,4,0,0}, {2,4,0,0}}, {0,0, 0,0, 0, 0, 0, 0}, {0,0, 0,0, 0, 0, 0, 0} },
     { 4, 4, 160, 160, {"Juke Kick", "Snare", "Fast Hat", "Hat 2", "Clap", "Tom", "Vocal 1", "Vocal 2"},
-      {K_808, S_909, H_Fast, H_Closed, S_Clap, P_TomM, F_Chant, F_Chaos},
-      {{3,4,6,0}, {3,4,6,0}, {4,6,8,0}, {4,6,8,0}, {2,4,0,0}, {3,5,6,0}, {3,4,5,0}, {4,6,7,0}},
-      {-5,-5, -5,-5, 0, -10, -5, -5}, {5,5, 5,5, 5, 10, 15, 15} },
+      {G5_T0, G5_T1, G5_T2, G5_T3, G5_T4, G5_T5, G5_T6, G5_T7},
+      {{3,4,6,0}, {3,4,6,0}, {4,6,8,0}, {4,6,8,0}, {2,4,0,0}, {3,5,6,0}, {3,4,5,0}, {4,6,7,0}}, {-5,-5, -5,-5, 0, -10, -5, -5}, {5,5, 5,5, 5, 10, 15, 15} },
     { 4, 4, 140, 180, {"Glitch Kick", "Drill Snr", "Hat 1", "Hat 2", "Noise", "Perc 1", "Perc 2", "Glitch FX"},
-      {K_Hard, S_Tight, H_Fast, H_Metallic, F_Noise, P_Wood, P_Cowbell, F_Chaos},
-      {{4,5,7,0}, {4,6,8,0}, {5,7,9,0}, {6,8,9,0}, {3,5,7,0}, {5,7,9,0}, {4,6,8,0}, {3,5,7,0}},
-      {-10,-10, -15,-15, -20, -20, -20, -20}, {10,10, 15,15, 20, 20, 20, 20} },
+      {G6_T0, G6_T1, G6_T2, G6_T3, G6_T4, G6_T5, G6_T6, G6_T7},
+      {{4,5,7,0}, {4,6,8,0}, {5,7,9,0}, {6,8,9,0}, {3,5,7,0}, {5,7,9,0}, {4,6,8,0}, {3,5,7,0}}, {-10,-10, -15,-15, -20, -20, -20, -20}, {10,10, 15,15, 20, 20, 20, 20} },
     { 4, 4, 140, 150, {"Stomp Kick", "Fat Snare", "Hat", "Ride", "Clap", "Wobble", "Growl", "Sub"},
-      {K_Hard, S_Fat, H_Closed, H_Ride, S_Clap, F_Wobble, F_Chaos, K_Sub},
-      {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,8,0}, {2,4,0,0}, {1,2,4,0}},
-      {0,0, 0,0, 0, 0, 0, 0}, {0,0, 5,5, 0, 10, 5, 0} },
+      {G7_T0, G7_T1, G7_T2, G7_T3, G7_T4, G7_T5, G7_T6, G7_T7},
+      {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,8,0}, {2,4,0,0}, {1,2,4,0}}, {0,0, 0,0, 0, 0, 0, 0}, {0,0, 5,5, 0, 10, 5, 0} },
     { 4, 4, 95, 115, {"Acoustic Kick", "Snare", "Shaker 1", "Shaker 2", "Clave", "Conga", "Djembe", "Agogo"},
-      {K_Acoustic, S_Rim, H_Shaker, H_Shaker, P_Clave, P_Conga, P_Bongo, P_Cowbell},
-      {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {3,4,0,0}, {3,4,5,0}, {3,4,6,0}, {2,3,4,0}},
-      {0,0, 3,3, 5, 5, 5, 5}, {5,10, 15,15, 20, 20, 20, 20} },
+      {G8_T0, G8_T1, G8_T2, G8_T3, G8_T4, G8_T5, G8_T6, G8_T7},
+      {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {3,4,0,0}, {3,4,5,0}, {3,4,6,0}, {2,3,4,0}}, {0,0, 3,3, 5, 5, 5, 5}, {5,10, 15,15, 20, 20, 20, 20} },
     { 4, 4, 98, 108, {"Heavy Kick", "Snare", "Hat", "Open Hat", "Clap", "Tom 1", "Tom 2", "Chant"},
-      {K_Deep, S_808, H_Closed, H_Open, S_Clap, P_TomL, P_TomM, F_Chant},
-      {{3,4,0,0}, {2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {2,3,4,0}},
-      {-5,0, 0,0, -5, -5, -5, 0}, {0,5, 10,5, 0, 10, 10, 10} },
+      {G9_T0, G9_T1, G9_T2, G9_T3, G9_T4, G9_T5, G9_T6, G9_T7},
+      {{3,4,0,0}, {2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {2,3,4,0}}, {-5,0, 0,0, -5, -5, -5, 0}, {0,5, 10,5, 0, 10, 10, 10} },
     { 4, 4, 110, 115, {"Log Drum", "Snare/Rim", "Shaker", "Open Hat", "Clap", "Conga", "Woodblock", "Whistle"},
-      {P_LogDrum, S_Rim, H_Shaker, H_Open, S_Clap, P_Conga, P_Wood, F_Pluck},
-      {{3,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {2,3,4,0}},
-      {0,0, 5,0, 0, 5, 5, 0}, {10,5, 15,5, 5, 15, 15, 10} },
-    { 7, 8, 80, 120, {"Bayan", "Dayan", "Tabla", "Manjira", "Ghungroo", "Dholak 1", "Dholak 2", "Vocal"},
-      {P_TablaL, P_TablaH, P_Bongo, H_Open, H_Shaker, P_Conga, P_TomM, F_Chant},
-      {{2,3,4,0}, {2,3,4,5}, {2,3,4,5}, {2,3,4,0}, {3,4,5,6}, {2,3,4,0}, {2,3,4,0}, {1,2,3,0}},
-      {-5,-5, -5, -2, -2, -5, -5, -10}, {5,5, 5, 5, 5, 5, 5, 10} },
-    { 4, 4, 90, 120, {"Surdo", "Caixa", "Pandeiro", "Ganza", "Tamborim", "Agogo", "Cuica", "Repique"},
-      {K_Deep, S_Tight, P_Bongo, H_Shaker, P_Wood, P_Cowbell, F_Sweep, P_TomH},
-      {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {3,4,0,0}, {3,4,0,0}, {3,4,0,0}, {4,6,0,0}},
-      {0,5, 5,5, 5, 5, 5, 5}, {5,15, 20,20, 20, 20, 20, 20} },
-    { 4, 4, 90, 105, {"Kick", "Snare (Tresillo)", "Hat", "Open Hat", "Clap", "Timbales", "Perc", "Vocal FX"},
-      {K_Punch, S_Tight, H_Closed, H_Open, S_Clap, P_TomH, P_Wood, F_Chant},
-      {{2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,0,0}, {2,4,0,0}},
-      {0,-6, 0,0, 0, 0, 0, 0}, {5,0, 5,5, 5, 10, 10, 10} },
-    { 8, 4, 80, 110, {"Gong", "Kempul", "Kendang", "Bonang", "Saron", "Kenong", "Kethuk", "Slenthem"},
-      {P_Gong, P_TomL, P_TablaL, P_Cowbell, F_Marimba, P_TomM, P_Wood, K_Sub},
-      {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}},
-      {-10,-10, -5,-5, -5, -10, -5, -10}, {10,10, 10,10, 10, 10, 10, 10} },
-    { 4, 4, 100, 115, {"Kick", "Snare", "Hi-Hat", "Open Hat", "Clap", "Tom", "Conga", "Tambourine"},
-      {K_Acoustic, S_Acoustic, H_Closed, H_Open, S_Clap, P_TomM, P_Conga, H_Tambourine},
-      {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,6,0}, {4,6,0,0}},
-      {0,0, 5,0, 0, 0, 5, 5}, {5,10, 20,5, 5, 10, 15, 20} },
-    { 4, 4, 100, 112, {"Punch Kick", "Snare", "Swing Hat", "Open Hat", "Clap", "Tom 1", "Tom 2", "Orch Hit"},
-      {K_Punch, S_Fat, H_Closed, H_Open, S_Clap, P_TomM, P_TomH, F_Pluck},
-      {{2,4,0,0}, {2,4,0,0}, {6,8,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,0,0}, {1,2,0,0}},
-      {0,0, 15,0, 0, 0, 0, 0}, {5,5, 25,5, 5, 5, 5, 5} },
-    { 4, 4, 80, 95, {"Soft Kick", "Rimshot", "Loose Hat", "Ride", "Snap", "Tom", "Shaker", "Vinyl FX"},
-      {K_Soft, S_Rim, H_Closed, H_Ride, S_Snap, P_TomL, H_Shaker, S_Lofi},
-      {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {3,4,0,0}, {2,4,0,0}, {2,3,4,0}, {4,6,0,0}, {1,2,0,0}},
-      {-5, 10, 20, 10, 5, 0, 15, 0}, {2, 25, 40, 25, 20, 10, 30, 0} },
-    { 4, 4, 85, 95, {"Gritty Kick", "Fat Snare", "Hi-Hat", "Open Hat", "Clap", "Perc", "Scratch", "Sample"},
-      {K_Hard, S_Fat, H_Closed, H_Open, S_Clap, P_Wood, F_Sweep, S_Lofi},
-      {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {1,2,4,0}},
-      {2, 5, 5, 0, 0, 0, 0, 0}, {8, 12, 15, 5, 5, 10, 5, 0} },
-    { 5, 4, 120, 160, {"Kick", "Snare", "Hi-Hat", "Ride", "Ghost Snr", "Tom 1", "Tom 2", "Crash"},
-      {K_Acoustic, S_Acoustic, H_Closed, H_Ride, S_Rim, P_TomM, P_TomL, H_Crash},
-      {{2,3,4,0}, {2,3,4,0}, {4,5,6,0}, {3,4,5,0}, {4,6,8,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}},
-      {0,0, 0,0, 0, 0, 0, 0}, {5,5, 5,5, 5, 5, 5, 5} },
-    { 13, 8, 90, 115, {"Kick (Click)", "Snare (Fat)", "Max Stax", "Hat Bark", "High Tom", "Mid Tom", "Floor Tom", "Splash/China"},
-      {K_Click, S_Fat, H_Metallic, H_Open, P_TomH, P_TomM, P_TomL, H_Crash},
-      {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}},
-      {0, 2, 0, 4, 1, 2, 3, 0}, {0, 2, 0, 6, 1, 2, 3, 0} },
-    { 12, 8, 140, 170, {"Clap 1", "Clap 2", "Marimba 1", "Marimba 2", "Woodblock", "Pulse", "Phase 1", "Phase 2"},
-      {S_Clap, S_Snap, F_Marimba, F_Marimba, P_Wood, K_Soft, S_Rim, S_Rim},
-      {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}},
-      {0,0, 0,0, 0, 0, -20, 20}, {0,0, 0,0, 0, 0, -20, 20} },
-    { 4, 4, 120, 150, {"Node C", "Node D", "Node F", "Node G", "Node A", "Node C^", "Node D^", "Node F^"},
-      {M_Pluck1, M_Pluck2, M_Pluck3, M_Pluck4, M_Pluck5, M_Pluck6, M_Pluck7, M_Pluck8},
-      {{2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}},
-      {0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0} },
-    { 4, 4, 120, 150, {"Chaos C", "Chaos D", "Chaos F", "Chaos G", "Chaos A", "Chaos C^", "Chaos D^", "Chaos F^"},
-      {M_Pluck1, M_Pluck2, M_Pluck3, M_Pluck4, M_Pluck5, M_Pluck6, M_Pluck7, M_Pluck8},
-      {{1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}},
-      {-20,-20,-20,-20,-20,-20,-20,-20}, {20,20,20,20,20,20,20,20} }
-} };
+      {G10_T0, G10_T1, G10_T2, G10_T3, G10_T4, G10_T5, G10_T6, G10_T7},
+      {{3,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {2,3,4,0}}, {0,0, 5,0, 0, 5, 5, 0}, {10,5, 15,5, 5, 15, 15, 10} },
+      // ★ テンポ適正化
+      { 7, 8, 40, 60, {"Bayan", "Dayan", "Tabla", "Manjira", "Ghungroo", "Dholak 1", "Dholak 2", "Vocal"},
+        {G11_T0, G11_T1, G11_T2, G11_T3, G11_T4, G11_T5, G11_T6, G11_T7},
+        {{2,3,4,0}, {2,3,4,5}, {2,3,4,5}, {2,3,4,0}, {3,4,5,6}, {2,3,4,0}, {2,3,4,0}, {1,2,3,0}}, {-5,-5, -5, -2, -2, -5, -5, -10}, {5,5, 5, 5, 5, 5, 5, 10} },
+      { 4, 4, 90, 120, {"Surdo", "Caixa", "Pandeiro", "Ganza", "Tamborim", "Agogo", "Cuica", "Repique"},
+        {G12_T0, G12_T1, G12_T2, G12_T3, G12_T4, G12_T5, G12_T6, G12_T7},
+        {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {3,4,0,0}, {3,4,0,0}, {3,4,0,0}, {4,6,0,0}}, {0,5, 5,5, 5, 5, 5, 5}, {5,15, 20,20, 20, 20, 20, 20} },
+      { 4, 4, 90, 105, {"Kick", "Snare (Tresillo)", "Hat", "Open Hat", "Clap", "Timbales", "Perc", "Vocal FX"},
+        {G13_T0, G13_T1, G13_T2, G13_T3, G13_T4, G13_T5, G13_T6, G13_T7},
+        {{2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,0,0}, {2,4,0,0}}, {0,-6, 0,0, 0, 0, 0, 0}, {5,0, 5,5, 5, 10, 10, 10} },
+        // ★ テンポ適正化
+        { 8, 4, 40, 55, {"Gong", "Kempul", "Kendang", "Bonang", "Saron", "Kenong", "Kethuk", "Slenthem"},
+          {G14_T0, G14_T1, G14_T2, G14_T3, G14_T4, G14_T5, G14_T6, G14_T7},
+          {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}}, {-10,-10, -5,-5, -5, -10, -5, -10}, {10,10, 10,10, 10, 10, 10, 10} },
+        { 4, 4, 100, 115, {"Kick", "Snare", "Hi-Hat", "Open Hat", "Clap", "Tom", "Conga", "Tambourine"},
+          {G15_T0, G15_T1, G15_T2, G15_T3, G15_T4, G15_T5, G15_T6, G15_T7},
+          {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,6,0}, {4,6,0,0}}, {0,0, 5,0, 0, 0, 5, 5}, {5,10, 20,5, 5, 10, 15, 20} },
+        { 4, 4, 100, 112, {"Punch Kick", "Snare", "Swing Hat", "Open Hat", "Clap", "Tom 1", "Tom 2", "Orch Hit"},
+          {G16_T0, G16_T1, G16_T2, G16_T3, G16_T4, G16_T5, G16_T6, G16_T7},
+          {{2,4,0,0}, {2,4,0,0}, {6,8,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,0,0}, {1,2,0,0}}, {0,0, 15,0, 0, 0, 0, 0}, {5,5, 25,5, 5, 5, 5, 5} },
+        { 4, 4, 80, 95, {"Soft Kick", "Rimshot", "Loose Hat", "Ride", "Snap", "Tom", "Shaker", "Vinyl FX"},
+          {G17_T0, G17_T1, G17_T2, G17_T3, G17_T4, G17_T5, G17_T6, G17_T7},
+          {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {3,4,0,0}, {2,4,0,0}, {2,3,4,0}, {4,6,0,0}, {1,2,0,0}}, {-5, 10, 20, 10, 5, 0, 15, 0}, {2, 25, 40, 25, 20, 10, 30, 0} },
+        { 4, 4, 85, 95, {"Gritty Kick", "Fat Snare", "Hi-Hat", "Open Hat", "Clap", "Perc", "Scratch", "Sample"},
+          {G18_T0, G18_T1, G18_T2, G18_T3, G18_T4, G18_T5, G18_T6, G18_T7},
+          {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {1,2,4,0}}, {2, 5, 5, 0, 0, 0, 0, 0}, {8, 12, 15, 5, 5, 10, 5, 0} },
+        { 5, 4, 120, 160, {"Kick", "Snare", "Hi-Hat", "Ride", "Ghost Snr", "Tom 1", "Tom 2", "Crash"},
+          {G19_T0, G19_T1, G19_T2, G19_T3, G19_T4, G19_T5, G19_T6, G19_T7},
+          {{2,3,4,0}, {2,3,4,0}, {4,5,6,0}, {3,4,5,0}, {4,6,8,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}}, {0,0, 0,0, 0, 0, 0, 0}, {5,5, 5,5, 5, 5, 5, 5} },
+          // ★ テンポ適正化: 13/8拍子 (BPM半減)
+          { 13, 8, 60, 85, {"Kick (Click)", "Snare (Fat)", "Max Stax", "Hat Bark", "High Tom", "Mid Tom", "Floor Tom", "Splash"},
+            {G20_T0, G20_T1, G20_T2, G20_T3, G20_T4, G20_T5, G20_T6, G20_T7},
+            {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}}, {0, 2, 0, 4, 1, 2, 3, 0}, {0, 2, 0, 6, 1, 2, 3, 0} },
+            // ★ テンポ適正化: 12/8拍子 (BPM適正化)
+            { 12, 8, 60, 75, {"Clap 1", "Clap 2", "Marimba 1", "Marimba 2", "Woodblock", "Pulse", "Phase 1", "Phase 2"},
+              {G21_T0, G21_T1, G21_T2, G21_T3, G21_T4, G21_T5, G21_T6, G21_T7},
+              {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}}, {0,0, 0,0, 0, 0, -20, 20}, {0,0, 0,0, 0, 0, -20, 20} },
+            { 4, 4, 120, 150, {"Node C", "Node D", "Node F", "Node G", "Node A", "Node C^", "Node D^", "Node F^"},
+              {PLUCK_1, PLUCK_2, PLUCK_3, PLUCK_4, PLUCK_5, PLUCK_6, PLUCK_7, PLUCK_8},
+              {{2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}}, {0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0} },
+            { 4, 4, 120, 150, {"Chaos C", "Chaos D", "Chaos F", "Chaos G", "Chaos A", "Chaos C^", "Chaos D^", "Chaos F^"},
+              {PLUCK_1, PLUCK_2, PLUCK_3, PLUCK_4, PLUCK_5, PLUCK_6, PLUCK_7, PLUCK_8},
+              {{1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}}, {-20,-20,-20,-20,-20,-20,-20,-20}, {20,20,20,20,20,20,20,20} }
+        } };
 
 AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -201,7 +161,8 @@ const InstrumentPatch& AIDrumMachineAudioProcessor::getPatch(PatchID id) {
     return patchLibrary[id];
 }
 
-juce::String AIDrumMachineAudioProcessor::getNoteName(int trackIndex) {
+// ★ const 追加
+juce::String AIDrumMachineAudioProcessor::getNoteName(int trackIndex) const {
     if (trackIndex < 0 || trackIndex >= 8) return "";
     const char* notesStr[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
     int note = 60 + arpKey.load() + (trackOctaveUI[trackIndex] * 12) + scalePatterns[arpScale.load()][trackDegreeUI[trackIndex]];
@@ -389,6 +350,9 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
         }
     }
     else {
+        // ★ フィル・タイポロジーのランダム決定
+        int fillTypology = random.nextInt(4);
+
         for (int trk = 0; trk < 8; ++trk) {
             if (trackLocked[trk]) continue;
 
@@ -422,11 +386,16 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             if (!trackEntrpLocked[trk]) {
                 trackEntropy[trk] = random.nextInt(juce::Range<int>(10, 50));
             }
+
             if (!trackShiftLocked[trk]) {
                 if (genre == 20) {
                     int baseShift = def.shiftMin[trk];
                     int shiftRange = def.shiftMax[trk] - def.shiftMin[trk];
                     trackShiftUI[trk] = baseShift + (shiftRange > 0 ? random.nextInt(shiftRange + 1) : 0);
+                }
+                else if (genre == 17 || genre == 18) { // Neo Soul, Hip Hop
+                    if (trk == 1 || trk == 4) trackShiftUI[trk] = random.nextInt(juce::Range<int>(5, 18));
+                    else trackShiftUI[trk] = random.nextInt(juce::Range<int>(def.shiftMin[trk], def.shiftMax[trk] + 1));
                 }
                 else {
                     trackShiftUI[trk] = random.nextInt(juce::Range<int>(def.shiftMin[trk], def.shiftMax[trk] + 1));
@@ -453,70 +422,77 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 int cmplx = trackComplexity[trk];
                 int entrp = trackEntropy[trk];
 
-                // ★ フィル・タイポロジー (Fill Typology) の適用
+                // ★ 動的トラック・ローテーション (Scatter Fills) の統合
                 if (isFillPortion && !isAlgorithmMode) {
-                    // ★ Group 1: Type B (Syncopated Break & Drop)
-                    if (genre == 0 || genre == 1 || genre == 4 || genre == 7) {
-                        bool isDropZone = (genre == 4 || genre == 7) ? (beatInBar >= num - 2) : (beatInBar >= num - 1);
-                        if (isDropZone) {
-                            if (trk == 0 || trk == 5 || trk == 6) { // Kick and SubBass drop out
-                                isNegativeAnchor = true; cmplx = 0;
-                            }
-                            else if (trk == 1 || trk == 7) { // Snare or Noise crescendo
-                                isAnchor = true;
-                                float prog = (float)(stepInBar % (div * (isDropZone ? 2 : 1))) / (float)(div * (isDropZone ? 2 : 1));
-                                anchorVel = 40 + (int)(60.0f * prog);
-                            }
-                        }
-                        else {
-                            if (trk == 1 || trk == 4) { isAnchor = true; anchorVel = 70; }
+                    int localStep = stepInBar - div * (num - 2);
+                    if (localStep < 0) localStep = stepInBar;
+
+                    if (fillTypology == 0) {
+                        // Type 0: True Linear Scatter (全トラックを数学的に横断)
+                        isNegativeAnchor = true; cmplx = 0;
+                        int prime = 7;
+                        int targetTrk = ((localStep * prime) + currentBarOfStep) % 8;
+                        if (entrp > 30) targetTrk = (targetTrk + (entrp % 5)) % 8;
+
+                        if (trk == targetTrk) {
+                            isAnchor = true; anchorVel = 75 + random.nextInt(25); isNegativeAnchor = false;
                         }
                     }
-                    else if (genre == 2) { // UK Garage Drop Break
+                    else if (fillTypology == 1) {
+                        // Type 1: Drop & Scatter (キック/サブを抜き、残りを散らす)
                         isNegativeAnchor = true; cmplx = 0;
-                        if (trk == 1 || trk == 4) {
-                            // Drop everything, clap on the last off-beat
-                            if (beatInBar == num - 1 && stepInBar == (div * num) - (div / 2)) {
+                        if (trk == 0 || trk == 5 || trk == 6) {
+                            // Silent drop
+                        }
+                        else {
+                            int targetTrk = 1 + ((localStep * 3) % 4); // 1, 2, 3, 4を散らす
+                            if (trk == targetTrk) {
+                                isAnchor = true; anchorVel = 60 + random.nextInt(40); isNegativeAnchor = false;
+                            }
+                            if (stepInBar == (div * num) - (div > 1 ? div / 2 : 1) && (trk == 1 || trk == 7)) {
                                 isAnchor = true; anchorVel = 100; isNegativeAnchor = false;
                             }
                         }
                     }
-                    else if (genre == 5) { // Footwork / Juke
-                        if (trk >= 5) { cmplx = 80; }
-                        if (trk == 0) { isNegativeAnchor = true; cmplx = 0; }
-                    }
-                    else if (genre == 19) { // Math Rock
-                        if (trk >= 5) { isAnchor = true; anchorVel = 90; }
-                        if (trk == 0) { isAnchor = true; anchorVel = 100; }
-                        if (trk == 1 || trk == 2) { isNegativeAnchor = true; cmplx = 0; }
-                    }
-                    else if (genre == 20) { // Progressive Metal RLKK
-                        int fillStep = stepInBar - (div * (num - 2));
-                        if (fillStep >= 0) {
-                            int seqIndex = fillStep % 4;
-                            isNegativeAnchor = true; cmplx = 0;
-                            if (seqIndex == 0 && trk == 1) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
-                            else if (seqIndex == 1 && trk == 4) { isAnchor = true; anchorVel = 90; isNegativeAnchor = false; }
-                            else if (seqIndex == 2 && trk == 0) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
-                            else if (seqIndex == 3 && trk == 0) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
+                    else if (fillTypology == 2) {
+                        // Type 2: Euclidean Scatter (特定トラック間でユークリッドヒットを交差)
+                        isNegativeAnchor = true; cmplx = 0;
+                        int fillLen = div * 2;
+                        if (fillLen > 0) {
+                            int k = 5;
+                            if ((localStep * k) % fillLen < k) {
+                                int trkChoices[] = { 1, 2, 4, 5, 7 };
+                                int chosenTrk = trkChoices[(localStep + currentBarOfStep) % 5];
+                                if (trk == chosenTrk) {
+                                    isAnchor = true; anchorVel = 80 + random.nextInt(20); isNegativeAnchor = false;
+                                }
+                            }
                         }
                     }
-                    else if (genre == 14 || genre == 21) {
-                        if (genre == 14) { isAnchor = (stepInBar % div == 0); cmplx = 0; }
-                        else { isNegativeAnchor = true; cmplx = 0; }
-                    }
                     else {
-                        cmplx = 80;
-                        if (trk == 1 || trk == 4) { if (stepInBar % (div / 2) == 0) isAnchor = true; }
+                        // Type 3: Dynamic Multi-Track Roll (スネア、ハット、タムを用いたうねるロール)
+                        isNegativeAnchor = true; cmplx = 0;
+                        if (trk == 0 || trk == 6) {
+                            // Silent
+                        }
+                        else {
+                            int activeTrk = 1 + (localStep / (div > 0 ? div : 1)) % 4; // 拍ごとにトラックが切り替わる
+                            if (trk == activeTrk) {
+                                if (stepInBar % (div > 1 ? div / 2 : 1) == 0) {
+                                    isAnchor = true; isNegativeAnchor = false;
+                                    float prog = (float)(stepInBar % (div * 2)) / (float)(juce::jmax(1, div * 2));
+                                    anchorVel = 50 + (int)(50.0f * prog);
+                                }
+                            }
+                        }
                     }
                 }
                 else if (!isAlgorithmMode) {
+                    // ★ 全24ジャンルの高度化アンカー
                     switch (genre) {
-                        // ★ Group 1: Probabilistic Anchors & A/B/A/C Structures
-                    case 0: case 1: // Techno, House
+                    case 0: case 1:
                         if (trk == 0 && (stepInBar % div == 0)) {
                             isAnchor = true;
-                            // Ghosting (Drop) at the end of Bar 2 (B) and Bar 4 (C)
                             if ((currentBarOfStep % 2 != 0) && beatInBar == num - 1) {
                                 if (random.nextInt(100) < 15) { isAnchor = false; isNegativeAnchor = true; cmplx = 0; }
                             }
@@ -524,74 +500,116 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
                         if (trk == 2 && (stepInBar % div == div / 2)) isAnchor = true;
                         break;
-                    case 2: // UK Garage
+                    case 2:
                         if (trk == 0) {
                             if (stepInBar == 0) isAnchor = true;
                             int barType = currentBarOfStep % 4;
-                            if (barType == 0 || barType == 2) { // Phrase A
+                            if (barType == 0 || barType == 2) {
                                 if (stepInBar == div * 2 + div / 2) isAnchor = true;
                             }
-                            else if (barType == 1) { // Phrase B
+                            else if (barType == 1) {
                                 if (stepInBar == div * 3 + div / 2) isAnchor = true;
                             }
-                            else { // Phrase C
+                            else {
                                 if (stepInBar == div + div / 2 || stepInBar == div * 3 + div / 2) isAnchor = true;
                             }
                         }
                         if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) { isAnchor = true; anchorVel = 90; }
                         if (trk == 2) {
                             if (stepInBar % div == div / 2) { isAnchor = true; anchorVel = 70; }
-                            // Occasional ghost note on the last 16th
                             if (stepInBar % div == div - 1 && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 50; }
                         }
                         break;
-                    case 4: case 7: // Trap, Dubstep
+                    case 4: case 7:
                         if (trk == 0) {
                             if (stepInBar == 0) isAnchor = true;
                             if (genre == 4 && stepInBar == div + div / 2) isAnchor = true;
                             if (genre == 7 && stepInBar == div * 2 + div / 2) isAnchor = true;
                         }
                         if ((trk == 1 || trk == 4) && stepInBar == div * 2) { isAnchor = true; anchorVel = 100; }
-                        if (genre == 4 && trk == 2) { // Trap Hats
-                            if (stepInBar % (div / 2) == 0) isAnchor = true;
-                            // Ratcheting probability on beat 4 of odd bars
-                            if ((currentBarOfStep % 2 != 0) && beatInBar == 3 && random.nextInt(100) < 50) {
-                                isAnchor = true; anchorVel = 80;
+                        if (genre == 4 && trk == 2) {
+                            if (stepInBar % (div > 1 ? div / 2 : 1) == 0) isAnchor = true;
+                            if ((currentBarOfStep % 2 != 0) && beatInBar == 3 && random.nextInt(100) < 50) { isAnchor = true; anchorVel = 80; }
+                        }
+                        break;
+                    case 3:
+                        if (trk == 0) {
+                            if (stepInBar == 0) isAnchor = true;
+                            if (currentBarOfStep % 2 == 0 && stepInBar == div * 2 + div / 2) isAnchor = true;
+                            if (currentBarOfStep % 2 != 0 && stepInBar == div * 3) isAnchor = true;
+                        }
+                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) { isAnchor = true; anchorVel = 90; }
+                        if (trk == 2 && stepInBar % div == 0) isAnchor = true;
+                        break;
+                    case 15: case 16:
+                        if (trk == 0) {
+                            if (stepInBar == 0) isAnchor = true;
+                            if (currentBarOfStep % 2 == 0 && stepInBar == div * 2 + div / 2) isAnchor = true;
+                            if (currentBarOfStep % 2 != 0 && stepInBar == div * 2 + div - 1) isAnchor = true;
+                        }
+                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                        if (trk == 2) {
+                            if (stepInBar % div == 0) isAnchor = true;
+                            else if (random.nextInt(100) < 30) { isAnchor = true; anchorVel = 40; }
+                        }
+                        break;
+                    case 17: case 18:
+                        if (trk == 0) {
+                            if (stepInBar == 0) isAnchor = true;
+                            if (stepInBar == div * 2 + div / 2 && random.nextInt(100) < 70) isAnchor = true;
+                        }
+                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                        break;
+                    case 8: case 12:
+                        if (trk == 0) {
+                            if (stepInBar == 0 || stepInBar == div * 2 + div / 2) isAnchor = true;
+                        }
+                        if (trk == 1 || trk == 4 || trk == 7) {
+                            if (stepInBar == 0 || stepInBar == div + div / 2 || stepInBar == div * 2 + div || stepInBar == div * 3 || stepInBar == div * 4) {
+                                isAnchor = true; anchorVel = 85;
+                            }
+                        }
+                        if (trk == 2) { if (stepInBar % div == 0) isAnchor = true; }
+                        break;
+                    case 9: case 10: case 13:
+                        if (trk == 0) { if (stepInBar % div == 0) isAnchor = true; }
+                        if (trk == 1 || trk == 4) {
+                            if (stepInBar == div - 1 || stepInBar == div * 2 + div / 2) isAnchor = true;
+                        }
+                        if (genre == 10 && (trk == 6 || trk == 7)) {
+                            if (currentBarOfStep % 2 != 0 && (stepInBar == div * 2 + div / 2 || stepInBar == div * 3 + div / 2)) {
+                                isAnchor = true; anchorVel = 100;
                             }
                         }
                         break;
-                    case 3: // DnB / Jungle
-                        if (trk == 0 && (stepInBar == 0 || stepInBar == div * 2 + div / 2)) isAnchor = true;
-                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                    case 11: case 14:
+                        if (trk == 0) {
+                            if (currentBarOfStep % 4 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 100; }
+                            else { isNegativeAnchor = true; cmplx = 0; }
+                        }
+                        if (trk >= 1 && trk <= 4) {
+                            if (stepInBar % (div * 2) == 0) { isAnchor = true; anchorVel = 70; }
+                        }
                         break;
-                    case 8: // Afrobeat
-                        if (trk == 0 && (stepInBar == 0 || stepInBar == div + div / 2 || stepInBar == div * 2 || stepInBar == div * 3 + div / 2)) isAnchor = true;
-                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                    case 19:
+                        if (trk == 0) {
+                            if (stepInBar == 0 || stepInBar == div * 3) isAnchor = true;
+                        }
+                        if (trk == 1 || trk == 4) {
+                            if (stepInBar == div * 2 || stepInBar == div * 4) isAnchor = true;
+                        }
+                        if (trk == 2) {
+                            if (stepInBar % div == 0) isAnchor = true;
+                            if (random.nextInt(100) < 20) { isAnchor = true; anchorVel = 50; }
+                        }
                         break;
-                    case 13: // Reggaeton
-                        if (trk == 0 && (stepInBar % div == 0)) isAnchor = true;
-                        if ((trk == 1 || trk == 4) && (stepInBar == div - 1 || stepInBar == div * 2 + div / 2)) isAnchor = true;
-                        break;
-                    case 14: // Gamelan
-                        if (trk == 0 && stepInBar == 0) isAnchor = true;
-                        if (trk == 1 && stepInBar == div * 4 && num > 4) isAnchor = true;
-                        if (trk >= 2 && (stepInBar % (div * 2) == 0)) isAnchor = true;
-                        break;
-                    case 15: case 18: // Funk / Hip Hop
-                        if (trk == 0 && (stepInBar == 0 || stepInBar == div * 2 + div / 2)) isAnchor = true;
-                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
-                        break;
-                    case 19: // Math Rock
-                        if (trk == 0 && (stepInBar == 0 || stepInBar == div * 3)) isAnchor = true;
-                        if ((trk == 1 || trk == 4) && (stepInBar == div * 2)) isAnchor = true;
-                        break;
-                    case 20: // Progressive Metal
+                    case 20:
                         if (trk == 0 && (stepInBar == 0 || stepInBar == div * 3 || stepInBar == div * 5)) isAnchor = true;
                         if (trk == 1 && (stepInBar == div * 2 || stepInBar == div * 4 || stepInBar == div * 6)) isAnchor = true;
                         if (trk == 2 && (stepInBar % (div > 1 ? div / 2 : 1) == 0)) { isAnchor = true; anchorVel = 70; }
                         if (trk == 3 && (stepInBar == div * 2 + (div > 1 ? div / 2 : 0) || stepInBar == div * 4 + (div > 1 ? div / 2 : 0))) { isAnchor = true; anchorVel = 85; }
                         break;
-                    case 21: // Minimalism
+                    case 21:
                         if (trk == 0 && (stepInBar % (div * 3) == 0)) isAnchor = true;
                         if (trk == 1 && ((stepInBar + div) % (div * 3) == 0)) isAnchor = true;
                         if (trk >= 2 && (stepInBar % 2 == 0)) isAnchor = true;
@@ -781,7 +799,7 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                             sampleVolume[trk] = velocity / 100.0f;
                         }
                         else {
-                            InstrumentPatch p = getPatch(isArp ? M_ArpPluck : def.trackPatches[trk]);
+                            InstrumentPatch p = getPatch(isArp ? M_ARP : def.trackPatches[trk]);
                             if (isArp) {
                                 int note = 60 + arpKey.load() + (trackOctaveDSP[trk] * 12) + scalePatterns[arpScale.load()][trackDegreeDSP[trk]];
                                 p.freq = 440.0f * std::pow(2.0f, (note - 69) / 12.0f);
