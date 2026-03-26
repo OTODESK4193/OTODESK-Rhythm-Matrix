@@ -71,7 +71,7 @@ static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = { {
         {2, 293.6f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 2500.0f, 2.0f, 1.2f, 1.0f},
         {2, 349.2f, 15.0f, 0.0f, 1.0f, 50.0f, 0.0f, 0, 3000.0f, 2.0f, 1.2f, 1.0f},
 
-        // ★ M_ArpPluck
+        // M_ArpPluck
         {1, 440.0f, 5.0f, 0.0f, 0.5f, 20.0f, 0.0f, 0, 2500.0f, 1.5f, 1.0f, 1.0f}
     } };
 
@@ -156,23 +156,24 @@ static const std::array<GenreDefinition, 24> genreTable = { {
       {K_Acoustic, S_Acoustic, H_Closed, H_Ride, S_Rim, P_TomM, P_TomL, H_Crash},
       {{2,3,4,0}, {2,3,4,0}, {4,5,6,0}, {3,4,5,0}, {4,6,8,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}},
       {0,0, 0,0, 0, 0, 0, 0}, {5,5, 5,5, 5, 5, 5, 5} },
-    { 7, 8, 140, 180, {"Heavy Kick", "Fat Snare", "Hi-Hat", "China", "Ghost Snr", "Low Tom", "Mid Tom", "High Tom"},
-      {K_Click, S_Fat, H_Closed, H_Metallic, S_Tight, P_TomL, P_TomM, P_TomH},
-      {{2,3,4,5}, {2,3,4,0}, {4,6,8,0}, {2,3,4,0}, {4,6,8,0}, {3,4,5,0}, {3,4,5,0}, {3,4,5,0}},
-      {0,0, 0,0, 0, 0, 0, 0}, {2,2, 2,2, 5, 5, 5, 5} },
-    { 12, 8, 140, 170, {"Clap 1", "Clap 2", "Marimba 1", "Marimba 2", "Woodblock", "Pulse", "Phase 1", "Phase 2"},
-      {S_Clap, S_Snap, F_Marimba, F_Marimba, P_Wood, K_Soft, S_Rim, S_Rim},
-      {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}},
-      {0,0, 0,0, 0, 0, -20, 20}, {0,0, 0,0, 0, 0, -20, 20} },
-    { 4, 4, 120, 150, {"Node C", "Node D", "Node F", "Node G", "Node A", "Node C^", "Node D^", "Node F^"},
-      {M_Pluck1, M_Pluck2, M_Pluck3, M_Pluck4, M_Pluck5, M_Pluck6, M_Pluck7, M_Pluck8},
-      {{2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}},
-      {0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0} },
-    { 4, 4, 120, 150, {"Chaos C", "Chaos D", "Chaos F", "Chaos G", "Chaos A", "Chaos C^", "Chaos D^", "Chaos F^"},
-      {M_Pluck1, M_Pluck2, M_Pluck3, M_Pluck4, M_Pluck5, M_Pluck6, M_Pluck7, M_Pluck8},
-      {{1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}},
-      {-20,-20,-20,-20,-20,-20,-20,-20}, {20,20,20,20,20,20,20,20} }
-} };
+      // ★ 修正箇所: Progressive Metal (Genre 20) Portnoy Style / Monster Kit & Tempo Adjusted
+      { 13, 8, 90, 115, {"Kick (Click)", "Snare (Fat)", "Max Stax", "Hat Bark", "High Tom", "Mid Tom", "Floor Tom", "Splash/China"},
+        {K_Click, S_Fat, H_Metallic, H_Open, P_TomH, P_TomM, P_TomL, H_Crash},
+        {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}},
+        {0, 2, 0, 4, 1, 2, 3, 0}, {0, 2, 0, 6, 1, 2, 3, 0} },
+      { 12, 8, 140, 170, {"Clap 1", "Clap 2", "Marimba 1", "Marimba 2", "Woodblock", "Pulse", "Phase 1", "Phase 2"},
+        {S_Clap, S_Snap, F_Marimba, F_Marimba, P_Wood, K_Soft, S_Rim, S_Rim},
+        {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}},
+        {0,0, 0,0, 0, 0, -20, 20}, {0,0, 0,0, 0, 0, -20, 20} },
+      { 4, 4, 120, 150, {"Node C", "Node D", "Node F", "Node G", "Node A", "Node C^", "Node D^", "Node F^"},
+        {M_Pluck1, M_Pluck2, M_Pluck3, M_Pluck4, M_Pluck5, M_Pluck6, M_Pluck7, M_Pluck8},
+        {{2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}},
+        {0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0} },
+      { 4, 4, 120, 150, {"Chaos C", "Chaos D", "Chaos F", "Chaos G", "Chaos A", "Chaos C^", "Chaos D^", "Chaos F^"},
+        {M_Pluck1, M_Pluck2, M_Pluck3, M_Pluck4, M_Pluck5, M_Pluck6, M_Pluck7, M_Pluck8},
+        {{1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}},
+        {-20,-20,-20,-20,-20,-20,-20,-20}, {20,20,20,20,20,20,20,20} }
+  } };
 
 AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -247,7 +248,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     bool isMono = arpMono.load();
     int curScale = arpScale.load();
 
-    // ★ テンポ・ロックとArpModeでの固定
+    // テンポ・ロックとArpModeでの固定
     if (!tempoLocked.load() && !isSyncEnabled.load() && !isArp) {
         int newBpm = random.nextInt(juce::Range<int>(def.minTempo, def.maxTempo + 1));
         internalTempo.store((double)newBpm);
@@ -256,19 +257,30 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     int num = timeSigNumerator.load();
     int den = timeSigDenominator.load();
 
-    if (!isArp && genre == 6) {
-        const int idmSigs[6][2] = { {4,4}, {5,4}, {5,8}, {7,8}, {7,16}, {15,16} };
-        int idx = random.nextInt(6);
-        num = idmSigs[idx][0];
-        den = idmSigs[idx][1];
-        timeSigNumerator.store(num);
-        timeSigDenominator.store(den);
+    if (!isArp) {
+        if (genre == 6) {
+            const int idmSigs[6][2] = { {4,4}, {5,4}, {5,8}, {7,8}, {7,16}, {15,16} };
+            int idx = random.nextInt(6);
+            num = idmSigs[idx][0];
+            den = idmSigs[idx][1];
+            timeSigNumerator.store(num);
+            timeSigDenominator.store(den);
+        }
+        // ★ 修正箇所: Progressive Metal (Genre 20) 変拍子の強制抽出
+        else if (genre == 20) {
+            const int progSigs[6][2] = { {13,8}, {15,16}, {19,16}, {7,8}, {11,8}, {21,16} };
+            int idx = random.nextInt(6);
+            num = progSigs[idx][0];
+            den = progSigs[idx][1];
+            timeSigNumerator.store(num);
+            timeSigDenominator.store(den);
+        }
     }
 
     int maxDiv = (den == 16) ? 2 : ((den == 8) ? 4 : 8);
     int bars = globalBarCount.load();
 
-    // ★ Arp Mode 音楽理論・専用ジェネレーター
+    // Arp Mode 音楽理論・専用ジェネレーター
     if (isArp) {
         int arpPreset = currentGenre.load();
         std::vector<int> usedNotes;
@@ -329,7 +341,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             bool isFillPortion = (fillBar > 0) && (currentBarOfStep == (fillBar - 1)) && (beatInBar >= num - 2);
 
             bool stepActive = false;
-            // ★ Euclidean Arp 修正 (毎回パターンが変化するように)
             if (arpPreset == 8) {
                 int k = (n * (20 + random.nextInt(60))) / 100;
                 int eucOffset = random.nextInt(juce::jmax(1, n));
@@ -402,6 +413,8 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 if (fillBar > 0 && !isAlgorithmMode && !isSpecialEnsemble) {
                     if ((genre == 4 || genre == 7) && trk == 2) newDiv = maxDiv;
                     if ((genre == 0 || genre == 1) && (trk == 1 || trk == 4)) newDiv = maxDiv;
+                    // ★ 修正箇所: Genre 20 RLKK フィル用解像度の固定
+                    if (genre == 20 && (trk == 0 || trk == 1 || trk == 4)) newDiv = maxDiv;
                 }
 
                 if (newDiv > maxDiv) newDiv = maxDiv;
@@ -412,12 +425,20 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 }
             }
 
-            // ★ エントロピーの変化
+            // エントロピーの変化
             if (!trackEntrpLocked[trk]) {
                 trackEntropy[trk] = random.nextInt(juce::Range<int>(10, 50));
             }
+            // ★ 修正箇所: Progressive Metal 身体的レイテンシ決定論的マッピング
             if (!trackShiftLocked[trk]) {
-                trackShiftUI[trk] = random.nextInt(juce::Range<int>(def.shiftMin[trk], def.shiftMax[trk] + 1));
+                if (genre == 20) {
+                    int baseShift = def.shiftMin[trk];
+                    int shiftRange = def.shiftMax[trk] - def.shiftMin[trk];
+                    trackShiftUI[trk] = baseShift + (shiftRange > 0 ? random.nextInt(shiftRange + 1) : 0);
+                }
+                else {
+                    trackShiftUI[trk] = random.nextInt(juce::Range<int>(def.shiftMin[trk], def.shiftMax[trk] + 1));
+                }
             }
 
             int div = trackDivisionsUI[trk];
@@ -455,9 +476,24 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if (trk == 0) { isNegativeAnchor = true; cmplx = 0; }
                     }
                     else if (genre == 19 || genre == 20) {
-                        if (trk >= 5) { isAnchor = true; anchorVel = 90; }
-                        if (trk == 0) { isAnchor = true; anchorVel = 100; }
-                        if (trk == 1 || trk == 2) { isNegativeAnchor = true; cmplx = 0; }
+                        // ★ 修正箇所: Genre 20 RLKK 2-up 2-down フィルロジック
+                        if (genre == 20) {
+                            int fillStep = stepInBar - (div * (num - 2));
+                            if (fillStep >= 0) {
+                                int seqIndex = fillStep % 4; // R(Snare), L(HighTom), K(Kick), K(Kick)
+                                isNegativeAnchor = true;
+                                cmplx = 0;
+                                if (seqIndex == 0 && trk == 1) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
+                                else if (seqIndex == 1 && trk == 4) { isAnchor = true; anchorVel = 90; isNegativeAnchor = false; }
+                                else if (seqIndex == 2 && trk == 0) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
+                                else if (seqIndex == 3 && trk == 0) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
+                            }
+                        }
+                        else {
+                            if (trk >= 5) { isAnchor = true; anchorVel = 90; }
+                            if (trk == 0) { isAnchor = true; anchorVel = 100; }
+                            if (trk == 1 || trk == 2) { isNegativeAnchor = true; cmplx = 0; }
+                        }
                     }
                     else if (genre == 14 || genre == 21) {
                         if (genre == 14) { isAnchor = (stepInBar % div == 0); cmplx = 0; }
@@ -508,9 +544,12 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if (trk == 0 && (stepInBar == 0 || stepInBar == div * 3)) isAnchor = true;
                         if ((trk == 1 || trk == 4) && (stepInBar == div * 2)) isAnchor = true;
                         break;
+                        // ★ 修正箇所: Progressive Metal (Genre 20) Portnoy Style Anchors
                     case 20:
                         if (trk == 0 && (stepInBar == 0 || stepInBar == div * 3 || stepInBar == div * 5)) isAnchor = true;
-                        if ((trk == 1 || trk == 4) && (stepInBar == div * 3 || stepInBar == div * 5)) isAnchor = true;
+                        if (trk == 1 && (stepInBar == div * 2 || stepInBar == div * 4 || stepInBar == div * 6)) isAnchor = true;
+                        if (trk == 2 && (stepInBar % (div > 1 ? div / 2 : 1) == 0)) { isAnchor = true; anchorVel = 70; }
+                        if (trk == 3 && (stepInBar == div * 2 + (div > 1 ? div / 2 : 0) || stepInBar == div * 4 + (div > 1 ? div / 2 : 0))) { isAnchor = true; anchorVel = 85; }
                         break;
                     case 21:
                         if (trk == 0 && (stepInBar % (div * 3) == 0)) isAnchor = true;

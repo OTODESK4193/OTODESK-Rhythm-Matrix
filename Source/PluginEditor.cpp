@@ -359,21 +359,9 @@ void AIDrumMachineAudioProcessorEditor::updateTrackNames() {
     }
 }
 
+// ★ 修正箇所: 拍子の分子（Numerator）の最大値を32に拡張
 void AIDrumMachineAudioProcessorEditor::updateTimeSigNumMenu() {
-    int den = audioProcessor.timeSigDenominator.load();
-    int maxNum = 7;
-    if (den == 8) maxNum = 9;
-    else if (den == 16) maxNum = 17;
-
-    int currentGenre = audioProcessor.currentGenre.load();
-    if (!audioProcessor.arpMode.load()) {
-        const auto& def = AIDrumMachineAudioProcessor::getGenreDef(currentGenre);
-        if (def.defaultNum > maxNum) maxNum = def.defaultNum;
-        if (currentGenre == 6) maxNum = 17;
-    }
-    else {
-        maxNum = 17;
-    }
+    int maxNum = 32; // 分母に関わらず常に最大32まで選択可能にする
 
     int currentNum = audioProcessor.timeSigNumerator.load();
     if (currentNum > maxNum) {
