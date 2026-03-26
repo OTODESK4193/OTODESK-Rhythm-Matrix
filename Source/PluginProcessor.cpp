@@ -156,24 +156,23 @@ static const std::array<GenreDefinition, 24> genreTable = { {
       {K_Acoustic, S_Acoustic, H_Closed, H_Ride, S_Rim, P_TomM, P_TomL, H_Crash},
       {{2,3,4,0}, {2,3,4,0}, {4,5,6,0}, {3,4,5,0}, {4,6,8,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}},
       {0,0, 0,0, 0, 0, 0, 0}, {5,5, 5,5, 5, 5, 5, 5} },
-      // ★ 修正箇所: Progressive Metal (Genre 20) Portnoy Style / Monster Kit & Tempo Adjusted
-      { 13, 8, 90, 115, {"Kick (Click)", "Snare (Fat)", "Max Stax", "Hat Bark", "High Tom", "Mid Tom", "Floor Tom", "Splash/China"},
-        {K_Click, S_Fat, H_Metallic, H_Open, P_TomH, P_TomM, P_TomL, H_Crash},
-        {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}},
-        {0, 2, 0, 4, 1, 2, 3, 0}, {0, 2, 0, 6, 1, 2, 3, 0} },
-      { 12, 8, 140, 170, {"Clap 1", "Clap 2", "Marimba 1", "Marimba 2", "Woodblock", "Pulse", "Phase 1", "Phase 2"},
-        {S_Clap, S_Snap, F_Marimba, F_Marimba, P_Wood, K_Soft, S_Rim, S_Rim},
-        {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}},
-        {0,0, 0,0, 0, 0, -20, 20}, {0,0, 0,0, 0, 0, -20, 20} },
-      { 4, 4, 120, 150, {"Node C", "Node D", "Node F", "Node G", "Node A", "Node C^", "Node D^", "Node F^"},
-        {M_Pluck1, M_Pluck2, M_Pluck3, M_Pluck4, M_Pluck5, M_Pluck6, M_Pluck7, M_Pluck8},
-        {{2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}},
-        {0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0} },
-      { 4, 4, 120, 150, {"Chaos C", "Chaos D", "Chaos F", "Chaos G", "Chaos A", "Chaos C^", "Chaos D^", "Chaos F^"},
-        {M_Pluck1, M_Pluck2, M_Pluck3, M_Pluck4, M_Pluck5, M_Pluck6, M_Pluck7, M_Pluck8},
-        {{1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}},
-        {-20,-20,-20,-20,-20,-20,-20,-20}, {20,20,20,20,20,20,20,20} }
-  } };
+    { 13, 8, 90, 115, {"Kick (Click)", "Snare (Fat)", "Max Stax", "Hat Bark", "High Tom", "Mid Tom", "Floor Tom", "Splash/China"},
+      {K_Click, S_Fat, H_Metallic, H_Open, P_TomH, P_TomM, P_TomL, H_Crash},
+      {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}},
+      {0, 2, 0, 4, 1, 2, 3, 0}, {0, 2, 0, 6, 1, 2, 3, 0} },
+    { 12, 8, 140, 170, {"Clap 1", "Clap 2", "Marimba 1", "Marimba 2", "Woodblock", "Pulse", "Phase 1", "Phase 2"},
+      {S_Clap, S_Snap, F_Marimba, F_Marimba, P_Wood, K_Soft, S_Rim, S_Rim},
+      {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}},
+      {0,0, 0,0, 0, 0, -20, 20}, {0,0, 0,0, 0, 0, -20, 20} },
+    { 4, 4, 120, 150, {"Node C", "Node D", "Node F", "Node G", "Node A", "Node C^", "Node D^", "Node F^"},
+      {M_Pluck1, M_Pluck2, M_Pluck3, M_Pluck4, M_Pluck5, M_Pluck6, M_Pluck7, M_Pluck8},
+      {{2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}},
+      {0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0} },
+    { 4, 4, 120, 150, {"Chaos C", "Chaos D", "Chaos F", "Chaos G", "Chaos A", "Chaos C^", "Chaos D^", "Chaos F^"},
+      {M_Pluck1, M_Pluck2, M_Pluck3, M_Pluck4, M_Pluck5, M_Pluck6, M_Pluck7, M_Pluck8},
+      {{1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}},
+      {-20,-20,-20,-20,-20,-20,-20,-20}, {20,20,20,20,20,20,20,20} }
+} };
 
 AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -248,7 +247,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     bool isMono = arpMono.load();
     int curScale = arpScale.load();
 
-    // テンポ・ロックとArpModeでの固定
     if (!tempoLocked.load() && !isSyncEnabled.load() && !isArp) {
         int newBpm = random.nextInt(juce::Range<int>(def.minTempo, def.maxTempo + 1));
         internalTempo.store((double)newBpm);
@@ -266,7 +264,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             timeSigNumerator.store(num);
             timeSigDenominator.store(den);
         }
-        // ★ 修正箇所: Progressive Metal (Genre 20) 変拍子の強制抽出
         else if (genre == 20) {
             const int progSigs[6][2] = { {13,8}, {15,16}, {19,16}, {7,8}, {11,8}, {21,16} };
             int idx = random.nextInt(6);
@@ -280,7 +277,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     int maxDiv = (den == 16) ? 2 : ((den == 8) ? 4 : 8);
     int bars = globalBarCount.load();
 
-    // Arp Mode 音楽理論・専用ジェネレーター
     if (isArp) {
         int arpPreset = currentGenre.load();
         std::vector<int> usedNotes;
@@ -295,7 +291,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 int attempts = 0;
                 bool unique = false;
 
-                // 重複音名の排除とオクターブランダマイズ
                 while (!unique && attempts < 50) {
                     switch (arpPreset) {
                     case 0: degree = (trk * 2) % scaleLengths[curScale]; octave = (trk < 4) ? -1 : 0; break;
@@ -413,7 +408,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 if (fillBar > 0 && !isAlgorithmMode && !isSpecialEnsemble) {
                     if ((genre == 4 || genre == 7) && trk == 2) newDiv = maxDiv;
                     if ((genre == 0 || genre == 1) && (trk == 1 || trk == 4)) newDiv = maxDiv;
-                    // ★ 修正箇所: Genre 20 RLKK フィル用解像度の固定
                     if (genre == 20 && (trk == 0 || trk == 1 || trk == 4)) newDiv = maxDiv;
                 }
 
@@ -425,11 +419,9 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 }
             }
 
-            // エントロピーの変化
             if (!trackEntrpLocked[trk]) {
                 trackEntropy[trk] = random.nextInt(juce::Range<int>(10, 50));
             }
-            // ★ 修正箇所: Progressive Metal 身体的レイテンシ決定論的マッピング
             if (!trackShiftLocked[trk]) {
                 if (genre == 20) {
                     int baseShift = def.shiftMin[trk];
@@ -461,38 +453,52 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 int cmplx = trackComplexity[trk];
                 int entrp = trackEntropy[trk];
 
+                // ★ フィル・タイポロジー (Fill Typology) の適用
                 if (isFillPortion && !isAlgorithmMode) {
-                    if (genre == 0 || genre == 1) {
-                        if (trk == 0) { isNegativeAnchor = true; cmplx = 0; }
-                        if (trk == 1 || trk == 4) { isAnchor = true; anchorVel = 50 + (int)(50.0f * ((float)(stepInBar % (div * 2)) / (float)(div * 2))); }
-                    }
-                    else if (genre == 4 || genre == 7) {
-                        if (trk == 2) { isAnchor = true; anchorVel = 80; }
-                        else if (trk == 1 && beatInBar == num - 1 && (stepInBar % (div / 2) == 0)) { isAnchor = true; }
-                        else if (trk == 0) { isNegativeAnchor = true; cmplx = 0; }
-                    }
-                    else if (genre == 2 || genre == 5) {
-                        if (trk >= 5) { cmplx = 80; }
-                        if (trk == 0) { isNegativeAnchor = true; cmplx = 0; }
-                    }
-                    else if (genre == 19 || genre == 20) {
-                        // ★ 修正箇所: Genre 20 RLKK 2-up 2-down フィルロジック
-                        if (genre == 20) {
-                            int fillStep = stepInBar - (div * (num - 2));
-                            if (fillStep >= 0) {
-                                int seqIndex = fillStep % 4; // R(Snare), L(HighTom), K(Kick), K(Kick)
-                                isNegativeAnchor = true;
-                                cmplx = 0;
-                                if (seqIndex == 0 && trk == 1) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
-                                else if (seqIndex == 1 && trk == 4) { isAnchor = true; anchorVel = 90; isNegativeAnchor = false; }
-                                else if (seqIndex == 2 && trk == 0) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
-                                else if (seqIndex == 3 && trk == 0) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
+                    // ★ Group 1: Type B (Syncopated Break & Drop)
+                    if (genre == 0 || genre == 1 || genre == 4 || genre == 7) {
+                        bool isDropZone = (genre == 4 || genre == 7) ? (beatInBar >= num - 2) : (beatInBar >= num - 1);
+                        if (isDropZone) {
+                            if (trk == 0 || trk == 5 || trk == 6) { // Kick and SubBass drop out
+                                isNegativeAnchor = true; cmplx = 0;
+                            }
+                            else if (trk == 1 || trk == 7) { // Snare or Noise crescendo
+                                isAnchor = true;
+                                float prog = (float)(stepInBar % (div * (isDropZone ? 2 : 1))) / (float)(div * (isDropZone ? 2 : 1));
+                                anchorVel = 40 + (int)(60.0f * prog);
                             }
                         }
                         else {
-                            if (trk >= 5) { isAnchor = true; anchorVel = 90; }
-                            if (trk == 0) { isAnchor = true; anchorVel = 100; }
-                            if (trk == 1 || trk == 2) { isNegativeAnchor = true; cmplx = 0; }
+                            if (trk == 1 || trk == 4) { isAnchor = true; anchorVel = 70; }
+                        }
+                    }
+                    else if (genre == 2) { // UK Garage Drop Break
+                        isNegativeAnchor = true; cmplx = 0;
+                        if (trk == 1 || trk == 4) {
+                            // Drop everything, clap on the last off-beat
+                            if (beatInBar == num - 1 && stepInBar == (div * num) - (div / 2)) {
+                                isAnchor = true; anchorVel = 100; isNegativeAnchor = false;
+                            }
+                        }
+                    }
+                    else if (genre == 5) { // Footwork / Juke
+                        if (trk >= 5) { cmplx = 80; }
+                        if (trk == 0) { isNegativeAnchor = true; cmplx = 0; }
+                    }
+                    else if (genre == 19) { // Math Rock
+                        if (trk >= 5) { isAnchor = true; anchorVel = 90; }
+                        if (trk == 0) { isAnchor = true; anchorVel = 100; }
+                        if (trk == 1 || trk == 2) { isNegativeAnchor = true; cmplx = 0; }
+                    }
+                    else if (genre == 20) { // Progressive Metal RLKK
+                        int fillStep = stepInBar - (div * (num - 2));
+                        if (fillStep >= 0) {
+                            int seqIndex = fillStep % 4;
+                            isNegativeAnchor = true; cmplx = 0;
+                            if (seqIndex == 0 && trk == 1) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
+                            else if (seqIndex == 1 && trk == 4) { isAnchor = true; anchorVel = 90; isNegativeAnchor = false; }
+                            else if (seqIndex == 2 && trk == 0) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
+                            else if (seqIndex == 3 && trk == 0) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
                         }
                     }
                     else if (genre == 14 || genre == 21) {
@@ -506,52 +512,86 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 }
                 else if (!isAlgorithmMode) {
                     switch (genre) {
-                    case 0: case 1:
-                        if (trk == 0 && (stepInBar % div == 0)) isAnchor = true;
+                        // ★ Group 1: Probabilistic Anchors & A/B/A/C Structures
+                    case 0: case 1: // Techno, House
+                        if (trk == 0 && (stepInBar % div == 0)) {
+                            isAnchor = true;
+                            // Ghosting (Drop) at the end of Bar 2 (B) and Bar 4 (C)
+                            if ((currentBarOfStep % 2 != 0) && beatInBar == num - 1) {
+                                if (random.nextInt(100) < 15) { isAnchor = false; isNegativeAnchor = true; cmplx = 0; }
+                            }
+                        }
                         if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
                         if (trk == 2 && (stepInBar % div == div / 2)) isAnchor = true;
                         break;
-                    case 2:
-                        if (trk == 0 && (stepInBar == 0 || stepInBar == div + div / 2 || stepInBar == div * 3 + div / 2)) isAnchor = true;
-                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
+                    case 2: // UK Garage
+                        if (trk == 0) {
+                            if (stepInBar == 0) isAnchor = true;
+                            int barType = currentBarOfStep % 4;
+                            if (barType == 0 || barType == 2) { // Phrase A
+                                if (stepInBar == div * 2 + div / 2) isAnchor = true;
+                            }
+                            else if (barType == 1) { // Phrase B
+                                if (stepInBar == div * 3 + div / 2) isAnchor = true;
+                            }
+                            else { // Phrase C
+                                if (stepInBar == div + div / 2 || stepInBar == div * 3 + div / 2) isAnchor = true;
+                            }
+                        }
+                        if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) { isAnchor = true; anchorVel = 90; }
+                        if (trk == 2) {
+                            if (stepInBar % div == div / 2) { isAnchor = true; anchorVel = 70; }
+                            // Occasional ghost note on the last 16th
+                            if (stepInBar % div == div - 1 && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 50; }
+                        }
                         break;
-                    case 3:
+                    case 4: case 7: // Trap, Dubstep
+                        if (trk == 0) {
+                            if (stepInBar == 0) isAnchor = true;
+                            if (genre == 4 && stepInBar == div + div / 2) isAnchor = true;
+                            if (genre == 7 && stepInBar == div * 2 + div / 2) isAnchor = true;
+                        }
+                        if ((trk == 1 || trk == 4) && stepInBar == div * 2) { isAnchor = true; anchorVel = 100; }
+                        if (genre == 4 && trk == 2) { // Trap Hats
+                            if (stepInBar % (div / 2) == 0) isAnchor = true;
+                            // Ratcheting probability on beat 4 of odd bars
+                            if ((currentBarOfStep % 2 != 0) && beatInBar == 3 && random.nextInt(100) < 50) {
+                                isAnchor = true; anchorVel = 80;
+                            }
+                        }
+                        break;
+                    case 3: // DnB / Jungle
                         if (trk == 0 && (stepInBar == 0 || stepInBar == div * 2 + div / 2)) isAnchor = true;
                         if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
                         break;
-                    case 4: case 7:
-                        if (trk == 0 && (stepInBar == 0 || stepInBar == div + div / 2)) isAnchor = true;
-                        if ((trk == 1 || trk == 4) && stepInBar == div * 2) isAnchor = true;
-                        break;
-                    case 8:
+                    case 8: // Afrobeat
                         if (trk == 0 && (stepInBar == 0 || stepInBar == div + div / 2 || stepInBar == div * 2 || stepInBar == div * 3 + div / 2)) isAnchor = true;
                         if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
                         break;
-                    case 13:
+                    case 13: // Reggaeton
                         if (trk == 0 && (stepInBar % div == 0)) isAnchor = true;
                         if ((trk == 1 || trk == 4) && (stepInBar == div - 1 || stepInBar == div * 2 + div / 2)) isAnchor = true;
                         break;
-                    case 14:
+                    case 14: // Gamelan
                         if (trk == 0 && stepInBar == 0) isAnchor = true;
                         if (trk == 1 && stepInBar == div * 4 && num > 4) isAnchor = true;
                         if (trk >= 2 && (stepInBar % (div * 2) == 0)) isAnchor = true;
                         break;
-                    case 15: case 18:
+                    case 15: case 18: // Funk / Hip Hop
                         if (trk == 0 && (stepInBar == 0 || stepInBar == div * 2 + div / 2)) isAnchor = true;
                         if ((trk == 1 || trk == 4) && (stepInBar == div || stepInBar == div * 3)) isAnchor = true;
                         break;
-                    case 19:
+                    case 19: // Math Rock
                         if (trk == 0 && (stepInBar == 0 || stepInBar == div * 3)) isAnchor = true;
                         if ((trk == 1 || trk == 4) && (stepInBar == div * 2)) isAnchor = true;
                         break;
-                        // ★ 修正箇所: Progressive Metal (Genre 20) Portnoy Style Anchors
-                    case 20:
+                    case 20: // Progressive Metal
                         if (trk == 0 && (stepInBar == 0 || stepInBar == div * 3 || stepInBar == div * 5)) isAnchor = true;
                         if (trk == 1 && (stepInBar == div * 2 || stepInBar == div * 4 || stepInBar == div * 6)) isAnchor = true;
                         if (trk == 2 && (stepInBar % (div > 1 ? div / 2 : 1) == 0)) { isAnchor = true; anchorVel = 70; }
                         if (trk == 3 && (stepInBar == div * 2 + (div > 1 ? div / 2 : 0) || stepInBar == div * 4 + (div > 1 ? div / 2 : 0))) { isAnchor = true; anchorVel = 85; }
                         break;
-                    case 21:
+                    case 21: // Minimalism
                         if (trk == 0 && (stepInBar % (div * 3) == 0)) isAnchor = true;
                         if (trk == 1 && ((stepInBar + div) % (div * 3) == 0)) isAnchor = true;
                         if (trk >= 2 && (stepInBar % 2 == 0)) isAnchor = true;
