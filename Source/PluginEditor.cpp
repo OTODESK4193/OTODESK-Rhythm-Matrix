@@ -7,7 +7,7 @@
 AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachineAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
-    setSize(1080, 520); // GUI幅を1080に拡張
+    setSize(1080, 520); // GUI幅1080
 
     addAndMakeVisible(syncButton); addAndMakeVisible(playButton); addAndMakeVisible(stopButton); addAndMakeVisible(tempoLabel);
     syncButton.setToggleState(audioProcessor.isSyncEnabled.load(), juce::dontSendNotification);
@@ -35,7 +35,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     tabSeqButton.onClick = [this] { currentView = SequencerView; updateViewVisibility(); resized(); repaint(); };
     tabSetupButton.onClick = [this] { currentView = Setup1View; updateViewVisibility(); resized(); repaint(); };
     tabSetup2Button.onClick = [this] { currentView = Setup2View; updateViewVisibility(); resized(); repaint(); };
-    // ★ Tuningタブのクリックイベント
     tabTuningButton.onClick = [this] { currentView = TuningView; updateTuningUIFromProcessor(); updateViewVisibility(); resized(); repaint(); };
 
     addAndMakeVisible(btnClearAll);
@@ -181,7 +180,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         btnPattern[i].setButtonText("Pat " + juce::String(i + 1));
         btnPattern[i].setTriggeredOnMouseDown(true);
         btnPattern[i].onClick = [this, i] {
-            // [既存のPatternセーブ・ロード処理を維持]
             auto mods = juce::ModifierKeys::getCurrentModifiers();
             if (mods.isPopupMenu()) {
                 if (audioProcessor.isPatternSaved[i]) {
@@ -306,6 +304,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     setupNumBox(tuningTempoMin, [this](int v) { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tempo.min = v; });
     setupNumBox(tuningTempoMax, [this](int v) { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tempo.max = v; });
     addChildComponent(tuningTempoGen);
+    tuningTempoGen.setButtonText("Gen");
     tuningTempoGen.onClick = [this] { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tempoGenEnabled = tuningTempoGen.getToggleState(); };
 
     const char* tsLabels[8] = { "4/4", "3/4", "5/4", "7/8", "12/8", "13/8", "15/16", "5/8" };
@@ -472,6 +471,12 @@ void AIDrumMachineAudioProcessorEditor::updateViewVisibility() {
     bool isS2 = (currentView == Setup2View);
     bool isTuning = (currentView == TuningView);
 
+    // ★ タブの点灯処理
+    tabSeqButton.setColour(juce::TextButton::buttonColourId, isSeq ? juce::Colours::orange : juce::Colours::darkgrey);
+    tabSetupButton.setColour(juce::TextButton::buttonColourId, isS1 ? juce::Colours::orange : juce::Colours::darkgrey);
+    tabSetup2Button.setColour(juce::TextButton::buttonColourId, isS2 ? juce::Colours::orange : juce::Colours::darkgrey);
+    tabTuningButton.setColour(juce::TextButton::buttonColourId, isTuning ? juce::Colours::orange : juce::Colours::darkgrey);
+
     btnClearAll.setVisible(isSeq);
 
     arpKeyMenu.setVisible(isS2);
@@ -558,11 +563,10 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     btnTempoLock.setBounds(row1.removeFromLeft(25).reduced(2));
     row1.removeFromLeft(10);
 
-    // ★ タブボタンの配置 (TUNINGタブ追加)
+    // SEQUENCER / SETUP 1 / SETUP 2 のタブ
     tabSeqButton.setBounds(row1.removeFromLeft(90).reduced(2));
     tabSetupButton.setBounds(row1.removeFromLeft(90).reduced(2));
     tabSetup2Button.setBounds(row1.removeFromLeft(90).reduced(2));
-    tabTuningButton.setBounds(row1.removeFromLeft(90).reduced(2));
 
     row1.removeFromLeft(10); btnClearAll.setBounds(row1.removeFromLeft(80).reduced(2));
 
@@ -581,7 +585,11 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     styleMenu.setBounds(row2.removeFromLeft(200)); row2.removeFromLeft(10);
     fillBarMenu.setBounds(row2.removeFromLeft(100)); row2.removeFromLeft(10);
     btnAutoFollow.setBounds(row2.removeFromLeft(70)); row2.removeFromLeft(10);
+
+    // ★ Arp Mode と TUNING タブを綺麗に配置
     btnArpMode.setBounds(row2.removeFromLeft(80));
+    row2.removeFromLeft(10);
+    tabTuningButton.setBounds(row2.removeFromLeft(80));
 
     row2.removeFromRight(10);
     barCountMenu.setBounds(row2.removeFromRight(80).reduced(2));
@@ -607,18 +615,24 @@ void AIDrumMachineAudioProcessorEditor::resized() {
 
     if (currentView == TuningView) {
         lockArea = juce::Rectangle<int>(); midiDragArea = juce::Rectangle<int>();
-        auto topTuningRow = bottomAreaInt.removeFromTop(40);
 
-        topTuningRow.removeFromLeft(10);
+        // ★ Tuning用のヘッダー行 (Tempo, Time Sigs, Fills)
+        auto topTuningRow = bottomAreaInt.removeFromTop(30);
+
+        topTuningRow.removeFromLeft(120);
         tuningTempoMin.setBounds(topTuningRow.removeFromLeft(40).reduced(2));
         tuningTempoMax.setBounds(topTuningRow.removeFromLeft(40).reduced(2));
         tuningTempoGen.setBounds(topTuningRow.removeFromLeft(50).reduced(2));
 
-        topTuningRow.removeFromLeft(30);
+        topTuningRow.removeFromLeft(10);
+        topTuningRow.removeFromLeft(70);
         for (int i = 0; i < 8; ++i) tuningTsBtns[i].setBounds(topTuningRow.removeFromLeft(50).reduced(2));
 
-        topTuningRow.removeFromLeft(30);
+        topTuningRow.removeFromLeft(10);
+        topTuningRow.removeFromLeft(40);
         for (int i = 0; i < 4; ++i) tuningFillBtns[i].setBounds(topTuningRow.removeFromLeft(60).reduced(2));
+
+        bottomAreaInt.removeFromTop(20); // 列タイトル用の余白
 
         sampleArea = bottomAreaInt.removeFromLeft(110);
         auto setupControls = bottomAreaInt;
@@ -628,14 +642,18 @@ void AIDrumMachineAudioProcessorEditor::resized() {
             trackNameLabels[idx].setBounds(sampleArea.withY(sampleArea.getY() + row * cellH).withHeight(cellH).reduced(2));
             auto ctrlRow = setupControls.withY(setupControls.getY() + row * cellH).withHeight(cellH).reduced(2);
 
-            ctrlRow.removeFromLeft(20);
-            tuningDivMin[idx].setBounds(ctrlRow.removeFromLeft(30)); tuningDivMax[idx].setBounds(ctrlRow.removeFromLeft(30)); tuningDivGen[idx].setBounds(ctrlRow.removeFromLeft(40));
-            ctrlRow.removeFromLeft(30);
-            tuningCmplxMin[idx].setBounds(ctrlRow.removeFromLeft(30)); tuningCmplxMax[idx].setBounds(ctrlRow.removeFromLeft(30)); tuningCmplxGen[idx].setBounds(ctrlRow.removeFromLeft(40));
-            ctrlRow.removeFromLeft(30);
-            tuningEntrpMin[idx].setBounds(ctrlRow.removeFromLeft(30)); tuningEntrpMax[idx].setBounds(ctrlRow.removeFromLeft(30)); tuningEntrpGen[idx].setBounds(ctrlRow.removeFromLeft(40));
-            ctrlRow.removeFromLeft(30);
-            tuningShiftMin[idx].setBounds(ctrlRow.removeFromLeft(40)); tuningShiftMax[idx].setBounds(ctrlRow.removeFromLeft(40)); tuningShiftGen[idx].setBounds(ctrlRow.removeFromLeft(40));
+            // 各ブロック150pxで整列
+            auto divBlock = ctrlRow.removeFromLeft(150); divBlock.removeFromLeft(10);
+            tuningDivMin[idx].setBounds(divBlock.removeFromLeft(40).reduced(2)); tuningDivMax[idx].setBounds(divBlock.removeFromLeft(40).reduced(2)); tuningDivGen[idx].setBounds(divBlock.removeFromLeft(50).reduced(2));
+
+            auto cmplxBlock = ctrlRow.removeFromLeft(150); cmplxBlock.removeFromLeft(10);
+            tuningCmplxMin[idx].setBounds(cmplxBlock.removeFromLeft(40).reduced(2)); tuningCmplxMax[idx].setBounds(cmplxBlock.removeFromLeft(40).reduced(2)); tuningCmplxGen[idx].setBounds(cmplxBlock.removeFromLeft(50).reduced(2));
+
+            auto entrpBlock = ctrlRow.removeFromLeft(150); entrpBlock.removeFromLeft(10);
+            tuningEntrpMin[idx].setBounds(entrpBlock.removeFromLeft(40).reduced(2)); tuningEntrpMax[idx].setBounds(entrpBlock.removeFromLeft(40).reduced(2)); tuningEntrpGen[idx].setBounds(entrpBlock.removeFromLeft(50).reduced(2));
+
+            auto shiftBlock = ctrlRow.removeFromLeft(150); shiftBlock.removeFromLeft(10);
+            tuningShiftMin[idx].setBounds(shiftBlock.removeFromLeft(40).reduced(2)); tuningShiftMax[idx].setBounds(shiftBlock.removeFromLeft(40).reduced(2)); tuningShiftGen[idx].setBounds(shiftBlock.removeFromLeft(50).reduced(2));
         }
     }
     else if (currentView == Setup2View) {
@@ -644,7 +662,7 @@ void AIDrumMachineAudioProcessorEditor::resized() {
         arpScaleMenu.setBounds(s2top.removeFromLeft(150).reduced(2));
         btnArpMono.setBounds(s2top.removeFromLeft(100).reduced(2));
         bottomAreaInt.removeFromTop(10);
-        // ... (続く Setup2View のTrack部分)
+
         lockArea = juce::Rectangle<int>(); midiDragArea = bottomAreaInt.removeFromRight(40);
         auto labelArea = bottomAreaInt.removeFromLeft(140);
         sampleArea = bottomAreaInt.removeFromLeft(110);
@@ -720,15 +738,19 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
         g.setColour(juce::Colours::white);
         g.setFont(12.0f);
         auto b = getLocalBounds().reduced(20).removeFromBottom(250);
-        g.drawText("Tempo (Min / Max):", b.getX(), b.getY() + 10, 100, 20, juce::Justification::left);
-        g.drawText("Time Sigs:", b.getX() + 180, b.getY() + 10, 80, 20, juce::Justification::left);
-        g.drawText("Fills:", b.getX() + 620, b.getY() + 10, 50, 20, juce::Justification::left);
 
-        int colY = b.getY() + 45;
-        g.drawText("Div (Min/Max)", b.getX() + 150, colY, 80, 20, juce::Justification::centred);
-        g.drawText("Cmplx (Min/Max)", b.getX() + 280, colY, 80, 20, juce::Justification::centred);
-        g.drawText("Entrp (Min/Max)", b.getX() + 410, colY, 80, 20, juce::Justification::centred);
-        g.drawText("Shift (Min/Max)", b.getX() + 550, colY, 80, 20, juce::Justification::centred);
+        // ★ Tuning用のヘッダーテキスト (resizedのレイアウトと正確に合致します)
+        g.drawText("Tempo(Min/Max):", b.getX(), b.getY() + 5, 120, 20, juce::Justification::left);
+        g.drawText("Time Sigs:", b.getX() + 260, b.getY() + 5, 70, 20, juce::Justification::left);
+        g.drawText("Fills:", b.getX() + 740, b.getY() + 5, 40, 20, juce::Justification::left);
+
+        // ★ 各列の見出し (Div, Cmplx, Entrp, Shift)
+        int colY = b.getY() + 30;
+        int cX = b.getX() + 110;
+        g.drawText("Div (Min/Max/Gen)", cX, colY, 150, 20, juce::Justification::centred);
+        g.drawText("Cmplx (Min/Max/Gen)", cX + 150, colY, 150, 20, juce::Justification::centred);
+        g.drawText("Entrp (Min/Max/Gen)", cX + 300, colY, 150, 20, juce::Justification::centred);
+        g.drawText("Shift (Min/Max/Gen)", cX + 450, colY, 150, 20, juce::Justification::centred);
     }
     else if (currentView == SequencerView) {
         int rows = 8; float cellH = mainGridArea.getHeight() / (float)rows;

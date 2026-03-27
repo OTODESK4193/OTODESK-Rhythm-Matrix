@@ -43,9 +43,8 @@ private:
     juce::TextButton tabSeqButton{ "SEQUENCER" };
     juce::TextButton tabSetupButton{ "SETUP 1" };
     juce::TextButton tabSetup2Button{ "SETUP 2" };
-    juce::TextButton tabTuningButton{ "TUNING" }; // ★ 新設: チューニングタブ
+    juce::TextButton tabTuningButton{ "TUNING" }; // ★ 新設
 
-    // ★ ViewMode に TuningView を追加
     enum ViewMode { SequencerView, Setup1View, Setup2View, TuningView };
     ViewMode currentView = SequencerView;
 
@@ -109,7 +108,7 @@ private:
     juce::TextButton btnShiftLock[8];
 
     // ==========================================================
-    // ★ 新設: ファインチューニング用 UIコンポーネント
+    // ファインチューニング用 UIコンポーネント
     // ==========================================================
     juce::Label tuningTempoMin, tuningTempoMax;
     juce::ToggleButton tuningTempoGen{ "Gen" };
