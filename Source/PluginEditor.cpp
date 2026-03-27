@@ -29,7 +29,12 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     btnTempoLock.setClickingTogglesState(true);
     btnTempoLock.setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
     btnTempoLock.setToggleState(audioProcessor.tempoLocked.load(), juce::dontSendNotification);
-    btnTempoLock.onClick = [this] { audioProcessor.tempoLocked.store(btnTempoLock.getToggleState()); };
+    btnTempoLock.onClick = [this] {
+        bool state = btnTempoLock.getToggleState();
+        audioProcessor.tempoLocked.store(state);
+        audioProcessor.userTuning[audioProcessor.currentGenre.load()].tempoLocked = state;
+        tuningTempoLock.setToggleState(state, juce::dontSendNotification);
+        };
 
     addAndMakeVisible(tabSeqButton); addAndMakeVisible(tabSetupButton); addAndMakeVisible(tabSetup2Button); addAndMakeVisible(tabTuningButton);
     tabSeqButton.onClick = [this] { currentView = SequencerView; updateViewVisibility(); resized(); repaint(); };
@@ -253,40 +258,64 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         addChildComponent(divLabels[i]); divLabels[i].setText("Div:", juce::dontSendNotification);
         addChildComponent(divSelectors[i]);
         divSelectors[i].onChange = [this, i] { audioProcessor.trackDivisionsUI[i] = divSelectors[i].getSelectedId(); audioProcessor.patternUpdated.store(true); repaint(); };
+
         addChildComponent(btnDivLock[i]); btnDivLock[i].setButtonText("L"); btnDivLock[i].setClickingTogglesState(true);
         btnDivLock[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
         btnDivLock[i].setToggleState(audioProcessor.trackDivLocked[i], juce::dontSendNotification);
-        btnDivLock[i].onClick = [this, i] { audioProcessor.trackDivLocked[i] = btnDivLock[i].getToggleState(); };
+        btnDivLock[i].onClick = [this, i] {
+            bool state = btnDivLock[i].getToggleState();
+            audioProcessor.trackDivLocked[i] = state;
+            audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[i].divLocked = state;
+            tuningDivLock[i].setToggleState(state, juce::dontSendNotification);
+            };
 
         addChildComponent(compLabels[i]); compLabels[i].setText("Cmplx:", juce::dontSendNotification);
         addChildComponent(complexitySliders[i]); complexitySliders[i].setSliderStyle(juce::Slider::LinearHorizontal);
         complexitySliders[i].setTextBoxStyle(juce::Slider::TextBoxRight, false, 40, 20);
         complexitySliders[i].setRange(0.0, 100.0, 1.0); complexitySliders[i].setValue(audioProcessor.trackComplexity[i], juce::dontSendNotification);
         complexitySliders[i].onValueChange = [this, i] { audioProcessor.trackComplexity[i] = static_cast<int>(complexitySliders[i].getValue()); };
+
         addChildComponent(btnCmplxLock[i]); btnCmplxLock[i].setButtonText("L"); btnCmplxLock[i].setClickingTogglesState(true);
         btnCmplxLock[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
         btnCmplxLock[i].setToggleState(audioProcessor.trackCmplxLocked[i], juce::dontSendNotification);
-        btnCmplxLock[i].onClick = [this, i] { audioProcessor.trackCmplxLocked[i] = btnCmplxLock[i].getToggleState(); };
+        btnCmplxLock[i].onClick = [this, i] {
+            bool state = btnCmplxLock[i].getToggleState();
+            audioProcessor.trackCmplxLocked[i] = state;
+            audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[i].cmplxLocked = state;
+            tuningCmplxLock[i].setToggleState(state, juce::dontSendNotification);
+            };
 
         addChildComponent(entrpLabels[i]); entrpLabels[i].setText("Entrp:", juce::dontSendNotification);
         addChildComponent(entropySliders[i]); entropySliders[i].setSliderStyle(juce::Slider::LinearHorizontal);
         entropySliders[i].setTextBoxStyle(juce::Slider::TextBoxRight, false, 40, 20);
         entropySliders[i].setRange(0.0, 100.0, 1.0); entropySliders[i].setValue(audioProcessor.trackEntropy[i], juce::dontSendNotification);
         entropySliders[i].onValueChange = [this, i] { audioProcessor.trackEntropy[i] = static_cast<int>(entropySliders[i].getValue()); };
+
         addChildComponent(btnEntrpLock[i]); btnEntrpLock[i].setButtonText("L"); btnEntrpLock[i].setClickingTogglesState(true);
         btnEntrpLock[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
         btnEntrpLock[i].setToggleState(audioProcessor.trackEntrpLocked[i], juce::dontSendNotification);
-        btnEntrpLock[i].onClick = [this, i] { audioProcessor.trackEntrpLocked[i] = btnEntrpLock[i].getToggleState(); };
+        btnEntrpLock[i].onClick = [this, i] {
+            bool state = btnEntrpLock[i].getToggleState();
+            audioProcessor.trackEntrpLocked[i] = state;
+            audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[i].entrpLocked = state;
+            tuningEntrpLock[i].setToggleState(state, juce::dontSendNotification);
+            };
 
         addChildComponent(shiftLabels[i]); shiftLabels[i].setText("Shift:", juce::dontSendNotification);
         addChildComponent(shiftSliders[i]); shiftSliders[i].setSliderStyle(juce::Slider::LinearHorizontal);
         shiftSliders[i].setTextBoxStyle(juce::Slider::TextBoxRight, false, 40, 20);
         shiftSliders[i].setRange(-50.0, 50.0, 1.0); shiftSliders[i].setValue(audioProcessor.trackShiftUI[i], juce::dontSendNotification);
         shiftSliders[i].onValueChange = [this, i] { audioProcessor.trackShiftUI[i] = static_cast<int>(shiftSliders[i].getValue()); audioProcessor.patternUpdated.store(true); };
+
         addChildComponent(btnShiftLock[i]); btnShiftLock[i].setButtonText("L"); btnShiftLock[i].setClickingTogglesState(true);
         btnShiftLock[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
         btnShiftLock[i].setToggleState(audioProcessor.trackShiftLocked[i], juce::dontSendNotification);
-        btnShiftLock[i].onClick = [this, i] { audioProcessor.trackShiftLocked[i] = btnShiftLock[i].getToggleState(); };
+        btnShiftLock[i].onClick = [this, i] {
+            bool state = btnShiftLock[i].getToggleState();
+            audioProcessor.trackShiftLocked[i] = state;
+            audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[i].shiftLocked = state;
+            tuningShiftLock[i].setToggleState(state, juce::dontSendNotification);
+            };
 
         addChildComponent(octaveLabels[i]); octaveLabels[i].setText("Octave:", juce::dontSendNotification);
         addChildComponent(octaveSliders[i]); octaveSliders[i].setSliderStyle(juce::Slider::LinearHorizontal);
@@ -298,9 +327,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             };
     }
 
-    // ==========================================================
-    // ★ Tuning View コンポーネント (Labelで完璧に配置)
-    // ==========================================================
     addChildComponent(tuningTempoTitle); tuningTempoTitle.setColour(juce::Label::textColourId, juce::Colours::white);
     addChildComponent(tuningTsTitle); tuningTsTitle.setColour(juce::Label::textColourId, juce::Colours::white);
     addChildComponent(tuningFillsTitle); tuningFillsTitle.setColour(juce::Label::textColourId, juce::Colours::white);
@@ -312,10 +338,16 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
     setupNumBox(tuningTempoMin, [this](int v) { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tempo.min = v; });
     setupNumBox(tuningTempoMax, [this](int v) { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tempo.max = v; });
+
     addChildComponent(tuningTempoLock);
     tuningTempoLock.setButtonText("L"); tuningTempoLock.setClickingTogglesState(true);
     tuningTempoLock.setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
-    tuningTempoLock.onClick = [this] { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tempoLocked = tuningTempoLock.getToggleState(); };
+    tuningTempoLock.onClick = [this] {
+        bool state = tuningTempoLock.getToggleState();
+        audioProcessor.userTuning[audioProcessor.currentGenre.load()].tempoLocked = state;
+        audioProcessor.tempoLocked.store(state);
+        btnTempoLock.setToggleState(state, juce::dontSendNotification);
+        };
 
     const char* tsLabels[8] = { "4/4", "3/4", "5/4", "7/8", "12/8", "13/8", "15/16", "5/8" };
     for (int i = 0; i < 8; ++i) {
@@ -332,7 +364,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     }
 
     for (int t = 0; t < 8; ++t) {
-        // ★ Div の 1〜8 ボタンを初期化
         for (int d = 0; d < 8; ++d) {
             addChildComponent(tuningDivBtns[t][d]);
             tuningDivBtns[t][d].setButtonText(juce::String(d + 1));
@@ -345,28 +376,47 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
         addChildComponent(tuningDivLock[t]);
         tuningDivLock[t].setButtonText("L"); tuningDivLock[t].setClickingTogglesState(true); tuningDivLock[t].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
-        tuningDivLock[t].onClick = [this, t] { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].divLocked = tuningDivLock[t].getToggleState(); };
+        tuningDivLock[t].onClick = [this, t] {
+            bool state = tuningDivLock[t].getToggleState();
+            audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].divLocked = state;
+            audioProcessor.trackDivLocked[t] = state;
+            btnDivLock[t].setToggleState(state, juce::dontSendNotification);
+            };
 
         setupNumBox(tuningCmplxMin[t], [this, t](int v) { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].cmplx.min = v; });
         setupNumBox(tuningCmplxMax[t], [this, t](int v) { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].cmplx.max = v; });
         addChildComponent(tuningCmplxLock[t]);
         tuningCmplxLock[t].setButtonText("L"); tuningCmplxLock[t].setClickingTogglesState(true); tuningCmplxLock[t].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
-        tuningCmplxLock[t].onClick = [this, t] { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].cmplxLocked = tuningCmplxLock[t].getToggleState(); };
+        tuningCmplxLock[t].onClick = [this, t] {
+            bool state = tuningCmplxLock[t].getToggleState();
+            audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].cmplxLocked = state;
+            audioProcessor.trackCmplxLocked[t] = state;
+            btnCmplxLock[t].setToggleState(state, juce::dontSendNotification);
+            };
 
         setupNumBox(tuningEntrpMin[t], [this, t](int v) { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].entrp.min = v; });
         setupNumBox(tuningEntrpMax[t], [this, t](int v) { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].entrp.max = v; });
         addChildComponent(tuningEntrpLock[t]);
         tuningEntrpLock[t].setButtonText("L"); tuningEntrpLock[t].setClickingTogglesState(true); tuningEntrpLock[t].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
-        tuningEntrpLock[t].onClick = [this, t] { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].entrpLocked = tuningEntrpLock[t].getToggleState(); };
+        tuningEntrpLock[t].onClick = [this, t] {
+            bool state = tuningEntrpLock[t].getToggleState();
+            audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].entrpLocked = state;
+            audioProcessor.trackEntrpLocked[t] = state;
+            btnEntrpLock[t].setToggleState(state, juce::dontSendNotification);
+            };
 
         setupNumBox(tuningShiftMin[t], [this, t](int v) { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].shift.min = v; });
         setupNumBox(tuningShiftMax[t], [this, t](int v) { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].shift.max = v; });
         addChildComponent(tuningShiftLock[t]);
         tuningShiftLock[t].setButtonText("L"); tuningShiftLock[t].setClickingTogglesState(true); tuningShiftLock[t].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
-        tuningShiftLock[t].onClick = [this, t] { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].shiftLocked = tuningShiftLock[t].getToggleState(); };
+        tuningShiftLock[t].onClick = [this, t] {
+            bool state = tuningShiftLock[t].getToggleState();
+            audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].shiftLocked = state;
+            audioProcessor.trackShiftLocked[t] = state;
+            btnShiftLock[t].setToggleState(state, juce::dontSendNotification);
+            };
     }
 
-    // ★ DUMP TO CLIPBOARD ボタンの設定 (Divを配列形式にアップデート)
     addChildComponent(btnDumpTuning);
     btnDumpTuning.setColour(juce::TextButton::buttonColourId, juce::Colours::teal);
     btnDumpTuning.onClick = [this] {
@@ -446,7 +496,6 @@ void AIDrumMachineAudioProcessorEditor::updateTuningUIFromProcessor() {
     for (int i = 0; i < 4; ++i) tuningFillBtns[i].setToggleState(t.allowedFills[i], juce::dontSendNotification);
 
     for (int i = 0; i < 8; ++i) {
-        // Divの1〜8ボタンを同期
         for (int d = 0; d < 8; ++d) {
             tuningDivBtns[i][d].setToggleState(t.tracks[i].allowedDivs[d], juce::dontSendNotification);
         }
@@ -557,7 +606,6 @@ void AIDrumMachineAudioProcessorEditor::updateViewVisibility() {
         octaveLabels[i].setVisible(isS2); octaveSliders[i].setVisible(isS2);
         midiKeyLabels[i].setVisible(!isSeq && !isTuning);
 
-        // Tuning components
         for (int d = 0; d < 8; ++d) tuningDivBtns[i][d].setVisible(isTuning);
         tuningDivLock[i].setVisible(isTuning);
 
@@ -819,7 +867,28 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colours::cyan.withAlpha(0.6f)); g.fillRoundedRectangle(dragAllArea.toFloat(), 4.0f);
     g.setColour(juce::Colours::white); g.setFont(14.0f); g.drawText("DRAG ALL MIDI", dragAllArea, juce::Justification::centred, false);
 
-    if (currentView == SequencerView) {
+    if (currentView == TuningView) {
+        g.setColour(juce::Colours::white);
+        g.setFont(12.0f);
+
+        auto area = getLocalBounds().reduced(20);
+        area.removeFromTop(30); area.removeFromTop(10); area.removeFromTop(30);
+        area.removeFromTop(40).withTrimmedTop(10); area.removeFromTop(10);
+
+        auto b = area;
+
+        g.drawText("Tempo(Min/Max):", b.getX(), b.getY() + 5, 110, 20, juce::Justification::left);
+        g.drawText("Time Sigs:", b.getX(), b.getY() + 35, 110, 20, juce::Justification::left);
+        g.drawText("Fills:", b.getX(), b.getY() + 65, 110, 20, juce::Justification::left);
+
+        int colY = b.getY() + 95;
+        int cX = b.getX() + 110;
+        g.drawText("Div (1-8 / L)", cX, colY, 270, 20, juce::Justification::centred);
+        g.drawText("Cmplx (Min/Max/L)", cX + 270, colY, 150, 20, juce::Justification::centred);
+        g.drawText("Entrp (Min/Max/L)", cX + 420, colY, 150, 20, juce::Justification::centred);
+        g.drawText("Shift (Min/Max/L)", cX + 570, colY, 150, 20, juce::Justification::centred);
+    }
+    else if (currentView == SequencerView) {
         int rows = 8; float cellH = mainGridArea.getHeight() / (float)rows;
         int numBeats = audioProcessor.timeSigNumerator.load();
 

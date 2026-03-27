@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <cmath>
 
-// ★ warning回避のため static を付与
 static constexpr InstrumentPatch P(int w, float fr, float pD, float pA, float aAt, float aDc, float ns, int fT, float fF, float fR, float dr, float vl) {
     return { w, fr, pD, pA, aAt, aDc, ns, fT, fF, fR, dr, vl };
 }
@@ -341,44 +340,29 @@ void AIDrumMachineAudioProcessor::initializeUserTunings() {
         userTuning[g].tempo.min = genreTable[g].minTempo;
         userTuning[g].tempo.max = genreTable[g].maxTempo;
         userTuning[g].tempoLocked = false;
-
         for (int t = 0; t < 8; ++t) {
-            userTuning[g].allowedTimeSigs[t] = false;
-            if (userTuning[g].timeSigOptions[t].num == genreTable[g].defaultNum &&
-                userTuning[g].timeSigOptions[t].den == genreTable[g].defaultDen) {
-                userTuning[g].allowedTimeSigs[t] = true;
-            }
+            userTuning[g].allowedTimeSigs[t] = (t == 0);
+            userTuning[g].tracks[t].divLocked = false;
+            for (int d = 0; d < 8; ++d) userTuning[g].tracks[t].allowedDivs[d] = (d == 0 || d == 3);
+            userTuning[g].tracks[t].cmplx.min = 20; userTuning[g].tracks[t].cmplx.max = 50;
+            userTuning[g].tracks[t].cmplxLocked = false;
+            userTuning[g].tracks[t].entrp.min = 10; userTuning[g].tracks[t].entrp.max = 50;
+            userTuning[g].tracks[t].entrpLocked = false;
+            userTuning[g].tracks[t].shift.min = 0; userTuning[g].tracks[t].shift.max = 0;
+            userTuning[g].tracks[t].shiftLocked = false;
         }
-        bool hasTs = false;
-        for (int t = 0; t < 8; ++t) if (userTuning[g].allowedTimeSigs[t]) hasTs = true;
-        if (!hasTs) userTuning[g].allowedTimeSigs[0] = true;
-
         for (int f = 0; f < 4; ++f) userTuning[g].allowedFills[f] = true;
-
-        for (int trk = 0; trk < 8; ++trk) {
-            // ★ Divの設定：min/maxではなくallowedDivs配列に直接セット
-            for (int d = 0; d < 8; ++d) userTuning[g].tracks[trk].allowedDivs[d] = false;
-            for (int i = 0; i < 4; ++i) {
-                int d = genreTable[g].allowedDivs[trk][i];
-                if (d > 0 && d <= 8) {
-                    userTuning[g].tracks[trk].allowedDivs[d - 1] = true;
-                }
-            }
-            userTuning[g].tracks[trk].divLocked = false;
-
-            userTuning[g].tracks[trk].cmplx.min = 20;
-            userTuning[g].tracks[trk].cmplx.max = 50;
-            userTuning[g].tracks[trk].cmplxLocked = false;
-
-            userTuning[g].tracks[trk].entrp.min = 10;
-            userTuning[g].tracks[trk].entrp.max = 50;
-            userTuning[g].tracks[trk].entrpLocked = false;
-
-            userTuning[g].tracks[trk].shift.min = genreTable[g].shiftMin[trk];
-            userTuning[g].tracks[trk].shift.max = genreTable[g].shiftMax[trk];
-            userTuning[g].tracks[trk].shiftLocked = false;
-        }
     }
+
+    // =========================================================================
+    // ⬇️ DUMP TO CLIPBOARD で取得したコードをここにペーストしてください ⬇️
+    // =========================================================================
+
+
+
+    // =========================================================================
+    // ⬆️ ペーストエリアここまで ⬆️
+    // =========================================================================
 }
 
 const GenreDefinition& AIDrumMachineAudioProcessor::getGenreDef(int index) {
@@ -587,17 +571,13 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
 
             TrackTuning& tt = tuning.tracks[trk];
 
-            // ★ Divの配列抽選ロジック（maxDivの安全フィルタ付き）
             if (!tt.divLocked && !trackDivLocked[trk]) {
                 std::vector<int> candidates;
                 for (int i = 0; i < 8; ++i) {
                     if (tt.allowedDivs[i]) candidates.push_back(i + 1);
                 }
-                int newDiv = 4; // fallback
+                int newDiv = 4;
                 if (!candidates.empty()) newDiv = candidates[random.nextInt((int)candidates.size())];
-
-                // 余計なお世話ロジックを削除し、純粋にTuningの候補だけを使う
-
                 if (newDiv > maxDiv) newDiv = maxDiv;
                 trackDivisionsUI[trk] = newDiv;
             }
@@ -1069,7 +1049,6 @@ void AIDrumMachineAudioProcessor::changeProgramName(int index, const juce::Strin
 bool AIDrumMachineAudioProcessor::hasEditor() const { return true; }
 juce::AudioProcessorEditor* AIDrumMachineAudioProcessor::createEditor() { return new AIDrumMachineAudioProcessorEditor(*this); }
 
-// ★ 保存と読み込み (Divの配列化に対応)
 void AIDrumMachineAudioProcessor::getStateInformation(juce::MemoryBlock& destData) {
     juce::XmlElement xml("AIDrumMachineState");
     xml.setAttribute("currentGenre", currentGenre.load());
