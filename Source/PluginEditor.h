@@ -77,9 +77,15 @@ private:
 
     juce::ComboBox arpKeyMenu;
     juce::ComboBox arpScaleMenu;
-    juce::ToggleButton btnArpMono{ "Mono Mode" };
+    juce::TextButton btnArpMono{ "Mono Mode" }; // ★ 点灯式に変更
+
     juce::Slider octaveSliders[8];
     juce::Label octaveLabels[8];
+
+    // ★ Setting2 (Arpモード) 用の新機能ボタン
+    juce::TextButton btnDegreeLock[8];
+    juce::TextButton btnOctaveLock[8];
+    juce::TextButton btnDynamic[8];
 
     const juce::String trackNotes[8] = { "C1", "D1", "F#1", "A#1", "D#1", "F1", "A1", "D2" };
 
@@ -108,7 +114,7 @@ private:
     juce::TextButton btnShiftLock[8];
 
     // ==========================================================
-    // ★ ファインチューニング用 UIコンポーネント (ラベルによる完全制御)
+    // ファインチューニング用 UIコンポーネント
     // ==========================================================
     juce::Label tuningTempoTitle{ "", "Tempo (Min/Max/L):" };
     juce::Label tuningTsTitle{ "", "Time Sigs:" };
@@ -124,7 +130,6 @@ private:
     juce::ToggleButton tuningTsBtns[8];
     juce::ToggleButton tuningFillBtns[4];
 
-    // ★ Divが8個の点灯ボタンに進化！
     juce::TextButton tuningDivBtns[8][8];
     juce::TextButton tuningDivLock[8];
 

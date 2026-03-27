@@ -16,29 +16,10 @@ struct InstrumentPatch {
     float fFreq; float fRes; float drive; float vol;
 };
 
+// ★ 音色の統一：808系基本パッチとArp/Pluckパッチのみに大幅圧縮
 enum PatchID {
-    G0_T0, G0_T1, G0_T2, G0_T3, G0_T4, G0_T5, G0_T6, G0_T7,
-    G1_T0, G1_T1, G1_T2, G1_T3, G1_T4, G1_T5, G1_T6, G1_T7,
-    G2_T0, G2_T1, G2_T2, G2_T3, G2_T4, G2_T5, G2_T6, G2_T7,
-    G3_T0, G3_T1, G3_T2, G3_T3, G3_T4, G3_T5, G3_T6, G3_T7,
-    G4_T0, G4_T1, G4_T2, G4_T3, G4_T4, G4_T5, G4_T6, G4_T7,
-    G5_T0, G5_T1, G5_T2, G5_T3, G5_T4, G5_T5, G5_T6, G5_T7,
-    G6_T0, G6_T1, G6_T2, G6_T3, G6_T4, G6_T5, G6_T6, G6_T7,
-    G7_T0, G7_T1, G7_T2, G7_T3, G7_T4, G7_T5, G7_T6, G7_T7,
-    G8_T0, G8_T1, G8_T2, G8_T3, G8_T4, G8_T5, G8_T6, G8_T7,
-    G9_T0, G9_T1, G9_T2, G9_T3, G9_T4, G9_T5, G9_T6, G9_T7,
-    G10_T0, G10_T1, G10_T2, G10_T3, G10_T4, G10_T5, G10_T6, G10_T7,
-    G11_T0, G11_T1, G11_T2, G11_T3, G11_T4, G11_T5, G11_T6, G11_T7,
-    G12_T0, G12_T1, G12_T2, G12_T3, G12_T4, G12_T5, G12_T6, G12_T7,
-    G13_T0, G13_T1, G13_T2, G13_T3, G13_T4, G13_T5, G13_T6, G13_T7,
-    G14_T0, G14_T1, G14_T2, G14_T3, G14_T4, G14_T5, G14_T6, G14_T7,
-    G15_T0, G15_T1, G15_T2, G15_T3, G15_T4, G15_T5, G15_T6, G15_T7,
-    G16_T0, G16_T1, G16_T2, G16_T3, G16_T4, G16_T5, G16_T6, G16_T7,
-    G17_T0, G17_T1, G17_T2, G17_T3, G17_T4, G17_T5, G17_T6, G17_T7,
-    G18_T0, G18_T1, G18_T2, G18_T3, G18_T4, G18_T5, G18_T6, G18_T7,
-    G19_T0, G19_T1, G19_T2, G19_T3, G19_T4, G19_T5, G19_T6, G19_T7,
-    G20_T0, G20_T1, G20_T2, G20_T3, G20_T4, G20_T5, G20_T6, G20_T7,
-    G21_T0, G21_T1, G21_T2, G21_T3, G21_T4, G21_T5, G21_T6, G21_T7,
+    P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH,
+    P_808_CLAP, P_808_TOM, P_808_PERC, P_808_BASS, P_808_FX,
     PLUCK_1, PLUCK_2, PLUCK_3, PLUCK_4, PLUCK_5, PLUCK_6, PLUCK_7, PLUCK_8,
     M_ARP,
     PATCH_MAX
@@ -59,14 +40,12 @@ struct SavedPattern {
     int num = 4; int den = 4; int bars = 4;
 };
 
-// ★ ファインチューニング用データ構造
 struct TuningRange { int min; int max; };
 struct TimeSigDef { int num; int den; };
 
 struct TrackTuning {
-    bool allowedDivs[8] = { true, false, false, true, false, false, false, false }; // Div 1,4がデフォ
+    bool allowedDivs[8] = { true, false, false, true, false, false, false, false };
     bool divLocked = false;
-
     TuningRange cmplx; bool cmplxLocked = false;
     TuningRange entrp; bool entrpLocked = false;
     TuningRange shift; bool shiftLocked = false;
@@ -80,12 +59,9 @@ struct GenreTuning {
     TrackTuning tracks[8];
 };
 
-const int scalePatterns[12][7] = {
-    {0, 2, 4, 5, 7, 9, 11}, {0, 2, 3, 5, 7, 8, 10}, {0, 2, 4, 7, 9, -1, -1}, {0, 3, 5, 7, 10, -1, -1},
-    {0, 2, 3, 5, 7, 9, 10}, {0, 2, 3, 5, 7, 8, 11}, {0, 2, 4, 6, 7, 9, 11}, {0, 2, 4, 5, 7, 9, 10},
-    {0, 1, 3, 5, 7, 8, 10}, {0, 1, 3, 5, 6, 8, 10}, {0, 2, 4, 6, 8, 10, -1},{0, 3, 5, 6, 7, 10, -1}
-};
-const int scaleLengths[12] = { 7, 7, 5, 5, 7, 7, 7, 7, 7, 7, 6, 6 };
+// ★ スケールを19種類、最大8音構成に拡張
+extern const int scalePatterns[19][8];
+extern const int scaleLengths[19];
 
 class DrumVoice {
 public:
@@ -177,6 +153,11 @@ public:
     bool trackShiftLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackMuted[8] = { false, false, false, false, false, false, false, false };
     bool trackSoloed[8] = { false, false, false, false, false, false, false, false };
+
+    // ★ Setting2 (Arp) のロックとDynamic新機能用
+    bool trackDegreeLocked[8] = { false, false, false, false, false, false, false, false };
+    bool trackOctaveLocked[8] = { false, false, false, false, false, false, false, false };
+    bool trackDynamic[8] = { false, false, false, false, false, false, false, false };
 
     std::atomic<bool> arpMode{ false }; std::atomic<bool> arpMono{ true }; std::atomic<int> arpKey{ 0 }; std::atomic<int> arpScale{ 1 };
     int trackOctaveUI[8] = { -1, -1, 0, 0, 1, 1, 2, 2 }; int trackDegreeUI[8] = { 0, 2, 4, 0, 2, 4, 0, 2 };

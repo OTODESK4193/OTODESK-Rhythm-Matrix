@@ -40,7 +40,15 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     tabSeqButton.onClick = [this] { currentView = SequencerView; updateViewVisibility(); resized(); repaint(); };
     tabSetupButton.onClick = [this] { currentView = Setup1View; updateViewVisibility(); resized(); repaint(); };
     tabSetup2Button.onClick = [this] { currentView = Setup2View; updateViewVisibility(); resized(); repaint(); };
-    tabTuningButton.onClick = [this] { currentView = TuningView; updateTuningUIFromProcessor(); updateViewVisibility(); resized(); repaint(); };
+
+    // ★ TuningモードとArpモードの排他制御
+    tabTuningButton.onClick = [this] {
+        if (audioProcessor.arpMode.load()) {
+            juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, "Info", "Arpモード時はTuning機能は使用できません。設定を優先します。");
+            return;
+        }
+        currentView = TuningView; updateTuningUIFromProcessor(); updateViewVisibility(); resized(); repaint();
+        };
 
     addAndMakeVisible(btnClearAll);
     btnClearAll.setColour(juce::TextButton::buttonColourId, juce::Colours::red.withAlpha(0.6f));
@@ -125,7 +133,13 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     btnArpMode.setClickingTogglesState(true);
     btnArpMode.setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
     btnArpMode.setToggleState(audioProcessor.arpMode.load(), juce::dontSendNotification);
+    // ★ TuningモードとArpモードの排他制御
     btnArpMode.onClick = [this] {
+        if (currentView == TuningView) {
+            juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, "Info", "Tuningモードを開いている状態ではArpモードに変更できません。先に別のタブへ移動してください。");
+            btnArpMode.setToggleState(audioProcessor.arpMode.load(), juce::dontSendNotification);
+            return;
+        }
         audioProcessor.arpMode.store(btnArpMode.getToggleState());
         updateStyleMenu(); updateTrackNames();
         };
@@ -137,12 +151,19 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     arpKeyMenu.onChange = [this] { audioProcessor.arpKey.store(arpKeyMenu.getSelectedId() - 1); updateTrackNames(); };
 
     addAndMakeVisible(arpScaleMenu);
-    const char* scales[] = { "Major", "Natural Minor", "Pentatonic Major", "Pentatonic Minor", "Dorian", "Harmonic Minor", "Lydian", "Mixolydian", "Phrygian", "Locrian", "Whole Tone", "Blues" };
-    for (int i = 0; i < 12; ++i) arpScaleMenu.addItem(scales[i], i + 1);
+    const char* scales[] = {
+        "Major", "Natural Minor", "Pentatonic Major", "Pentatonic Minor", "Dorian", "Harmonic Minor", "Lydian", "Mixolydian", "Phrygian", "Locrian", "Whole Tone", "Blues",
+        "Aeolian", "Dorian nat7", "Phrygian nat6", "Lydian #5", "Locrian b4", "Comb of Diminished", "Augmented"
+    };
+    for (int i = 0; i < 19; ++i) arpScaleMenu.addItem(scales[i], i + 1);
     arpScaleMenu.setSelectedId(audioProcessor.arpScale.load() + 1, juce::dontSendNotification);
     arpScaleMenu.onChange = [this] { audioProcessor.arpScale.store(arpScaleMenu.getSelectedId() - 1); updateTrackNames(); };
 
+    // ★ Arp Mono モードボタンを点灯式テキストボタンに変更
     addAndMakeVisible(btnArpMono);
+    btnArpMono.setButtonText("Mono Mode");
+    btnArpMono.setClickingTogglesState(true);
+    btnArpMono.setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
     btnArpMono.setToggleState(audioProcessor.arpMono.load(), juce::dontSendNotification);
     btnArpMono.onClick = [this] { audioProcessor.arpMono.store(btnArpMono.getToggleState()); };
 
@@ -238,6 +259,25 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
         addChildComponent(midiKeyLabels[i]); midiKeyLabels[i].setText("[" + trackNotes[i] + "]", juce::dontSendNotification);
         midiKeyLabels[i].setColour(juce::Label::textColourId, juce::Colours::grey); midiKeyLabels[i].setJustificationType(juce::Justification::centredRight);
+
+        // ★ Setting2用のLockボタンとDynamicボタンの初期化
+        addAndMakeVisible(btnDegreeLock[i]);
+        btnDegreeLock[i].setButtonText("L"); btnDegreeLock[i].setClickingTogglesState(true);
+        btnDegreeLock[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
+        btnDegreeLock[i].setToggleState(audioProcessor.trackDegreeLocked[i], juce::dontSendNotification);
+        btnDegreeLock[i].onClick = [this, i] { audioProcessor.trackDegreeLocked[i] = btnDegreeLock[i].getToggleState(); };
+
+        addAndMakeVisible(btnOctaveLock[i]);
+        btnOctaveLock[i].setButtonText("L"); btnOctaveLock[i].setClickingTogglesState(true);
+        btnOctaveLock[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
+        btnOctaveLock[i].setToggleState(audioProcessor.trackOctaveLocked[i], juce::dontSendNotification);
+        btnOctaveLock[i].onClick = [this, i] { audioProcessor.trackOctaveLocked[i] = btnOctaveLock[i].getToggleState(); };
+
+        addAndMakeVisible(btnDynamic[i]);
+        btnDynamic[i].setButtonText("Dyn"); btnDynamic[i].setClickingTogglesState(true);
+        btnDynamic[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::yellow.darker());
+        btnDynamic[i].setToggleState(audioProcessor.trackDynamic[i], juce::dontSendNotification);
+        btnDynamic[i].onClick = [this, i] { audioProcessor.trackDynamic[i] = btnDynamic[i].getToggleState(); };
 
         addAndMakeVisible(btnMute[i]); addAndMakeVisible(btnSolo[i]); addAndMakeVisible(btnClear[i]); addAndMakeVisible(btnShiftL[i]); addAndMakeVisible(btnShiftR[i]);
         btnMute[i].setButtonText("M"); btnSolo[i].setButtonText("S"); btnClear[i].setButtonText("C"); btnShiftL[i].setButtonText("<"); btnShiftR[i].setButtonText(">");
@@ -521,7 +561,7 @@ void AIDrumMachineAudioProcessorEditor::updateStyleMenu() {
         const juce::StringArray arpGenres = {
             "0. Basic Up (3rds)", "1. Basic Down (4ths)", "2. Poly Triads", "3. Poly 7ths",
             "4. 5th Cascades", "5. 6th Leaps", "6. Quartal Harmony", "7. Polyrhythm Plucks",
-            "8. Euclidean Arp", "9. Chaos Melodies"
+            "8. Euclidean Arp", "9. Pop/Hit Melody Maker"
         };
         for (int i = 0; i < arpGenres.size(); ++i) styleMenu.addItem(arpGenres[i], i + 1);
     }
@@ -603,7 +643,13 @@ void AIDrumMachineAudioProcessorEditor::updateViewVisibility() {
         entrpLabels[i].setVisible(isS1); entropySliders[i].setVisible(isS1); btnEntrpLock[i].setVisible(isS1);
         shiftLabels[i].setVisible(isS1); shiftSliders[i].setVisible(isS1); btnShiftLock[i].setVisible(isS1);
 
-        octaveLabels[i].setVisible(isS2); octaveSliders[i].setVisible(isS2);
+        // ★ Setting2用のボタン可視性
+        btnDegreeLock[i].setVisible(isS2);
+        octaveLabels[i].setVisible(isS2);
+        octaveSliders[i].setVisible(isS2);
+        btnOctaveLock[i].setVisible(isS2);
+        btnDynamic[i].setVisible(isS2);
+
         midiKeyLabels[i].setVisible(!isSeq && !isTuning);
 
         for (int d = 0; d < 8; ++d) tuningDivBtns[i][d].setVisible(isTuning);
@@ -805,8 +851,19 @@ void AIDrumMachineAudioProcessorEditor::resized() {
             int idx = 7 - row;
             auto lRow = labelArea.withY(labelArea.getY() + row * cellH).withHeight(cellH).reduced(2);
             midiKeyLabels[idx].setBounds(lRow.removeFromLeft(40)); trackNameLabels[idx].setBounds(lRow);
+
             auto ctrlRow = setupControls.withY(setupControls.getY() + row * cellH).withHeight(cellH).reduced(2);
-            ctrlRow.removeFromLeft(10); octaveLabels[idx].setBounds(ctrlRow.removeFromLeft(50)); octaveSliders[idx].setBounds(ctrlRow.removeFromLeft(200));
+            ctrlRow.removeFromLeft(10);
+            // ★ DegreeのLock
+            btnDegreeLock[idx].setBounds(ctrlRow.removeFromLeft(20).reduced(1));
+
+            octaveLabels[idx].setBounds(ctrlRow.removeFromLeft(50));
+            octaveSliders[idx].setBounds(ctrlRow.removeFromLeft(150));
+            // ★ OctaveのLock
+            btnOctaveLock[idx].setBounds(ctrlRow.removeFromLeft(20).reduced(1));
+            ctrlRow.removeFromLeft(10);
+            // ★ Dynamic
+            btnDynamic[idx].setBounds(ctrlRow.removeFromLeft(40).reduced(1));
         }
     }
     else if (currentView == SequencerView) {
@@ -865,28 +922,12 @@ void AIDrumMachineAudioProcessorEditor::resized() {
 void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
     g.fillAll(juce::Colours::darkgrey);
     g.setColour(juce::Colours::cyan.withAlpha(0.6f)); g.fillRoundedRectangle(dragAllArea.toFloat(), 4.0f);
-    g.setColour(juce::Colours::white); g.setFont(14.0f); g.drawText("DRAG ALL MIDI", dragAllArea, juce::Justification::centred, false);
+
+    // ★ DragMIDI に名称変更
+    g.setColour(juce::Colours::white); g.setFont(14.0f); g.drawText("DragMIDI", dragAllArea, juce::Justification::centred, false);
 
     if (currentView == TuningView) {
-        g.setColour(juce::Colours::white);
-        g.setFont(12.0f);
-
-        auto area = getLocalBounds().reduced(20);
-        area.removeFromTop(30); area.removeFromTop(10); area.removeFromTop(30);
-        area.removeFromTop(40).withTrimmedTop(10); area.removeFromTop(10);
-
-        auto b = area;
-
-        g.drawText("Tempo(Min/Max):", b.getX(), b.getY() + 5, 110, 20, juce::Justification::left);
-        g.drawText("Time Sigs:", b.getX(), b.getY() + 35, 110, 20, juce::Justification::left);
-        g.drawText("Fills:", b.getX(), b.getY() + 65, 110, 20, juce::Justification::left);
-
-        int colY = b.getY() + 95;
-        int cX = b.getX() + 110;
-        g.drawText("Div (1-8 / L)", cX, colY, 270, 20, juce::Justification::centred);
-        g.drawText("Cmplx (Min/Max/L)", cX + 270, colY, 150, 20, juce::Justification::centred);
-        g.drawText("Entrp (Min/Max/L)", cX + 420, colY, 150, 20, juce::Justification::centred);
-        g.drawText("Shift (Min/Max/L)", cX + 570, colY, 150, 20, juce::Justification::centred);
+        // ★ TuningViewにおけるラベルの二重描画を完全に削除し、Labelコンポーネントのみで表示
     }
     else if (currentView == SequencerView) {
         int rows = 8; float cellH = mainGridArea.getHeight() / (float)rows;
