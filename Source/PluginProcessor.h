@@ -15,7 +15,7 @@ struct InstrumentPatch {
     float fFreq; float fRes; float drive; float vol;
 };
 
-// ★ 22ジャンル×8トラック = 176パッチ + Pluck(8) + Arp(1) = 185パッチに完全独立拡張
+// 22ジャンル×8トラック = 176パッチ + Pluck(8) + Arp(1) = 185パッチに完全独立拡張
 enum PatchID {
     G0_T0, G0_T1, G0_T2, G0_T3, G0_T4, G0_T5, G0_T6, G0_T7,
     G1_T0, G1_T1, G1_T2, G1_T3, G1_T4, G1_T5, G1_T6, G1_T7,
@@ -163,7 +163,6 @@ public:
     void loadSample(int trackIndex, const juce::String& filePath); bool hasSampleLoaded(int trackIndex) const { return hasSample[trackIndex]; }
     void clearSample(int trackIndex); void generateAllTracks(); void shiftTrackLeft(int trackIndex); void shiftTrackRight(int trackIndex); void clearTrack(int trackIndex);
 
-    // ★ constを追加
     static const GenreDefinition& getGenreDef(int index);
     static const InstrumentPatch& getPatch(PatchID id);
     juce::String getNoteName(int trackIndex) const;
