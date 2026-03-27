@@ -37,13 +37,16 @@ private:
     juce::TextButton playButton{ "Play" };
     juce::TextButton stopButton{ "Stop" };
     juce::Label tempoLabel;
-    juce::TextButton btnTempoLock{ "L" }; // ★ テンポロックボタン
+    juce::TextButton btnTempoLock{ "L" };
     juce::int64 lastStopClickTime = 0;
 
     juce::TextButton tabSeqButton{ "SEQUENCER" };
     juce::TextButton tabSetupButton{ "SETUP 1" };
     juce::TextButton tabSetup2Button{ "SETUP 2" };
-    enum ViewMode { SequencerView, Setup1View, Setup2View };
+    juce::TextButton tabTuningButton{ "TUNING" }; // ★ 新設: チューニングタブ
+
+    // ★ ViewMode に TuningView を追加
+    enum ViewMode { SequencerView, Setup1View, Setup2View, TuningView };
     ViewMode currentView = SequencerView;
 
     juce::TextButton btnClearAll{ "CLEAR ALL" };
@@ -104,6 +107,23 @@ private:
     juce::Slider shiftSliders[8];
     juce::Label shiftLabels[8];
     juce::TextButton btnShiftLock[8];
+
+    // ==========================================================
+    // ★ 新設: ファインチューニング用 UIコンポーネント
+    // ==========================================================
+    juce::Label tuningTempoMin, tuningTempoMax;
+    juce::ToggleButton tuningTempoGen{ "Gen" };
+    juce::ToggleButton tuningTsBtns[8];
+    juce::ToggleButton tuningFillBtns[4];
+
+    juce::Label tuningDivMin[8], tuningDivMax[8]; juce::ToggleButton tuningDivGen[8];
+    juce::Label tuningCmplxMin[8], tuningCmplxMax[8]; juce::ToggleButton tuningCmplxGen[8];
+    juce::Label tuningEntrpMin[8], tuningEntrpMax[8]; juce::ToggleButton tuningEntrpGen[8];
+    juce::Label tuningShiftMin[8], tuningShiftMax[8]; juce::ToggleButton tuningShiftGen[8];
+
+    void setupNumBox(juce::Label& lbl, std::function<void(int)> onChange);
+    void updateTuningUIFromProcessor();
+    // ==========================================================
 
     juce::Rectangle<int> dragAllArea;
     juce::Rectangle<int> lockArea;

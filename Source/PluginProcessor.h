@@ -15,7 +15,6 @@ struct InstrumentPatch {
     float fFreq; float fRes; float drive; float vol;
 };
 
-// 22ジャンル×8トラック = 176パッチ + Pluck(8) + Arp(1) = 185パッチに完全独立拡張
 enum PatchID {
     G0_T0, G0_T1, G0_T2, G0_T3, G0_T4, G0_T5, G0_T6, G0_T7,
     G1_T0, G1_T1, G1_T2, G1_T3, G1_T4, G1_T5, G1_T6, G1_T7,
@@ -57,6 +56,36 @@ struct SavedPattern {
     int trackComplexity[8] = { 50, 50, 50, 50, 50, 50, 50, 50 };
     int trackEntropy[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
     int num = 4; int den = 4; int bars = 4;
+};
+
+// ★ 新設: ファインチューニング用データ構造
+struct TuningRange { int min; int max; };
+
+struct TimeSigDef { int num; int den; };
+
+struct TrackTuning {
+    TuningRange div;
+    TuningRange cmplx;
+    TuningRange entrp;
+    TuningRange shift;
+    bool divGenEnabled = true;
+    bool cmplxGenEnabled = true;
+    bool entrpGenEnabled = true;
+    bool shiftGenEnabled = true;
+};
+
+struct GenreTuning {
+    TuningRange tempo;
+    bool tempoGenEnabled = true;
+
+    // 8種類の代表的な拍子を候補として持たせる
+    bool allowedTimeSigs[8] = { true, false, false, false, false, false, false, false };
+    TimeSigDef timeSigOptions[8] = { {4,4}, {3,4}, {5,4}, {7,8}, {12,8}, {13,8}, {15,16}, {5,8} };
+
+    // Fillの種類ごとの許可フラグ (0:Scatter, 1:Drop, 2:Euclid, 3:Roll)
+    bool allowedFills[4] = { true, true, true, true };
+
+    TrackTuning tracks[8];
 };
 
 const int scalePatterns[12][7] = {
@@ -133,6 +162,10 @@ public:
     const juce::String getProgramName(int index) override; void changeProgramName(int index, const juce::String& newName) override;
     void getStateInformation(juce::MemoryBlock& destData) override; void setStateInformation(const void* data, int sizeInBytes) override;
 
+    // ★ 新設: ユーザーによるチューニング設定データ
+    GenreTuning userTuning[24];
+    void initializeUserTunings(); // コンストラクタで呼び出す初期化関数
+
     std::atomic<int> timeSigNumerator{ 4 }; std::atomic<int> timeSigDenominator{ 4 };
     std::atomic<int> globalBarCount{ 4 }; std::atomic<int> fillBarTarget{ 0 };
 
@@ -141,6 +174,8 @@ public:
     int trackShiftUI[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
     std::atomic<bool> patternUpdated{ false }; std::atomic<bool> uiNeedsUpdate{ false }; std::atomic<int> currentPlayingBar{ 0 };
+
+    // UI側のマニュアルロックボタン（従来通り）
     bool trackLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackDivLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackCmplxLocked[8] = { true, true, false, false, true, false, false, false };

@@ -6,12 +6,11 @@
 #include <algorithm>
 #include <cmath>
 
-// コンパイル時パッチ生成ヘルパー (短い名前 P にして可読性と文字数を圧縮)
 constexpr InstrumentPatch P(int w, float fr, float pD, float pA, float aAt, float aDc, float ns, int fT, float fF, float fR, float dr, float vl) {
     return { w, fr, pD, pA, aAt, aDc, ns, fT, fF, fR, dr, vl };
 }
 
-// 176独立パッチ + Pluck(8) + Arp(1) = 185パッチの完全個別定義
+// 185パッチの完全個別定義 (省略なし)
 static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = []() {
     std::array<InstrumentPatch, PATCH_MAX> arr{};
 
@@ -100,7 +99,7 @@ static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = []() {
     arr[G8_T1] = P(0, 350.0f, 4.0f, 1.5f, 1.0f, 10.0f, 0.2f, 2, 1500.0f, 2.0f, 1.5f, 0.9f);
     arr[G8_T2] = P(0, 200.0f, 0.0f, 0.0f, 8.0f, 10.0f, 1.0f, 2, 3000.0f, 1.5f, 1.5f, 0.5f);
     arr[G8_T3] = P(0, 250.0f, 0.0f, 0.0f, 8.0f, 12.0f, 1.0f, 2, 3500.0f, 1.5f, 1.5f, 0.5f);
-    arr[G8_T4] = P(0, 2000.0f, 2.0f, 0.0f, 1.0f, 5.0f, 0.0f, 3, 0.0f, 0.0f, 1.5f, 0.9f); // Clave
+    arr[G8_T4] = P(0, 2000.0f, 2.0f, 0.0f, 1.0f, 5.0f, 0.0f, 3, 0.0f, 0.0f, 1.5f, 0.9f);
     arr[G8_T5] = P(0, 250.0f, 6.0f, 1.5f, 1.0f, 15.0f, 0.0f, 2, 500.0f, 2.0f, 2.0f, 1.0f);
     arr[G8_T6] = P(0, 180.0f, 8.0f, 2.0f, 1.0f, 20.0f, 0.1f, 2, 400.0f, 2.0f, 2.0f, 1.0f);
     arr[G8_T7] = P(3, 900.0f, 6.0f, 0.2f, 1.0f, 18.0f, 0.0f, 2, 1200.0f, 4.0f, 2.5f, 0.8f);
@@ -123,7 +122,7 @@ static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = []() {
     arr[G10_T4] = P(2, 130.0f, 6.0f, 0.0f, 3.0f, 15.0f, 1.0f, 2, 1500.0f, 1.0f, 2.0f, 0.9f);
     arr[G10_T5] = P(0, 250.0f, 6.0f, 1.5f, 1.0f, 15.0f, 0.0f, 2, 500.0f, 2.0f, 2.0f, 1.0f);
     arr[G10_T6] = P(3, 600.0f, 4.0f, 0.5f, 1.0f, 8.0f, 0.1f, 2, 1000.0f, 3.0f, 1.5f, 0.9f);
-    arr[G10_T7] = P(0, 1800.0f, 5.0f, 0.2f, 5.0f, 15.0f, 0.0f, 3, 0.0f, 0.0f, 1.5f, 0.8f); // Whistle
+    arr[G10_T7] = P(0, 1800.0f, 5.0f, 0.2f, 5.0f, 15.0f, 0.0f, 3, 0.0f, 0.0f, 1.5f, 0.8f);
 
     // G11: Indian Cls
     arr[G11_T0] = P(0, 70.0f, 20.0f, 2.0f, 1.0f, 25.0f, 0.0f, 0, 800.0f, 2.0f, 1.5f, 1.1f);
@@ -142,7 +141,7 @@ static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = []() {
     arr[G12_T3] = P(0, 200.0f, 0.0f, 0.0f, 8.0f, 10.0f, 1.0f, 2, 3000.0f, 1.5f, 1.5f, 0.5f);
     arr[G12_T4] = P(3, 700.0f, 4.0f, 0.5f, 1.0f, 8.0f, 0.1f, 2, 1200.0f, 3.0f, 1.5f, 0.9f);
     arr[G12_T5] = P(3, 850.0f, 6.0f, 0.2f, 1.0f, 18.0f, 0.0f, 2, 1200.0f, 4.0f, 2.5f, 0.8f);
-    arr[G12_T6] = P(0, 300.0f, 25.0f, -2.0f, 2.0f, 25.0f, 0.1f, 0, 1500.0f, 2.0f, 2.5f, 1.0f); // Cuica
+    arr[G12_T6] = P(0, 300.0f, 25.0f, -2.0f, 2.0f, 25.0f, 0.1f, 0, 1500.0f, 2.0f, 2.5f, 1.0f);
     arr[G12_T7] = P(0, 200.0f, 8.0f, 1.5f, 1.0f, 15.0f, 0.1f, 2, 1000.0f, 2.0f, 2.0f, 1.0f);
 
     // G13: Reggaeton
@@ -202,7 +201,7 @@ static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = []() {
     arr[G18_T3] = P(3, 800.0f, 4.0f, 0.0f, 1.0f, 15.0f, 1.0f, 1, 4000.0f, 1.0f, 2.0f, 0.6f);
     arr[G18_T4] = P(2, 100.0f, 6.0f, 0.0f, 3.0f, 15.0f, 1.0f, 2, 1500.0f, 1.0f, 2.5f, 0.9f);
     arr[G18_T5] = P(3, 600.0f, 4.0f, 0.5f, 1.0f, 8.0f, 0.1f, 2, 1000.0f, 3.0f, 1.5f, 0.9f);
-    arr[G18_T6] = P(2, 100.0f, 40.0f, 2.0f, 5.0f, 30.0f, 0.8f, 2, 2000.0f, 2.0f, 2.5f, 0.9f); // Scratch
+    arr[G18_T6] = P(2, 100.0f, 40.0f, 2.0f, 5.0f, 30.0f, 0.8f, 2, 2000.0f, 2.0f, 2.5f, 0.9f);
     arr[G18_T7] = P(3, 150.0f, 8.0f, 1.0f, 1.0f, 15.0f, 0.5f, 2, 800.0f, 2.0f, 4.0f, 0.8f);
 
     // G19: Math Rock
@@ -215,7 +214,7 @@ static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = []() {
     arr[G19_T6] = P(0, 80.0f, 12.0f, 2.0f, 1.0f, 20.0f, 0.0f, 0, 1000.0f, 1.0f, 2.5f, 1.1f);
     arr[G19_T7] = P(2, 300.0f, 8.0f, 0.0f, 1.0f, 30.0f, 0.9f, 1, 2000.0f, 1.0f, 2.5f, 0.6f);
 
-    // G20: Prog Metal (Portnoy Kit)
+    // G20: Prog Metal
     arr[G20_T0] = P(0, 85.0f, 4.0f, 8.0f, 0.5f, 12.0f, 0.2f, 0, 6000.0f, 1.0f, 3.5f, 1.1f);
     arr[G20_T1] = P(2, 190.0f, 8.0f, 2.0f, 1.0f, 18.0f, 0.5f, 0, 4000.0f, 1.5f, 4.0f, 1.0f);
     arr[G20_T2] = P(3, 1200.0f, 2.0f, 0.0f, 1.0f, 6.0f, 0.8f, 1, 6000.0f, 2.0f, 3.0f, 0.8f);
@@ -235,7 +234,6 @@ static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = []() {
     arr[G21_T6] = P(0, 400.0f, 4.0f, 1.5f, 1.0f, 8.0f, 0.1f, 2, 1200.0f, 3.0f, 2.0f, 1.0f);
     arr[G21_T7] = P(0, 450.0f, 4.0f, 1.5f, 1.0f, 8.0f, 0.1f, 2, 1200.0f, 3.0f, 2.0f, 1.0f);
 
-    // Plucks & Arp (狭い型変換エラー回避のため static_cast を使用)
     for (int i = 176; i < 184; ++i) {
         float f = static_cast<float>(130.81 * std::pow(1.05946, (i - 176) * 2));
         arr[i] = P(2, f, 12.0f, 0.0f, 1.0f, 25.0f, 0.0f, 0, 1500.0f, 2.0f, 2.0f, 1.0f);
@@ -333,9 +331,59 @@ AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
 #endif
 {
     formatManager.registerBasicFormats();
+    initializeUserTunings(); // ★ 新設: デフォルト設定をロード
 }
 
 AIDrumMachineAudioProcessor::~AIDrumMachineAudioProcessor() {}
+
+// ★ 新設: genreTableのデフォルト値を userTuning に初期コピーする関数
+void AIDrumMachineAudioProcessor::initializeUserTunings() {
+    for (int g = 0; g < 24; ++g) {
+        userTuning[g].tempo.min = genreTable[g].minTempo;
+        userTuning[g].tempo.max = genreTable[g].maxTempo;
+
+        // デフォルトでは元の拍子のみをONにする
+        for (int t = 0; t < 8; ++t) {
+            userTuning[g].allowedTimeSigs[t] = false;
+            if (userTuning[g].timeSigOptions[t].num == genreTable[g].defaultNum &&
+                userTuning[g].timeSigOptions[t].den == genreTable[g].defaultDen) {
+                userTuning[g].allowedTimeSigs[t] = true;
+            }
+        }
+        // もし一致がなければ最初の候補をONにする（フェイルセーフ）
+        bool hasTs = false;
+        for (int t = 0; t < 8; ++t) if (userTuning[g].allowedTimeSigs[t]) hasTs = true;
+        if (!hasTs) userTuning[g].allowedTimeSigs[0] = true;
+
+        for (int f = 0; f < 4; ++f) userTuning[g].allowedFills[f] = true;
+
+        for (int trk = 0; trk < 8; ++trk) {
+            // Division の範囲を抽出 (元が固定長4つなので、最小値と最大値を取る)
+            int minDiv = 999, maxDiv = -1;
+            for (int i = 0; i < 4; ++i) {
+                int d = genreTable[g].allowedDivs[trk][i];
+                if (d > 0) {
+                    if (d < minDiv) minDiv = d;
+                    if (d > maxDiv) maxDiv = d;
+                }
+            }
+            if (minDiv == 999) minDiv = 4;
+            if (maxDiv == -1) maxDiv = 4;
+
+            userTuning[g].tracks[trk].div.min = minDiv;
+            userTuning[g].tracks[trk].div.max = maxDiv;
+
+            // CmplxとEntrpの初期範囲 (スプレッドシートの標準値相当)
+            userTuning[g].tracks[trk].cmplx.min = 20;
+            userTuning[g].tracks[trk].cmplx.max = 50;
+            userTuning[g].tracks[trk].entrp.min = 10;
+            userTuning[g].tracks[trk].entrp.max = 50;
+
+            userTuning[g].tracks[trk].shift.min = genreTable[g].shiftMin[trk];
+            userTuning[g].tracks[trk].shift.max = genreTable[g].shiftMax[trk];
+        }
+    }
+}
 
 const GenreDefinition& AIDrumMachineAudioProcessor::getGenreDef(int index) {
     if (index < 0 || index >= 24) return genreTable[0];
@@ -384,36 +432,38 @@ void AIDrumMachineAudioProcessor::clearTrack(int trk) {
 
 void AIDrumMachineAudioProcessor::generateAllTracks() {
     int genre = currentGenre.load();
-    const auto& def = getGenreDef(genre);
+    GenreTuning& tuning = userTuning[genre];
     bool isAlgorithmMode = (genre >= 22);
-    bool isSpecialEnsemble = (genre == 14 || genre == 21);
 
     int fillBar = fillBarTarget.load();
     bool isArp = arpMode.load();
     bool isMono = arpMono.load();
     int curScale = arpScale.load();
 
-    // ★ Tempo Lock
-    if (!tempoLocked.load() && !isSyncEnabled.load() && !isArp) {
-        int newBpm = random.nextInt(juce::Range<int>(def.minTempo, def.maxTempo + 1));
+    // ★ Tempo Generation (userTuning 参照)
+    if (tuning.tempoGenEnabled && !tempoLocked.load() && !isSyncEnabled.load() && !isArp) {
+        int tMin = std::min(tuning.tempo.min, tuning.tempo.max);
+        int tMax = std::max(tuning.tempo.min, tuning.tempo.max);
+        int newBpm = random.nextInt(juce::Range<int>(tMin, tMax + 1));
         internalTempo.store((double)newBpm);
     }
 
     int num = timeSigNumerator.load();
     int den = timeSigDenominator.load();
 
+    // ★ Time Signature Generation (userTuning 参照)
     if (!isArp) {
-        if (genre == 6) {
-            const int idmSigs[6][2] = { {4,4}, {5,4}, {5,8}, {7,8}, {7,16}, {15,16} };
-            int idx = random.nextInt(6);
-            num = idmSigs[idx][0]; den = idmSigs[idx][1];
-            timeSigNumerator.store(num); timeSigDenominator.store(den);
+        int tsChoices[8];
+        int numTsChoices = 0;
+        for (int i = 0; i < 8; ++i) {
+            if (tuning.allowedTimeSigs[i]) tsChoices[numTsChoices++] = i;
         }
-        else if (genre == 20) {
-            const int progSigs[6][2] = { {13,8}, {15,16}, {19,16}, {7,8}, {11,8}, {21,16} };
-            int idx = random.nextInt(6);
-            num = progSigs[idx][0]; den = progSigs[idx][1];
-            timeSigNumerator.store(num); timeSigDenominator.store(den);
+        if (numTsChoices > 0) {
+            int pickedTs = tsChoices[random.nextInt(numTsChoices)];
+            num = tuning.timeSigOptions[pickedTs].num;
+            den = tuning.timeSigOptions[pickedTs].den;
+            timeSigNumerator.store(num);
+            timeSigDenominator.store(den);
         }
     }
 
@@ -425,7 +475,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
         std::vector<int> usedNotes;
 
         for (int trk = 0; trk < 8; ++trk) {
-            // ★ Track Lock (Arp): 保護されているなら生成処理をスキップ
             if (trackLocked[trk]) {
                 usedNotes.push_back(trackOctaveUI[trk] * 12 + trackDegreeUI[trk]);
                 continue;
@@ -533,45 +582,48 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
         }
     }
     else {
-        // ★ フィル・タイポロジーのランダム決定
-        int fillTypology = random.nextInt(4);
+        // ★ Fill Typology Generation (userTuning 参照)
+        int fillChoices[4];
+        int numFillChoices = 0;
+        for (int i = 0; i < 4; ++i) if (tuning.allowedFills[i]) fillChoices[numFillChoices++] = i;
+        int fillTypology = numFillChoices > 0 ? fillChoices[random.nextInt(numFillChoices)] : 0;
 
         for (int trk = 0; trk < 8; ++trk) {
-            // ★ Track Lock
             if (trackLocked[trk]) continue;
 
-            // ★ Division Lock
-            if (!trackDivLocked[trk]) {
-                std::vector<int> candidates;
-                for (int i = 0; i < 4; ++i) if (def.allowedDivs[trk][i] > 0) candidates.push_back(def.allowedDivs[trk][i]);
-                int newDiv = 4;
-                if (!candidates.empty()) newDiv = candidates[random.nextInt(candidates.size())];
+            TrackTuning& tt = tuning.tracks[trk];
 
-                if (fillBar > 0 && !isAlgorithmMode && !isSpecialEnsemble) {
-                    if ((genre == 4 || genre == 7) && trk == 2) newDiv = maxDiv;
-                    if ((genre == 0 || genre == 1) && (trk == 1 || trk == 4)) newDiv = maxDiv;
-                    if (genre == 20 && (trk == 0 || trk == 1 || trk == 4)) newDiv = maxDiv;
-                }
+            // ★ Division
+            if (tt.divGenEnabled && !trackDivLocked[trk]) {
+                int dMin = std::min(tt.div.min, tt.div.max);
+                int dMax = std::max(tt.div.min, tt.div.max);
+                int newDiv = random.nextInt(juce::Range<int>(std::max(1, dMin), std::max(2, dMax + 1)));
                 if (newDiv > maxDiv) newDiv = maxDiv;
                 trackDivisionsUI[trk] = newDiv;
             }
 
-            // ★ Entropy, Shift, Complexity Lock 
-            // （ロックされていない時のみ新しい乱数を生成。ロックされている時は現在のUI値を維持）
-            if (!trackEntrpLocked[trk]) trackEntropy[trk] = random.nextInt(juce::Range<int>(10, 50));
-            if (!trackShiftLocked[trk]) trackShiftUI[trk] = random.nextInt(juce::Range<int>(def.shiftMin[trk], def.shiftMax[trk] + 1));
-
-            if (isAlgorithmMode || isSpecialEnsemble) {
-                trackComplexity[trk] = (isAlgorithmMode) ? 50 : (10 + random.nextInt(15));
+            // ★ Cmplx, Entrp, Shift
+            if (tt.cmplxGenEnabled && !trackCmplxLocked[trk]) {
+                int cMin = std::min(tt.cmplx.min, tt.cmplx.max);
+                int cMax = std::max(tt.cmplx.min, tt.cmplx.max);
+                trackComplexity[trk] = isAlgorithmMode ? 50 : random.nextInt(juce::Range<int>(cMin, cMax + 1));
             }
-            else if (!trackCmplxLocked[trk]) {
-                trackComplexity[trk] = 20 + random.nextInt(30);
+            if (tt.entrpGenEnabled && !trackEntrpLocked[trk]) {
+                int eMin = std::min(tt.entrp.min, tt.entrp.max);
+                int eMax = std::max(tt.entrp.min, tt.entrp.max);
+                trackEntropy[trk] = random.nextInt(juce::Range<int>(eMin, eMax + 1));
+            }
+            if (tt.shiftGenEnabled && !trackShiftLocked[trk]) {
+                int sMin = std::min(tt.shift.min, tt.shift.max);
+                int sMax = std::max(tt.shift.min, tt.shift.max);
+                trackShiftUI[trk] = random.nextInt(juce::Range<int>(sMin, sMax + 1));
             }
 
             int div = trackDivisionsUI[trk];
             int n = div * num * bars;
             int offset = random.nextInt(juce::Range<int>(0, juce::jmax(1, n)));
-            int cmplx = trackComplexity[trk]; // 最新の値（ロックされていれば古いまま）を参照
+
+            int cmplx = trackComplexity[trk];
             int entrp = trackEntropy[trk];
 
             for (int j = 0; j < 1024; ++j) {
@@ -588,19 +640,19 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 bool isNegativeAnchor = false;
                 int anchorVel = 100;
 
-                // ★ Scatter Fills / Fill Typology
+                // ★ Scatter Fills
                 if (isFillPortion && !isAlgorithmMode) {
                     int localStep = stepInBar - div * (num - 2);
                     if (localStep < 0) localStep = stepInBar;
 
-                    if (fillTypology == 0) { // Linear Scatter
+                    if (fillTypology == 0) {
                         isNegativeAnchor = true;
                         int prime = 7;
                         int targetTrk = ((localStep * prime) + currentBarOfStep) % 8;
                         if (entrp > 30) targetTrk = (targetTrk + (entrp % 5)) % 8;
                         if (trk == targetTrk) { isAnchor = true; anchorVel = 75 + random.nextInt(25); isNegativeAnchor = false; }
                     }
-                    else if (fillTypology == 1) { // Drop & Scatter
+                    else if (fillTypology == 1) {
                         isNegativeAnchor = true;
                         if (trk != 0 && trk != 5 && trk != 6) {
                             int targetTrk = 1 + ((localStep * 3) % 4);
@@ -608,7 +660,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                             if (stepInBar == (div * num) - (div > 1 ? div / 2 : 1) && (trk == 1 || trk == 7)) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; }
                         }
                     }
-                    else if (fillTypology == 2) { // Euclidean Scatter
+                    else if (fillTypology == 2) {
                         isNegativeAnchor = true;
                         int fillLen = div * 2;
                         if (fillLen > 0) {
@@ -620,7 +672,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                             }
                         }
                     }
-                    else { // Dynamic Multi-Track Roll
+                    else {
                         isNegativeAnchor = true;
                         if (trk != 0 && trk != 6) {
                             int activeTrk = 1 + (localStep / (div > 0 ? div : 1)) % 4;
@@ -635,9 +687,8 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                     }
                 }
                 else if (!isAlgorithmMode) {
-                    // ★ 全24ジャンルの高度化アンカー (T0-T7) 完全網羅
                     switch (genre) {
-                    case 0: case 1: // Techno, House
+                    case 0: case 1:
                         if (trk == 0) {
                             if (stepInBar % div == 0) {
                                 isAnchor = true;
@@ -651,7 +702,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if (trk == 7) { if (currentBarOfStep % 4 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 80; } }
                         break;
 
-                    case 2: // UKG
+                    case 2:
                         if (trk == 0) {
                             if (stepInBar == 0) isAnchor = true;
                             int barType = currentBarOfStep % 4;
@@ -669,7 +720,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if (trk == 6 || trk == 7) { if (stepInBar == div + div / 2 || stepInBar == div * 3 + div / 2) { isAnchor = true; anchorVel = 60; } }
                         break;
 
-                    case 4: case 7: // Trap, Dubstep
+                    case 4: case 7:
                         if (trk == 0) {
                             if (stepInBar == 0) isAnchor = true;
                             if (genre == 4 && stepInBar == div + div / 2) isAnchor = true;
@@ -685,7 +736,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if (trk == 7) { if (stepInBar == 0) { isAnchor = true; anchorVel = 100; } }
                         break;
 
-                    case 3: // DnB
+                    case 3:
                         if (trk == 0) {
                             if (stepInBar == 0) isAnchor = true;
                             if (currentBarOfStep % 2 == 0 && stepInBar == div * 2 + div / 2) isAnchor = true;
@@ -698,7 +749,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if (trk == 7) { if (stepInBar == 0) { isAnchor = true; anchorVel = 95; } }
                         break;
 
-                    case 15: case 16: // Funk, NJS
+                    case 15: case 16:
                         if (trk == 0) {
                             if (stepInBar == 0) isAnchor = true;
                             if (currentBarOfStep % 2 == 0 && stepInBar == div * 2 + div / 2) isAnchor = true;
@@ -714,7 +765,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if (trk == 7) { if (currentBarOfStep % 2 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 90; } }
                         break;
 
-                    case 17: case 18: // Neo Soul, Hip Hop
+                    case 17: case 18:
                         if (trk == 0) {
                             if (stepInBar == 0) isAnchor = true;
                             if (stepInBar == div * 2 + div / 2 && random.nextInt(100) < 70) isAnchor = true;
@@ -725,7 +776,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if (trk == 7) { if (currentBarOfStep % 4 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 85; } }
                         break;
 
-                    case 8: case 12: // Afrobeat, Samba
+                    case 8: case 12:
                         if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2 + div / 2) isAnchor = true; }
                         if (trk == 1 || trk == 4) {
                             if (stepInBar == 0 || stepInBar == div + div / 2 || stepInBar == div * 2 + div || stepInBar == div * 3 || stepInBar == div * 4) { isAnchor = true; anchorVel = 85; }
@@ -735,7 +786,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if (trk >= 5 && trk <= 7) { if (stepInBar == div - 1 || stepInBar == div * 3 + div / 2) { isAnchor = true; anchorVel = 80; } }
                         break;
 
-                    case 9: case 10: case 13: // Gqom, Amapiano, Reggaeton
+                    case 9: case 10: case 13:
                         if (trk == 0) { if (stepInBar % div == 0) isAnchor = true; }
                         if (trk == 1 || trk == 4) { if (stepInBar == div - 1 || stepInBar == div * 2 + div / 2) isAnchor = true; }
                         if (trk == 2 || trk == 3) { if (stepInBar % (div > 1 ? div / 2 : 1) == 0) { isAnchor = true; anchorVel = 70; } }
@@ -748,7 +799,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         }
                         break;
 
-                    case 11: case 14: // Indian, Gamelan
+                    case 11: case 14:
                         if (trk == 0) {
                             if (currentBarOfStep % 4 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 100; }
                             else { isNegativeAnchor = true; }
@@ -757,7 +808,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if (trk >= 5 && trk <= 7) { if (stepInBar % div == div / 2) { isAnchor = true; anchorVel = 60; } }
                         break;
 
-                    case 19: // Math Rock
+                    case 19:
                         if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 3) isAnchor = true; }
                         if (trk == 1 || trk == 4) { if (stepInBar == div * 2 || stepInBar == div * 4) isAnchor = true; }
                         if (trk == 2) {
@@ -769,7 +820,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if (trk == 7) { if (currentBarOfStep % 2 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 90; } }
                         break;
 
-                    case 20: // Progressive Metal
+                    case 20:
                         if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 3 || stepInBar == div * 5) isAnchor = true; }
                         if (trk == 1) { if (stepInBar == div * 2 || stepInBar == div * 4 || stepInBar == div * 6) isAnchor = true; }
                         if (trk == 2) { if (stepInBar % (div > 1 ? div / 2 : 1) == 0) { isAnchor = true; anchorVel = 70; } }
@@ -780,7 +831,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if (trk == 7) { if (currentBarOfStep % 2 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 100; } }
                         break;
 
-                    case 21: // Minimalism
+                    case 21:
                         if (trk == 0) { if (stepInBar % (div * 3) == 0) isAnchor = true; }
                         if (trk == 1) { if ((stepInBar + div) % (div * 3) == 0) isAnchor = true; }
                         if (trk >= 2 && trk <= 4) { if (stepInBar % 2 == 0) isAnchor = true; }
@@ -794,11 +845,11 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         break;
                     }
 
+                    // ★ ゴーストノートの純粋エントロピー依存化 (C=0, E=0 時のバグ解消)
                     if (trk == 0 && !isAnchor && !isNegativeAnchor) {
                         if (stepInBar % div == div - 1) {
-                            // C>0 かつ E>0 の時だけゴーストノートを許可する（あるいはEの数値に純粋に依存させる）
                             if (cmplx > 0 && entrp > 0) {
-                                if (random.nextInt(100) < (entrp / 2)) { // ベースの15%を廃止し、Eに完全依存させる
+                                if (random.nextInt(100) < (entrp / 2)) {
                                     drumPatternUI[trk][j] = random.nextInt(juce::Range<int>(40, 75));
                                     continue;
                                 }
@@ -807,7 +858,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                     }
                 }
 
-                // ★ 最終的な発音決定 (Lockに関わらず現在のcmplx値を参照するよう修正)
                 int k = juce::jmax(1, (n * cmplx) / 100);
                 int vel = 0;
 
@@ -818,7 +868,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 else if (isNegativeAnchor) {
                     vel = 0;
                 }
-                else if (cmplx > 0) { // ★ trackCmplxLocked のチェックを削除
+                else if (cmplx > 0) {
                     bool isHit = (((j + offset) * k) % n) < k;
                     if (entrp > 0 && random.nextInt(100) < (entrp / 3)) isHit = !isHit;
                     vel = isHit ? random.nextInt(juce::Range<int>(40, 90 + (entrp / 10))) : 0;
