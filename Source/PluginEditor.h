@@ -43,7 +43,7 @@ private:
     juce::TextButton tabSeqButton{ "SEQUENCER" };
     juce::TextButton tabSetupButton{ "SETUP 1" };
     juce::TextButton tabSetup2Button{ "SETUP 2" };
-    juce::TextButton tabTuningButton{ "TUNING" }; // ★ 新設
+    juce::TextButton tabTuningButton{ "TUNING" };
 
     enum ViewMode { SequencerView, Setup1View, Setup2View, TuningView };
     ViewMode currentView = SequencerView;
@@ -108,17 +108,31 @@ private:
     juce::TextButton btnShiftLock[8];
 
     // ==========================================================
-    // ファインチューニング用 UIコンポーネント
+    // ★ ファインチューニング用 UIコンポーネント (ラベルによる完全制御)
     // ==========================================================
+    juce::Label tuningTempoTitle{ "", "Tempo (Min/Max/L):" };
+    juce::Label tuningTsTitle{ "", "Time Sigs:" };
+    juce::Label tuningFillsTitle{ "", "Fills:" };
+
+    juce::Label tuningColDiv{ "", "Div (1-8 / L)" };
+    juce::Label tuningColCmplx{ "", "Cmplx (Min/Max/L)" };
+    juce::Label tuningColEntrp{ "", "Entrp (Min/Max/L)" };
+    juce::Label tuningColShift{ "", "Shift (Min/Max/L)" };
+
     juce::Label tuningTempoMin, tuningTempoMax;
-    juce::ToggleButton tuningTempoGen{ "Gen" };
+    juce::TextButton tuningTempoLock{ "L" };
     juce::ToggleButton tuningTsBtns[8];
     juce::ToggleButton tuningFillBtns[4];
 
-    juce::Label tuningDivMin[8], tuningDivMax[8]; juce::ToggleButton tuningDivGen[8];
-    juce::Label tuningCmplxMin[8], tuningCmplxMax[8]; juce::ToggleButton tuningCmplxGen[8];
-    juce::Label tuningEntrpMin[8], tuningEntrpMax[8]; juce::ToggleButton tuningEntrpGen[8];
-    juce::Label tuningShiftMin[8], tuningShiftMax[8]; juce::ToggleButton tuningShiftGen[8];
+    // ★ Divが8個の点灯ボタンに進化！
+    juce::TextButton tuningDivBtns[8][8];
+    juce::TextButton tuningDivLock[8];
+
+    juce::Label tuningCmplxMin[8], tuningCmplxMax[8]; juce::TextButton tuningCmplxLock[8];
+    juce::Label tuningEntrpMin[8], tuningEntrpMax[8]; juce::TextButton tuningEntrpLock[8];
+    juce::Label tuningShiftMin[8], tuningShiftMax[8]; juce::TextButton tuningShiftLock[8];
+
+    juce::TextButton btnDumpTuning{ "DUMP TO CLIPBOARD" };
 
     void setupNumBox(juce::Label& lbl, std::function<void(int)> onChange);
     void updateTuningUIFromProcessor();

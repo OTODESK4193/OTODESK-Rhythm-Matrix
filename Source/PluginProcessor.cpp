@@ -6,11 +6,11 @@
 #include <algorithm>
 #include <cmath>
 
-constexpr InstrumentPatch P(int w, float fr, float pD, float pA, float aAt, float aDc, float ns, int fT, float fF, float fR, float dr, float vl) {
+// ★ warning回避のため static を付与
+static constexpr InstrumentPatch P(int w, float fr, float pD, float pA, float aAt, float aDc, float ns, int fT, float fF, float fR, float dr, float vl) {
     return { w, fr, pD, pA, aAt, aDc, ns, fT, fF, fR, dr, vl };
 }
 
-// 185パッチの完全個別定義 (省略なし)
 static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = []() {
     std::array<InstrumentPatch, PATCH_MAX> arr{};
 
@@ -331,18 +331,17 @@ AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
 #endif
 {
     formatManager.registerBasicFormats();
-    initializeUserTunings(); // ★ 新設: デフォルト設定をロード
+    initializeUserTunings();
 }
 
 AIDrumMachineAudioProcessor::~AIDrumMachineAudioProcessor() {}
 
-// ★ 新設: genreTableのデフォルト値を userTuning に初期コピーする関数
 void AIDrumMachineAudioProcessor::initializeUserTunings() {
     for (int g = 0; g < 24; ++g) {
         userTuning[g].tempo.min = genreTable[g].minTempo;
         userTuning[g].tempo.max = genreTable[g].maxTempo;
+        userTuning[g].tempoLocked = false;
 
-        // デフォルトでは元の拍子のみをONにする
         for (int t = 0; t < 8; ++t) {
             userTuning[g].allowedTimeSigs[t] = false;
             if (userTuning[g].timeSigOptions[t].num == genreTable[g].defaultNum &&
@@ -350,7 +349,6 @@ void AIDrumMachineAudioProcessor::initializeUserTunings() {
                 userTuning[g].allowedTimeSigs[t] = true;
             }
         }
-        // もし一致がなければ最初の候補をONにする（フェイルセーフ）
         bool hasTs = false;
         for (int t = 0; t < 8; ++t) if (userTuning[g].allowedTimeSigs[t]) hasTs = true;
         if (!hasTs) userTuning[g].allowedTimeSigs[0] = true;
@@ -358,29 +356,27 @@ void AIDrumMachineAudioProcessor::initializeUserTunings() {
         for (int f = 0; f < 4; ++f) userTuning[g].allowedFills[f] = true;
 
         for (int trk = 0; trk < 8; ++trk) {
-            // Division の範囲を抽出 (元が固定長4つなので、最小値と最大値を取る)
-            int minDiv = 999, maxDiv = -1;
+            // ★ Divの設定：min/maxではなくallowedDivs配列に直接セット
+            for (int d = 0; d < 8; ++d) userTuning[g].tracks[trk].allowedDivs[d] = false;
             for (int i = 0; i < 4; ++i) {
                 int d = genreTable[g].allowedDivs[trk][i];
-                if (d > 0) {
-                    if (d < minDiv) minDiv = d;
-                    if (d > maxDiv) maxDiv = d;
+                if (d > 0 && d <= 8) {
+                    userTuning[g].tracks[trk].allowedDivs[d - 1] = true;
                 }
             }
-            if (minDiv == 999) minDiv = 4;
-            if (maxDiv == -1) maxDiv = 4;
+            userTuning[g].tracks[trk].divLocked = false;
 
-            userTuning[g].tracks[trk].div.min = minDiv;
-            userTuning[g].tracks[trk].div.max = maxDiv;
-
-            // CmplxとEntrpの初期範囲 (スプレッドシートの標準値相当)
             userTuning[g].tracks[trk].cmplx.min = 20;
             userTuning[g].tracks[trk].cmplx.max = 50;
+            userTuning[g].tracks[trk].cmplxLocked = false;
+
             userTuning[g].tracks[trk].entrp.min = 10;
             userTuning[g].tracks[trk].entrp.max = 50;
+            userTuning[g].tracks[trk].entrpLocked = false;
 
             userTuning[g].tracks[trk].shift.min = genreTable[g].shiftMin[trk];
             userTuning[g].tracks[trk].shift.max = genreTable[g].shiftMax[trk];
+            userTuning[g].tracks[trk].shiftLocked = false;
         }
     }
 }
@@ -434,14 +430,14 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     int genre = currentGenre.load();
     GenreTuning& tuning = userTuning[genre];
     bool isAlgorithmMode = (genre >= 22);
+    bool isSpecialEnsemble = (genre == 14 || genre == 21);
 
     int fillBar = fillBarTarget.load();
     bool isArp = arpMode.load();
     bool isMono = arpMono.load();
     int curScale = arpScale.load();
 
-    // ★ Tempo Generation (userTuning 参照)
-    if (tuning.tempoGenEnabled && !tempoLocked.load() && !isSyncEnabled.load() && !isArp) {
+    if (!tuning.tempoLocked && !tempoLocked.load() && !isSyncEnabled.load() && !isArp) {
         int tMin = std::min(tuning.tempo.min, tuning.tempo.max);
         int tMax = std::max(tuning.tempo.min, tuning.tempo.max);
         int newBpm = random.nextInt(juce::Range<int>(tMin, tMax + 1));
@@ -451,7 +447,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     int num = timeSigNumerator.load();
     int den = timeSigDenominator.load();
 
-    // ★ Time Signature Generation (userTuning 参照)
     if (!isArp) {
         int tsChoices[8];
         int numTsChoices = 0;
@@ -582,7 +577,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
         }
     }
     else {
-        // ★ Fill Typology Generation (userTuning 参照)
         int fillChoices[4];
         int numFillChoices = 0;
         for (int i = 0; i < 4; ++i) if (tuning.allowedFills[i]) fillChoices[numFillChoices++] = i;
@@ -593,27 +587,32 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
 
             TrackTuning& tt = tuning.tracks[trk];
 
-            // ★ Division
-            if (tt.divGenEnabled && !trackDivLocked[trk]) {
-                int dMin = std::min(tt.div.min, tt.div.max);
-                int dMax = std::max(tt.div.min, tt.div.max);
-                int newDiv = random.nextInt(juce::Range<int>(std::max(1, dMin), std::max(2, dMax + 1)));
+            // ★ Divの配列抽選ロジック（maxDivの安全フィルタ付き）
+            if (!tt.divLocked && !trackDivLocked[trk]) {
+                std::vector<int> candidates;
+                for (int i = 0; i < 8; ++i) {
+                    if (tt.allowedDivs[i]) candidates.push_back(i + 1);
+                }
+                int newDiv = 4; // fallback
+                if (!candidates.empty()) newDiv = candidates[random.nextInt((int)candidates.size())];
+
+                // 余計なお世話ロジックを削除し、純粋にTuningの候補だけを使う
+
                 if (newDiv > maxDiv) newDiv = maxDiv;
                 trackDivisionsUI[trk] = newDiv;
             }
 
-            // ★ Cmplx, Entrp, Shift
-            if (tt.cmplxGenEnabled && !trackCmplxLocked[trk]) {
+            if (!tt.cmplxLocked && !trackCmplxLocked[trk]) {
                 int cMin = std::min(tt.cmplx.min, tt.cmplx.max);
                 int cMax = std::max(tt.cmplx.min, tt.cmplx.max);
                 trackComplexity[trk] = isAlgorithmMode ? 50 : random.nextInt(juce::Range<int>(cMin, cMax + 1));
             }
-            if (tt.entrpGenEnabled && !trackEntrpLocked[trk]) {
+            if (!tt.entrpLocked && !trackEntrpLocked[trk]) {
                 int eMin = std::min(tt.entrp.min, tt.entrp.max);
                 int eMax = std::max(tt.entrp.min, tt.entrp.max);
                 trackEntropy[trk] = random.nextInt(juce::Range<int>(eMin, eMax + 1));
             }
-            if (tt.shiftGenEnabled && !trackShiftLocked[trk]) {
+            if (!tt.shiftLocked && !trackShiftLocked[trk]) {
                 int sMin = std::min(tt.shift.min, tt.shift.max);
                 int sMax = std::max(tt.shift.min, tt.shift.max);
                 trackShiftUI[trk] = random.nextInt(juce::Range<int>(sMin, sMax + 1));
@@ -640,7 +639,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 bool isNegativeAnchor = false;
                 int anchorVel = 100;
 
-                // ★ Scatter Fills
                 if (isFillPortion && !isAlgorithmMode) {
                     int localStep = stepInBar - div * (num - 2);
                     if (localStep < 0) localStep = stepInBar;
@@ -845,7 +843,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         break;
                     }
 
-                    // ★ ゴーストノートの純粋エントロピー依存化 (C=0, E=0 時のバグ解消)
                     if (trk == 0 && !isAnchor && !isNegativeAnchor) {
                         if (stepInBar % div == div - 1) {
                             if (cmplx > 0 && entrp > 0) {
@@ -1071,6 +1068,100 @@ void AIDrumMachineAudioProcessor::changeProgramName(int index, const juce::Strin
 
 bool AIDrumMachineAudioProcessor::hasEditor() const { return true; }
 juce::AudioProcessorEditor* AIDrumMachineAudioProcessor::createEditor() { return new AIDrumMachineAudioProcessorEditor(*this); }
-void AIDrumMachineAudioProcessor::getStateInformation(juce::MemoryBlock& destData) {}
-void AIDrumMachineAudioProcessor::setStateInformation(const void* data, int sizeInBytes) {}
+
+// ★ 保存と読み込み (Divの配列化に対応)
+void AIDrumMachineAudioProcessor::getStateInformation(juce::MemoryBlock& destData) {
+    juce::XmlElement xml("AIDrumMachineState");
+    xml.setAttribute("currentGenre", currentGenre.load());
+    xml.setAttribute("globalBarCount", globalBarCount.load());
+
+    auto* tuningsXml = new juce::XmlElement("UserTunings");
+    for (int g = 0; g < 24; ++g) {
+        auto* gXml = new juce::XmlElement("Genre");
+        gXml->setAttribute("id", g);
+        gXml->setAttribute("tMin", userTuning[g].tempo.min);
+        gXml->setAttribute("tMax", userTuning[g].tempo.max);
+        gXml->setAttribute("tLock", userTuning[g].tempoLocked);
+
+        juce::String tsStr, fStr;
+        for (int i = 0; i < 8; ++i) tsStr += userTuning[g].allowedTimeSigs[i] ? "1" : "0";
+        for (int i = 0; i < 4; ++i) fStr += userTuning[g].allowedFills[i] ? "1" : "0";
+        gXml->setAttribute("ts", tsStr);
+        gXml->setAttribute("fills", fStr);
+
+        for (int t = 0; t < 8; ++t) {
+            auto* tXml = new juce::XmlElement("Track");
+            tXml->setAttribute("id", t);
+
+            juce::String dStr;
+            for (int d = 0; d < 8; ++d) dStr += userTuning[g].tracks[t].allowedDivs[d] ? "1" : "0";
+            tXml->setAttribute("divs", dStr);
+
+            tXml->setAttribute("dLck", userTuning[g].tracks[t].divLocked);
+            tXml->setAttribute("cMin", userTuning[g].tracks[t].cmplx.min);
+            tXml->setAttribute("cMax", userTuning[g].tracks[t].cmplx.max);
+            tXml->setAttribute("cLck", userTuning[g].tracks[t].cmplxLocked);
+            tXml->setAttribute("eMin", userTuning[g].tracks[t].entrp.min);
+            tXml->setAttribute("eMax", userTuning[g].tracks[t].entrp.max);
+            tXml->setAttribute("eLck", userTuning[g].tracks[t].entrpLocked);
+            tXml->setAttribute("sMin", userTuning[g].tracks[t].shift.min);
+            tXml->setAttribute("sMax", userTuning[g].tracks[t].shift.max);
+            tXml->setAttribute("sLck", userTuning[g].tracks[t].shiftLocked);
+            gXml->addChildElement(tXml);
+        }
+        tuningsXml->addChildElement(gXml);
+    }
+    xml.addChildElement(tuningsXml);
+
+    copyXmlToBinary(xml, destData);
+}
+
+void AIDrumMachineAudioProcessor::setStateInformation(const void* data, int sizeInBytes) {
+    std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
+    if (xmlState != nullptr && xmlState->hasTagName("AIDrumMachineState")) {
+        currentGenre.store(xmlState->getIntAttribute("currentGenre", 0));
+        globalBarCount.store(xmlState->getIntAttribute("globalBarCount", 4));
+
+        if (auto* tuningsXml = xmlState->getChildByName("UserTunings")) {
+            for (auto* gXml : tuningsXml->getChildIterator()) {
+                int g = gXml->getIntAttribute("id", -1);
+                if (g >= 0 && g < 24) {
+                    userTuning[g].tempo.min = gXml->getIntAttribute("tMin", 120);
+                    userTuning[g].tempo.max = gXml->getIntAttribute("tMax", 120);
+                    userTuning[g].tempoLocked = gXml->getBoolAttribute("tLock", false);
+
+                    juce::String tsStr = gXml->getStringAttribute("ts", "10000000");
+                    for (int i = 0; i < 8; ++i) userTuning[g].allowedTimeSigs[i] = (tsStr[i] == '1');
+
+                    juce::String fStr = gXml->getStringAttribute("fills", "1111");
+                    for (int i = 0; i < 4; ++i) userTuning[g].allowedFills[i] = (fStr[i] == '1');
+
+                    for (auto* tXml : gXml->getChildIterator()) {
+                        int t = tXml->getIntAttribute("id", -1);
+                        if (t >= 0 && t < 8) {
+                            juce::String dStr = tXml->getStringAttribute("divs", "10010000");
+                            for (int d = 0; d < 8; ++d) userTuning[g].tracks[t].allowedDivs[d] = (dStr[d] == '1');
+
+                            userTuning[g].tracks[t].divLocked = tXml->getBoolAttribute("dLck", false);
+
+                            userTuning[g].tracks[t].cmplx.min = tXml->getIntAttribute("cMin", 20);
+                            userTuning[g].tracks[t].cmplx.max = tXml->getIntAttribute("cMax", 50);
+                            userTuning[g].tracks[t].cmplxLocked = tXml->getBoolAttribute("cLck", false);
+
+                            userTuning[g].tracks[t].entrp.min = tXml->getIntAttribute("eMin", 10);
+                            userTuning[g].tracks[t].entrp.max = tXml->getIntAttribute("eMax", 50);
+                            userTuning[g].tracks[t].entrpLocked = tXml->getBoolAttribute("eLck", false);
+
+                            userTuning[g].tracks[t].shift.min = tXml->getIntAttribute("sMin", 0);
+                            userTuning[g].tracks[t].shift.max = tXml->getIntAttribute("sMax", 0);
+                            userTuning[g].tracks[t].shiftLocked = tXml->getBoolAttribute("sLck", false);
+                        }
+                    }
+                }
+            }
+        }
+        uiNeedsUpdate.store(true);
+    }
+}
+
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new AIDrumMachineAudioProcessor(); }

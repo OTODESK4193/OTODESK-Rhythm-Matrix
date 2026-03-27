@@ -2,6 +2,7 @@
 // Source/PluginProcessor.h
 // ==============================================================================
 #pragma once
+#include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <atomic>
@@ -58,33 +59,24 @@ struct SavedPattern {
     int num = 4; int den = 4; int bars = 4;
 };
 
-// ★ 新設: ファインチューニング用データ構造
+// ★ ファインチューニング用データ構造
 struct TuningRange { int min; int max; };
-
 struct TimeSigDef { int num; int den; };
 
 struct TrackTuning {
-    TuningRange div;
-    TuningRange cmplx;
-    TuningRange entrp;
-    TuningRange shift;
-    bool divGenEnabled = true;
-    bool cmplxGenEnabled = true;
-    bool entrpGenEnabled = true;
-    bool shiftGenEnabled = true;
+    bool allowedDivs[8] = { true, false, false, true, false, false, false, false }; // Div 1,4がデフォ
+    bool divLocked = false;
+
+    TuningRange cmplx; bool cmplxLocked = false;
+    TuningRange entrp; bool entrpLocked = false;
+    TuningRange shift; bool shiftLocked = false;
 };
 
 struct GenreTuning {
-    TuningRange tempo;
-    bool tempoGenEnabled = true;
-
-    // 8種類の代表的な拍子を候補として持たせる
+    TuningRange tempo; bool tempoLocked = false;
     bool allowedTimeSigs[8] = { true, false, false, false, false, false, false, false };
     TimeSigDef timeSigOptions[8] = { {4,4}, {3,4}, {5,4}, {7,8}, {12,8}, {13,8}, {15,16}, {5,8} };
-
-    // Fillの種類ごとの許可フラグ (0:Scatter, 1:Drop, 2:Euclid, 3:Roll)
     bool allowedFills[4] = { true, true, true, true };
-
     TrackTuning tracks[8];
 };
 
@@ -160,11 +152,12 @@ public:
     double getTailLengthSeconds() const override; int getNumPrograms() override;
     int getCurrentProgram() override; void setCurrentProgram(int index) override;
     const juce::String getProgramName(int index) override; void changeProgramName(int index, const juce::String& newName) override;
-    void getStateInformation(juce::MemoryBlock& destData) override; void setStateInformation(const void* data, int sizeInBytes) override;
 
-    // ★ 新設: ユーザーによるチューニング設定データ
+    void getStateInformation(juce::MemoryBlock& destData) override;
+    void setStateInformation(const void* data, int sizeInBytes) override;
+
     GenreTuning userTuning[24];
-    void initializeUserTunings(); // コンストラクタで呼び出す初期化関数
+    void initializeUserTunings();
 
     std::atomic<int> timeSigNumerator{ 4 }; std::atomic<int> timeSigDenominator{ 4 };
     std::atomic<int> globalBarCount{ 4 }; std::atomic<int> fillBarTarget{ 0 };
@@ -175,7 +168,6 @@ public:
 
     std::atomic<bool> patternUpdated{ false }; std::atomic<bool> uiNeedsUpdate{ false }; std::atomic<int> currentPlayingBar{ 0 };
 
-    // UI側のマニュアルロックボタン（従来通り）
     bool trackLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackDivLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackCmplxLocked[8] = { true, true, false, false, true, false, false, false };
