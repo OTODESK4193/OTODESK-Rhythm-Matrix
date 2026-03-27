@@ -5,12 +5,13 @@
 #include "PluginEditor.h"
 #include <algorithm>
 #include <cmath>
+#include <numeric>
 
 static constexpr InstrumentPatch P(int w, float fr, float pD, float pA, float aAt, float aDc, float ns, int fT, float fF, float fR, float dr, float vl) {
     return { w, fr, pD, pA, aAt, aDc, ns, fT, fF, fR, dr, vl };
 }
 
-// ★ 音色の統一: 808系基本パッチ + Pluck/Arp のみに圧縮（メモリとコード量の劇的な削減）
+// ★ 音色の統一: 808系基本パッチ + Pluck/Arp
 static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = []() {
     std::array<InstrumentPatch, PATCH_MAX> arr{};
     arr[P_808_KICK] = P(0, 45.0f, 15.0f, 4.0f, 1.0f, 45.0f, 0.0f, 0, 800.0f, 1.0f, 2.5f, 1.2f);
@@ -32,7 +33,6 @@ static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = []() {
     return arr;
     }();
 
-// 統一パッチIDマクロ
 #define D_STD {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}
 #define D_BASS {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_BASS, P_808_FX}
 #define D_PLUCK {PLUCK_1, PLUCK_2, PLUCK_3, PLUCK_4, PLUCK_5, PLUCK_6, PLUCK_7, PLUCK_8}
@@ -64,7 +64,6 @@ static const std::array<GenreDefinition, 24> genreTable = { {
     { 4, 4, 120, 150, {"Chaos C", "Chaos D", "Chaos F", "Chaos G", "Chaos A", "Chaos C^", "Chaos D^", "Chaos F^"}, D_PLUCK, {{1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}}, {-20,-20,-20,-20,-20,-20,-20,-20}, {20,20,20,20,20,20,20,20} }
 } };
 
-// ★ 全19スケール拡張 (最大8音構成)
 const int scalePatterns[19][8] = {
     {0, 2, 4, 5, 7, 9, 11, -1},  // 0: Major
     {0, 2, 3, 5, 7, 8, 10, -1},  // 1: Natural Minor
@@ -185,7 +184,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     int genre = currentGenre.load();
     GenreTuning& tuning = userTuning[genre];
     bool isAlgorithmMode = (genre >= 22);
-    bool isSpecialEnsemble = (genre == 14 || genre == 21);
 
     int fillBar = fillBarTarget.load();
     bool isArp = arpMode.load();
@@ -251,7 +249,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                     case 4: degree = (trk * 4) % scaleLengths[curScale]; break;
                     case 5: degree = (trk * 5) % scaleLengths[curScale]; break;
                     case 6: degree = (trk * 3) % scaleLengths[curScale]; break;
-                    case 9: degree = (trk == 0 || trk == 4) ? 0 : random.nextInt(scaleLengths[curScale]); break; // Hit Melody: 安定音優先
+                    case 9: degree = (trk == 0 || trk == 4) ? 0 : random.nextInt(scaleLengths[curScale]); break;
                     default: degree = random.nextInt(scaleLengths[curScale]); break;
                     }
                     if (random.nextInt(100) < 30) degree = (degree + random.nextInt(3)) % scaleLengths[curScale];
@@ -266,7 +264,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                     case 4: octave = (trk % 2 == 0) ? -1 : 0; break;
                     case 5: octave = (trk % 2 == 0) ? -1 : 1; break;
                     case 6: octave = (trk / 3) - 1; break;
-                    case 9: octave = 0; break; // Hit Melody: メインオクターブ中心
+                    case 9: octave = 0; break;
                     default: octave = random.nextInt(3) - 1; break;
                     }
                     octave += random.nextInt(juce::Range<int>(-1, 2));
@@ -274,7 +272,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 }
 
                 int noteVal = octave * 12 + degree;
-                if (std::find(usedNotes.begin(), usedNotes.end(), noteVal) == usedNotes.end() || trackDegreeLocked[trk] || trackOctaveLocked[trk]) {
+                if (trackDegreeLocked[trk] || trackOctaveLocked[trk] || std::find(usedNotes.begin(), usedNotes.end(), noteVal) == usedNotes.end()) {
                     unique = true; usedNotes.push_back(noteVal);
                 }
                 attempts++;
@@ -289,7 +287,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
         int currentChordBase = 0;
         bool stepOccupied[1024] = { false };
 
-        // ★ Hit Melody Maker (Preset 10 / index 9) 用のモチーフ保存バッファ
         std::vector<std::vector<int>> popMotif;
 
         for (int j = 0; j < 1024; ++j) {
@@ -300,30 +297,31 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             bool isFillPortion = (fillBar > 0) && (currentBarOfStep == (fillBar - 1)) && (beatInBar >= num - 2);
 
             bool stepActive = false;
-            if (arpPreset == 8) { // Euclidean
+            if (arpPreset == 8) {
                 int k = (n * (20 + random.nextInt(60))) / 100;
                 int eucOffset = random.nextInt(juce::jmax(1, n));
                 stepActive = (((j + eucOffset) * k) % n < k);
             }
-            else if (arpPreset == 9) { // Pop/Hit Melody Maker
+            else if (arpPreset == 9) {
                 if (currentBarOfStep < 2) {
-                    // Aメロ: シンコペーション（食い）を高確率で発生
                     bool isAnticipation = (stepInBar % baseDiv == baseDiv - 1) && (random.nextInt(100) < 60);
                     bool isStrongBeat = (stepInBar % baseDiv == 0) && (random.nextInt(100) < 80);
                     stepActive = isAnticipation || isStrongBeat;
-                    if (stepActive) popMotif.push_back({ j, currentTrk }); // モチーフ記憶
+                    if (stepActive) {
+                        currentTrk = random.nextInt(8);
+                        popMotif.push_back({ j, currentTrk });
+                    }
                 }
                 else if (currentBarOfStep == 2) {
-                    // A'メロ: モチーフの再現と微変化
                     int localJ = j % (baseDiv * num * 2);
                     for (auto& m : popMotif) {
                         if (m[0] == localJ) { stepActive = true; currentTrk = m[1]; break; }
                     }
-                    if (random.nextInt(100) < 20) stepActive = !stepActive; // 微変化
+                    if (random.nextInt(100) < 20) stepActive = !stepActive;
                 }
                 else {
-                    // Bメロ（展開）: 跳躍や休符
                     stepActive = (stepInBar % (baseDiv * 2) == 0) || (random.nextInt(100) < 40);
+                    if (stepActive) currentTrk = random.nextInt(8);
                 }
             }
             else {
@@ -344,10 +342,9 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             case 4: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 4) % 8; break;
             case 5: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 5) % 8; break;
             case 6: tracksToHit.push_back(currentChordBase % 8); tracksToHit.push_back((currentChordBase + 3) % 8); tracksToHit.push_back((currentChordBase + 6) % 8); currentChordBase = (currentChordBase + 1) % 8; break;
-            case 7: break; // Polyrhythm Plucks (handled below)
+            case 7: break;
             case 8: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 1) % 8; break;
             case 9:
-                if (currentBarOfStep >= 2 && random.nextInt(100) < 30) currentTrk = random.nextInt(8);
                 tracksToHit.push_back(currentTrk);
                 break;
             default:
@@ -361,7 +358,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                     if (!stepOccupied[j]) {
                         int t = tracksToHit[0];
                         if (!trackLocked[t]) {
-                            // ★ Dynamic機能: 強拍やアンティシペーションのVelocity強調
                             if (trackDynamic[t] && (stepInBar % baseDiv == 0 || stepInBar % baseDiv == baseDiv - 1)) {
                                 vel = juce::jlimit(100, 127, vel + 30);
                             }
@@ -384,27 +380,29 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
         }
 
         if (arpPreset == 7) {
-            for (int trk = 0; trk < 8; ++trk) {
-                if (trackLocked[trk]) continue;
-                int tDiv = trackDivisionsUI[trk];
-                for (int j = 0; j < tDiv * num * bars; ++j) {
-                    if (j % tDiv == 0 && random.nextInt(100) < 60) {
-                        // ★ Preset 7のMonoモードバグ修正
-                        // 時間的な衝突を避けるため、絶対時間インデックスを計算
-                        int absoluteStep = (j * baseDiv) / tDiv;
-                        if (isMono && stepOccupied[absoluteStep]) continue;
+            std::vector<int> trkOrder = { 0, 1, 2, 3, 4, 5, 6, 7 };
+            for (int j = 0; j < 1024; ++j) {
+                if (j >= n) break;
+                std::random_shuffle(trkOrder.begin(), trkOrder.end());
+                for (int trk : trkOrder) {
+                    if (trackLocked[trk]) continue;
+                    int tDiv = trackDivisionsUI[trk];
 
-                        int vel = 70 + random.nextInt(30);
-                        if (trackDynamic[trk] && j % (tDiv * 2) == 0) vel = juce::jlimit(100, 127, vel + 30);
-                        drumPatternUI[trk][j] = vel;
-                        if (isMono) stepOccupied[absoluteStep] = true;
+                    int absoluteStepT = (j * tDiv) / baseDiv;
+                    if ((j * tDiv) % baseDiv == 0) {
+                        if (random.nextInt(100) < 60) {
+                            if (isMono && stepOccupied[j]) continue;
+                            int vel = 70 + random.nextInt(30);
+                            if (trackDynamic[trk] && absoluteStepT % (tDiv * 2) == 0) vel = juce::jlimit(100, 127, vel + 30);
+                            drumPatternUI[trk][absoluteStepT] = vel;
+                            if (isMono) stepOccupied[j] = true;
+                        }
                     }
                 }
             }
         }
     }
     else {
-        // --- ドラムモードのジェネレートロジック (既存維持) ---
         int fillChoices[4];
         int numFillChoices = 0;
         for (int i = 0; i < 4; ++i) if (tuning.allowedFills[i]) fillChoices[numFillChoices++] = i;
@@ -412,10 +410,10 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
 
         for (int trk = 0; trk < 8; ++trk) {
             if (trackLocked[trk]) continue;
-
             TrackTuning& tt = tuning.tracks[trk];
 
-            if (!tt.divLocked && !trackDivLocked[trk]) {
+            bool divLck = trackDivLocked[trk] || (!isAlgorithmMode && tt.divLocked);
+            if (!divLck) {
                 std::vector<int> candidates;
                 for (int i = 0; i < 8; ++i) {
                     if (tt.allowedDivs[i]) candidates.push_back(i + 1);
@@ -426,17 +424,22 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 trackDivisionsUI[trk] = newDiv;
             }
 
-            if (!tt.cmplxLocked && !trackCmplxLocked[trk]) {
+            bool cmplxLck = trackCmplxLocked[trk] || (!isAlgorithmMode && tt.cmplxLocked);
+            if (!cmplxLck) {
                 int cMin = std::min(tt.cmplx.min, tt.cmplx.max);
                 int cMax = std::max(tt.cmplx.min, tt.cmplx.max);
                 trackComplexity[trk] = isAlgorithmMode ? 50 : random.nextInt(juce::Range<int>(cMin, cMax + 1));
             }
-            if (!tt.entrpLocked && !trackEntrpLocked[trk]) {
+
+            bool entrpLck = trackEntrpLocked[trk] || (!isAlgorithmMode && tt.entrpLocked);
+            if (!entrpLck) {
                 int eMin = std::min(tt.entrp.min, tt.entrp.max);
                 int eMax = std::max(tt.entrp.min, tt.entrp.max);
                 trackEntropy[trk] = random.nextInt(juce::Range<int>(eMin, eMax + 1));
             }
-            if (!tt.shiftLocked && !trackShiftLocked[trk]) {
+
+            bool shiftLck = trackShiftLocked[trk] || (!isAlgorithmMode && tt.shiftLocked);
+            if (!shiftLck) {
                 int sMin = std::min(tt.shift.min, tt.shift.max);
                 int sMax = std::max(tt.shift.min, tt.shift.max);
                 trackShiftUI[trk] = random.nextInt(juce::Range<int>(sMin, sMax + 1));
@@ -445,7 +448,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             int div = trackDivisionsUI[trk];
             int n = div * num * bars;
             int offset = random.nextInt(juce::Range<int>(0, juce::jmax(1, n)));
-
             int cmplx = trackComplexity[trk];
             int entrp = trackEntropy[trk];
 
@@ -509,7 +511,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                     }
                 }
                 else if (!isAlgorithmMode) {
-                    // ★ 既存のドラムジャンル別アンカーロジックを維持 (簡略化せずに残す)
                     switch (genre) {
                     case 0: case 1:
                         if (trk == 0) { if (stepInBar % div == 0) { isAnchor = true; if ((currentBarOfStep % 2 != 0) && beatInBar == num - 1 && random.nextInt(100) < 15) { isAnchor = false; isNegativeAnchor = true; } } }
@@ -633,7 +634,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 if (isAnchor) {
                     int velJitter = (int)((entrp / 100.0f) * 20.0f);
                     vel = anchorVel - random.nextInt(juce::Range<int>(0, velJitter + 1));
-                    // ★ Dynamic処理をドラムにも適用（強拍をより強調）
                     if (trackDynamic[trk]) vel = juce::jlimit(80, 127, vel + 20);
                 }
                 else if (isNegativeAnchor) {
@@ -850,7 +850,6 @@ void AIDrumMachineAudioProcessor::getStateInformation(juce::MemoryBlock& destDat
     xml.setAttribute("currentGenre", currentGenre.load());
     xml.setAttribute("globalBarCount", globalBarCount.load());
 
-    // ★ 新規追加フラグの保存
     juce::String dynStr, degLckStr, octLckStr;
     for (int i = 0; i < 8; ++i) {
         dynStr += trackDynamic[i] ? "1" : "0";

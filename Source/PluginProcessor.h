@@ -16,7 +16,7 @@ struct InstrumentPatch {
     float fFreq; float fRes; float drive; float vol;
 };
 
-// ★ 音色の統一：808系基本パッチとArp/Pluckパッチのみに大幅圧縮
+// ★ 音色の統一：808系基本パッチとArp/Pluckパッチのみに圧縮
 enum PatchID {
     P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH,
     P_808_CLAP, P_808_TOM, P_808_PERC, P_808_BASS, P_808_FX,
@@ -154,7 +154,7 @@ public:
     bool trackMuted[8] = { false, false, false, false, false, false, false, false };
     bool trackSoloed[8] = { false, false, false, false, false, false, false, false };
 
-    // ★ Setting2 (Arp) のロックとDynamic新機能用
+    // ★ Setting2 (Arp) のロックとDynamic用フラグ
     bool trackDegreeLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackOctaveLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackDynamic[8] = { false, false, false, false, false, false, false, false };

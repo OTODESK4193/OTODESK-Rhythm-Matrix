@@ -41,12 +41,8 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     tabSetupButton.onClick = [this] { currentView = Setup1View; updateViewVisibility(); resized(); repaint(); };
     tabSetup2Button.onClick = [this] { currentView = Setup2View; updateViewVisibility(); resized(); repaint(); };
 
-    // ★ TuningモードとArpモードの排他制御
+    // ★ TuningモードとArpモードの排他制御 (クラッシュ防止のためボタン無効化で対応)
     tabTuningButton.onClick = [this] {
-        if (audioProcessor.arpMode.load()) {
-            juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, "Info", "Arpモード時はTuning機能は使用できません。設定を優先します。");
-            return;
-        }
         currentView = TuningView; updateTuningUIFromProcessor(); updateViewVisibility(); resized(); repaint();
         };
 
@@ -135,13 +131,8 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     btnArpMode.setToggleState(audioProcessor.arpMode.load(), juce::dontSendNotification);
     // ★ TuningモードとArpモードの排他制御
     btnArpMode.onClick = [this] {
-        if (currentView == TuningView) {
-            juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, "Info", "Tuningモードを開いている状態ではArpモードに変更できません。先に別のタブへ移動してください。");
-            btnArpMode.setToggleState(audioProcessor.arpMode.load(), juce::dontSendNotification);
-            return;
-        }
         audioProcessor.arpMode.store(btnArpMode.getToggleState());
-        updateStyleMenu(); updateTrackNames();
+        updateStyleMenu(); updateTrackNames(); updateViewVisibility();
         };
 
     addAndMakeVisible(arpKeyMenu);
@@ -624,6 +615,10 @@ void AIDrumMachineAudioProcessorEditor::updateViewVisibility() {
     bool isS2 = (currentView == Setup2View);
     bool isTuning = (currentView == TuningView);
 
+    // ★ TuningとArpモードの排他制御による無効化設定
+    tabTuningButton.setEnabled(!audioProcessor.arpMode.load());
+    btnArpMode.setEnabled(currentView != TuningView);
+
     tabSeqButton.setColour(juce::TextButton::buttonColourId, isSeq ? juce::Colours::orange : juce::Colours::darkgrey);
     tabSetupButton.setColour(juce::TextButton::buttonColourId, isS1 ? juce::Colours::orange : juce::Colours::darkgrey);
     tabSetup2Button.setColour(juce::TextButton::buttonColourId, isS2 ? juce::Colours::orange : juce::Colours::darkgrey);
@@ -858,10 +853,13 @@ void AIDrumMachineAudioProcessorEditor::resized() {
             btnDegreeLock[idx].setBounds(ctrlRow.removeFromLeft(20).reduced(1));
 
             octaveLabels[idx].setBounds(ctrlRow.removeFromLeft(50));
-            octaveSliders[idx].setBounds(ctrlRow.removeFromLeft(150));
+            // ★ Octaveスライダーの幅を縮小しDynamicボタンの領域を確保
+            octaveSliders[idx].setBounds(ctrlRow.removeFromLeft(120));
+
             // ★ OctaveのLock
             btnOctaveLock[idx].setBounds(ctrlRow.removeFromLeft(20).reduced(1));
             ctrlRow.removeFromLeft(10);
+
             // ★ Dynamic
             btnDynamic[idx].setBounds(ctrlRow.removeFromLeft(40).reduced(1));
         }
@@ -926,10 +924,8 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
     // ★ DragMIDI に名称変更
     g.setColour(juce::Colours::white); g.setFont(14.0f); g.drawText("DragMIDI", dragAllArea, juce::Justification::centred, false);
 
-    if (currentView == TuningView) {
-        // ★ TuningViewにおけるラベルの二重描画を完全に削除し、Labelコンポーネントのみで表示
-    }
-    else if (currentView == SequencerView) {
+    // ★ TuningViewにおけるラベルの二重描画を完全に削除
+    if (currentView == SequencerView) {
         int rows = 8; float cellH = mainGridArea.getHeight() / (float)rows;
         int numBeats = audioProcessor.timeSigNumerator.load();
 
