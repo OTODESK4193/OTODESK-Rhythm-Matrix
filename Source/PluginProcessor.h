@@ -132,7 +132,8 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    GenreTuning userTuning[24];
+    // ★ 修正点: 配列サイズを24から26へ拡張し、メモリ破壊を防止
+    GenreTuning userTuning[26];
     void initializeUserTunings();
 
     std::atomic<int> timeSigNumerator{ 4 }; std::atomic<int> timeSigDenominator{ 4 };
@@ -179,7 +180,6 @@ public:
     static const GenreDefinition& getGenreDef(int index);
     static const InstrumentPatch& getPatch(PatchID id);
     juce::String getNoteName(int trackIndex) const;
-
 private:
     int drumPatternDSP[8][1024] = { {0} };
     int trackDivisionsDSP[8] = { 4, 4, 4, 4, 4, 4, 4, 4 };

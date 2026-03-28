@@ -4,6 +4,9 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+// ★ ARPピッチ計算用外部配列の参照
+extern const int scalePatterns[19][8];
+
 AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachineAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
@@ -75,7 +78,9 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     addAndMakeVisible(timeSigLabel); timeSigLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible(timeSigNumMenu);
     timeSigNumMenu.onChange = [this] {
-        audioProcessor.timeSigNumerator.store(timeSigNumMenu.getSelectedId());
+        int newNum = timeSigNumMenu.getSelectedId();
+        if (newNum < 1) newNum = 4;
+        audioProcessor.timeSigNumerator.store(newNum);
         audioProcessor.patternUpdated.store(true);
         resized(); repaint();
         };
@@ -87,7 +92,9 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     timeSigDenMenu.addItem("4", 4); timeSigDenMenu.addItem("8", 8); timeSigDenMenu.addItem("16", 16);
     timeSigDenMenu.setSelectedId(audioProcessor.timeSigDenominator.load(), juce::dontSendNotification);
     timeSigDenMenu.onChange = [this] {
-        audioProcessor.timeSigDenominator.store(timeSigDenMenu.getSelectedId());
+        int newDen = timeSigDenMenu.getSelectedId();
+        if (newDen < 1) newDen = 4;
+        audioProcessor.timeSigDenominator.store(newDen);
         updateTimeSigNumMenu();
         updateDivisionMenus();
         audioProcessor.patternUpdated.store(true);
@@ -107,7 +114,9 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     barCountMenu.addItem("3 Bars", 3); barCountMenu.addItem("4 Bars", 4);
     barCountMenu.setSelectedId(audioProcessor.globalBarCount.load(), juce::dontSendNotification);
     barCountMenu.onChange = [this] {
-        audioProcessor.globalBarCount.store(barCountMenu.getSelectedId());
+        int newBars = barCountMenu.getSelectedId();
+        if (newBars < 1) newBars = 1;
+        audioProcessor.globalBarCount.store(newBars);
         if (currentViewBar >= audioProcessor.globalBarCount.load()) currentViewBar = audioProcessor.globalBarCount.load() - 1;
         audioProcessor.patternUpdated.store(true);
         updateTabColors(); updateViewVisibility(); resized(); repaint();
@@ -164,7 +173,30 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
 
     styleMenu.onChange = [this] {
         int genreIndex = styleMenu.getSelectedId() - 1;
+        if (genreIndex < 0) genreIndex = 0;
         audioProcessor.currentGenre.store(genreIndex);
+
+        // ★ 修正：Polyrhythm Matrix のデフォルト・オートロックと、他ジャンルへの伝播防止
+        if (genreIndex == 25) {
+            int targetDivs[8] = { 2, 4, 3, 5, 7, 6, 8, 1 };
+            for (int i = 0; i < 8; ++i) {
+                audioProcessor.userTuning[25].tracks[i].divLocked = true;
+                audioProcessor.trackDivLocked[i] = true;
+                btnDivLock[i].setToggleState(true, juce::dontSendNotification);
+                tuningDivLock[i].setToggleState(true, juce::dontSendNotification);
+                audioProcessor.trackDivisionsUI[i] = targetDivs[i];
+                divSelectors[i].setSelectedId(targetDivs[i], juce::dontSendNotification);
+            }
+        }
+        else {
+            // ID 25以外が選ばれたときは、そのジャンルのTuning設定に基づいてロック状態を正しく復元する
+            for (int i = 0; i < 8; ++i) {
+                bool isLocked = audioProcessor.userTuning[genreIndex].tracks[i].divLocked;
+                audioProcessor.trackDivLocked[i] = isLocked;
+                btnDivLock[i].setToggleState(isLocked, juce::dontSendNotification);
+                tuningDivLock[i].setToggleState(isLocked, juce::dontSendNotification);
+            }
+        }
 
         if (!audioProcessor.arpMode.load()) {
             const auto& def = AIDrumMachineAudioProcessor::getGenreDef(genreIndex);
@@ -393,32 +425,31 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         btnTempoLock.setToggleState(state, juce::dontSendNotification);
         };
 
-    // ==============================================================================
-    // ★ Tuning画面の Random ボタンの修正
-    // ==============================================================================
     addChildComponent(btnTuningRandom);
     btnTuningRandom.setColour(juce::TextButton::buttonColourId, juce::Colours::teal);
     btnTuningRandom.onClick = [this] {
         int g = audioProcessor.currentGenre.load();
         auto& t = audioProcessor.userTuning[g];
         for (int i = 0; i < 8; ++i) {
-            // ★ Divはランダマイズしない（約束事項反映）
-
-            // ★ Cmplxは 0-10 に制限
             if (!t.tracks[i].cmplxLocked) {
-                t.tracks[i].cmplx.min = audioProcessor.random.nextInt(11);
-                t.tracks[i].cmplx.max = audioProcessor.random.nextInt(11);
+                // ★ ID25 の Complex制限 (0〜6)
+                if (g == 25) {
+                    t.tracks[i].cmplx.min = audioProcessor.random.nextInt(7);
+                    t.tracks[i].cmplx.max = audioProcessor.random.nextInt(7);
+                }
+                else {
+                    t.tracks[i].cmplx.min = audioProcessor.random.nextInt(11);
+                    t.tracks[i].cmplx.max = audioProcessor.random.nextInt(11);
+                }
                 if (t.tracks[i].cmplx.min > t.tracks[i].cmplx.max) std::swap(t.tracks[i].cmplx.min, t.tracks[i].cmplx.max);
             }
 
-            // ★ Entrpは 0-10 に制限
             if (!t.tracks[i].entrpLocked) {
                 t.tracks[i].entrp.min = audioProcessor.random.nextInt(11);
                 t.tracks[i].entrp.max = audioProcessor.random.nextInt(11);
                 if (t.tracks[i].entrp.min > t.tracks[i].entrp.max) std::swap(t.tracks[i].entrp.min, t.tracks[i].entrp.max);
             }
 
-            // ★ Shiftは トラック0除外、それ以外は -5〜5 に制限
             if (!t.tracks[i].shiftLocked) {
                 if (i == 0) {
                     t.tracks[i].shift.min = 0;
@@ -444,7 +475,10 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
                 for (int d = 0; d < 8; ++d) t.tracks[i].allowedDivs[d] = false;
             }
 
-            if (g == 22 || g == 23) {
+            if (g == 25) {
+                if (!t.tracks[i].cmplxLocked) { t.tracks[i].cmplx.min = 0; t.tracks[i].cmplx.max = 6; }
+            }
+            else if (g == 22 || g == 23) {
                 if (!t.tracks[i].cmplxLocked) { t.tracks[i].cmplx.min = 30; t.tracks[i].cmplx.max = 70; }
             }
             else {
@@ -610,7 +644,8 @@ void AIDrumMachineAudioProcessorEditor::updateStyleMenu() {
             "12. Samba / Bossa Nova", "13. Reggaeton / Dembow", "14. Gamelan",
             "15. Funk (James Brown)", "16. New Jack Swing", "17. Neo Soul (J Dilla)",
             "18. Hip Hop (Boom Bap)", "19. Math Rock", "20. Progressive Metal", "21. Minimalism (Reich)",
-            "22. Pure Euclidean (Math)", "23. Pure Chaos (Random)"
+            "22. Pure Euclidean (Math)", "23. Pure Chaos (Random)",
+            "24. UK Drill", "25. Polyrhythm Matrix"
         };
         for (int i = 0; i < genres.size(); ++i) styleMenu.addItem(genres[i], i + 1);
     }
@@ -634,6 +669,7 @@ void AIDrumMachineAudioProcessorEditor::updateTrackNames() {
 void AIDrumMachineAudioProcessorEditor::updateTimeSigNumMenu() {
     int maxNum = 32;
     int currentNum = audioProcessor.timeSigNumerator.load();
+    if (currentNum < 1) currentNum = 4;
     if (currentNum > maxNum) {
         currentNum = maxNum;
         audioProcessor.timeSigNumerator.store(currentNum);
@@ -645,6 +681,7 @@ void AIDrumMachineAudioProcessorEditor::updateTimeSigNumMenu() {
 
 void AIDrumMachineAudioProcessorEditor::updateDivisionMenus() {
     int den = audioProcessor.timeSigDenominator.load();
+    if (den < 1) den = 4;
     int maxDiv = (den == 16) ? 2 : ((den == 8) ? 4 : 8);
 
     for (int i = 0; i < 8; ++i) {
@@ -974,8 +1011,9 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colours::white); g.setFont(14.0f); g.drawText("DragMIDI", dragAllArea, juce::Justification::centred, false);
 
     if (currentView == SequencerView) {
-        int rows = 8; float cellH = mainGridArea.getHeight() / (float)rows;
+        int rows = 8; float cellH = mainGridArea.getHeight() / (float)juce::jmax(1, rows);
         int numBeats = audioProcessor.timeSigNumerator.load();
+        if (numBeats < 1) numBeats = 4;
 
         for (int row = 0; row < rows; ++row) {
             int idx = 7 - row;
@@ -993,8 +1031,9 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
             g.drawText("MIDI", mDrag, juce::Justification::centred, false);
 
             int div = audioProcessor.trackDivisionsUI[idx];
+            if (div < 1) div = 1;
             int colsToDraw = numBeats * div;
-            float cellW = mainGridArea.getWidth() / (float)colsToDraw;
+            float cellW = mainGridArea.getWidth() / (float)juce::jmax(1, colsToDraw);
 
             for (int b = 0; b < numBeats; ++b) {
                 g.setColour(b % 2 == 0 ? juce::Colours::black.withAlpha(0.15f) : juce::Colours::white.withAlpha(0.05f));
@@ -1003,15 +1042,17 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
 
             for (int col = 0; col < colsToDraw; ++col) {
                 int globalStep = (currentViewBar * colsToDraw) + col;
-                int vel = audioProcessor.drumPatternUI[idx][globalStep];
-                juce::Rectangle<float> cell(mainGridArea.getX() + col * cellW + 1, mainGridArea.getY() + row * cellH + 1, cellW - 2, cellH - 2);
-                float alpha = juce::jlimit(0.0f, 1.0f, 0.2f + 0.8f * (vel / 100.0f));
-                g.setColour(vel > 0 ? juce::Colours::orange.withAlpha(alpha) : juce::Colours::black.withAlpha(0.3f));
-                g.fillRoundedRectangle(cell, 2.0f);
+                if (globalStep < 1024) {
+                    int vel = audioProcessor.drumPatternUI[idx][globalStep];
+                    juce::Rectangle<float> cell(mainGridArea.getX() + col * cellW + 1, mainGridArea.getY() + row * cellH + 1, cellW - 2, cellH - 2);
+                    float alpha = juce::jlimit(0.0f, 1.0f, 0.2f + 0.8f * (vel / 100.0f));
+                    g.setColour(vel > 0 ? juce::Colours::orange.withAlpha(alpha) : juce::Colours::black.withAlpha(0.3f));
+                    g.fillRoundedRectangle(cell, 2.0f);
 
-                if (col % div == 0 && col > 0) {
-                    g.setColour(juce::Colours::white.withAlpha(0.4f));
-                    g.drawVerticalLine((int)(cell.getX() - 1), cell.getY(), cell.getBottom());
+                    if (col % div == 0 && col > 0) {
+                        g.setColour(juce::Colours::white.withAlpha(0.4f));
+                        g.drawVerticalLine((int)(cell.getX() - 1), cell.getY(), cell.getBottom());
+                    }
                 }
             }
 
@@ -1024,7 +1065,7 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
         }
     }
     else if (currentView == Setup1View) {
-        int rows = 8; float cellH = sampleArea.getHeight() / (float)rows;
+        int rows = 8; float cellH = sampleArea.getHeight() / (float)juce::jmax(1, rows);
         for (int row = 0; row < rows; ++row) {
             int idx = 7 - row; juce::Rectangle<float> sArea(sampleArea.getX(), sampleArea.getY() + row * cellH + 2, sampleArea.getWidth() - 4, cellH - 4);
             g.setColour(audioProcessor.hasSampleLoaded(idx) ? juce::Colours::lightblue.withAlpha(0.2f) : juce::Colours::darkgrey.darker());
@@ -1037,8 +1078,8 @@ void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
     auto pos = e.getPosition();
 
     if (e.mods.isRightButtonDown() && sampleArea.contains(pos) && currentView != Setup2View && currentView != TuningView) {
-        int idx = 7 - (int)((pos.y - sampleArea.getY()) / (sampleArea.getHeight() / 8));
-        if (idx >= 0 && audioProcessor.hasSampleLoaded(idx)) {
+        int idx = getTrackIndexFromMouseY(pos.y);
+        if (idx >= 0 && idx < 8 && audioProcessor.hasSampleLoaded(idx)) {
             juce::NativeMessageBox::showOkCancelBox(juce::MessageBoxIconType::WarningIcon, "Delete", "Delete sample?", this, juce::ModalCallbackFunction::create([this, idx](int r) { if (r == 1) { audioProcessor.clearSample(idx); updateTrackNames(); repaint(); } }));
         }
         return;
@@ -1046,7 +1087,7 @@ void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
 
     if (currentView == SequencerView) {
         if (lockArea.contains(pos)) {
-            int row = (int)((pos.y - lockArea.getY()) / (lockArea.getHeight() / 8));
+            int row = (int)((pos.y - lockArea.getY()) / juce::jmax(1, lockArea.getHeight() / 8));
             if (row >= 0 && row < 8) {
                 int idx = 7 - row;
                 audioProcessor.trackLocked[idx] = !audioProcessor.trackLocked[idx];
@@ -1054,16 +1095,22 @@ void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
             }
         }
         else if (mainGridArea.contains(pos)) {
-            int idx = 7 - (int)((pos.y - mainGridArea.getY()) / (mainGridArea.getHeight() / 8));
-            int div = audioProcessor.trackDivisionsUI[idx];
-            int numBeats = audioProcessor.timeSigNumerator.load();
-            float cellW = mainGridArea.getWidth() / (float)(div * numBeats);
-            int col = (int)((pos.x - mainGridArea.getX()) / cellW);
-            int globalStep = (currentViewBar * div * numBeats) + col;
-            if (globalStep < 1024) {
-                audioProcessor.drumPatternUI[idx][globalStep] = (audioProcessor.drumPatternUI[idx][globalStep] > 0) ? 0 : 100;
-                audioProcessor.patternUpdated.store(true);
-                repaint();
+            int idx = 7 - (int)((pos.y - mainGridArea.getY()) / juce::jmax(1, mainGridArea.getHeight() / 8));
+            if (idx >= 0 && idx < 8) {
+                int div = audioProcessor.trackDivisionsUI[idx];
+                if (div < 1) div = 1;
+                int numBeats = audioProcessor.timeSigNumerator.load();
+                if (numBeats < 1) numBeats = 4;
+
+                float cellW = mainGridArea.getWidth() / (float)juce::jmax(1, div * numBeats);
+                int col = (int)((pos.x - mainGridArea.getX()) / juce::jmax(1.0f, cellW));
+                int globalStep = (currentViewBar * div * numBeats) + col;
+
+                if (globalStep >= 0 && globalStep < 1024) {
+                    audioProcessor.drumPatternUI[idx][globalStep] = (audioProcessor.drumPatternUI[idx][globalStep] > 0) ? 0 : 100;
+                    audioProcessor.patternUpdated.store(true);
+                    repaint();
+                }
             }
         }
     }
@@ -1073,8 +1120,8 @@ void AIDrumMachineAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e) {
     if (e.mouseWasDraggedSinceMouseDown() && !isDragging) {
         isDragging = true; auto startPos = e.getMouseDownPosition(); int track = -2;
         if (dragAllArea.contains(startPos)) track = -1;
-        else if (midiDragArea.contains(startPos)) track = 7 - (int)((startPos.y - midiDragArea.getY()) / (midiDragArea.getHeight() / 8));
-        if (track != -2) {
+        else if (midiDragArea.contains(startPos)) track = 7 - (int)((startPos.y - midiDragArea.getY()) / juce::jmax(1, midiDragArea.getHeight() / 8));
+        if (track >= -1 && track < 8) {
             juce::File f = exportMidi(track);
             if (f.existsAsFile()) { juce::StringArray s; s.add(f.getFullPathName()); performExternalDragDropOfFiles(s, false, this); }
         }
@@ -1090,7 +1137,7 @@ bool AIDrumMachineAudioProcessorEditor::isInterestedInFileDrag(const juce::Strin
 
 void AIDrumMachineAudioProcessorEditor::filesDropped(const juce::StringArray& files, int x, int y) {
     if (currentView == Setup2View || currentView == TuningView) return;
-    int idx = 7 - (int)((y - sampleArea.getY()) / (sampleArea.getHeight() / 8));
+    int idx = getTrackIndexFromMouseY(y);
     if (idx >= 0 && idx < 8) { for (const auto& f : files) { audioProcessor.loadSample(idx, f); trackNameLabels[idx].setText(juce::File(f).getFileNameWithoutExtension(), juce::dontSendNotification); repaint(); break; } }
 }
 
@@ -1098,13 +1145,21 @@ void AIDrumMachineAudioProcessorEditor::fileDragEnter(const juce::StringArray& f
 void AIDrumMachineAudioProcessorEditor::fileDragMove(const juce::StringArray& f, int x, int y) {}
 void AIDrumMachineAudioProcessorEditor::fileDragExit(const juce::StringArray& f) {}
 
-int AIDrumMachineAudioProcessorEditor::getTrackIndexFromMouseY(int y) { return 7 - (int)((y - sampleArea.getY()) / (sampleArea.getHeight() / 8)); }
+int AIDrumMachineAudioProcessorEditor::getTrackIndexFromMouseY(int y) {
+    return 7 - (int)((y - sampleArea.getY()) / juce::jmax(1, sampleArea.getHeight() / 8));
+}
 
+// ==============================================================================
+// ★ MIDI Export: ARP Mode Pitch Tracking & Bounds Safety implemented
+// ==============================================================================
 juce::File AIDrumMachineAudioProcessorEditor::exportMidi(int trackIndex) {
-    juce::MidiMessageSequence seq; int notes[8] = { 36, 38, 42, 46, 39, 41, 45, 50 };
-    int startT = (trackIndex == -1) ? 0 : trackIndex; int endT = (trackIndex == -1) ? 7 : trackIndex;
+    juce::MidiMessageSequence seq;
+    int notes[8] = { 36, 38, 42, 46, 39, 41, 45, 50 };
+    int startT = (trackIndex == -1) ? 0 : trackIndex;
+    int endT = (trackIndex == -1) ? 7 : trackIndex;
     double ppq = 960.0;
     int den = audioProcessor.timeSigDenominator.load();
+    if (den < 1) den = 4;
     double ticksPerBeat = ppq * (4.0 / (double)den);
 
     bool isArp = audioProcessor.arpMode.load();
@@ -1113,26 +1168,45 @@ juce::File AIDrumMachineAudioProcessorEditor::exportMidi(int trackIndex) {
 
     for (int t = startT; t <= endT; ++t) {
         int div = audioProcessor.trackDivisionsUI[t];
+        if (div < 1) div = 1;
         double ticksPerStep = ticksPerBeat / (double)div;
         double shiftOffsetTicks = (audioProcessor.trackShiftUI[t] / 100.0) * ticksPerStep;
+
         int totalSteps = div * audioProcessor.timeSigNumerator.load() * audioProcessor.globalBarCount.load();
+        totalSteps = juce::jlimit(1, 1024, totalSteps); // ★ 配列外アクセスのフェイルセーフ
 
         int note = notes[t];
         if (isArp) {
-            note = 60 + curKey + (audioProcessor.trackOctaveUI[t] * 12) + scalePatterns[curScale][audioProcessor.trackDegreeUI[t]];
+            int offset = scalePatterns[curScale][audioProcessor.trackDegreeUI[t]];
+            if (offset != -1) {
+                note = 60 + curKey + (audioProcessor.trackOctaveUI[t] * 12) + offset;
+            }
         }
+        note = juce::jlimit(0, 127, note); // ★ MIDIノートナンバーの制限
 
         for (int s = 0; s < totalSteps; ++s) {
             int vel = audioProcessor.drumPatternUI[t][s];
             if (vel > 0) {
                 double start = (s * ticksPerStep) + shiftOffsetTicks;
                 if (start < 0.0) start = 0.0;
-                seq.addEvent(juce::MidiMessage::noteOn(10, note, (juce::uint8)((vel / 100.0f) * 127)), start);
-                seq.addEvent(juce::MidiMessage::noteOff(10, note), start + ticksPerStep * 0.5);
+
+                // velはプロセッサ側で既に1〜127の適正値になっているためそのまま使用
+                seq.addEvent(juce::MidiMessage::noteOn(10, note, (juce::uint8)vel), start);
+
+                // 次のノートと重なってプツッというノイズが出るのを防ぐため、0.85倍で発音オフにする
+                seq.addEvent(juce::MidiMessage::noteOff(10, note), start + ticksPerStep * 0.85);
             }
         }
     }
-    seq.updateMatchedPairs(); juce::MidiFile mf; mf.setTicksPerQuarterNote((short)ppq); mf.addTrack(seq);
+
+    seq.updateMatchedPairs();
+    juce::MidiFile mf;
+    mf.setTicksPerQuarterNote((short)ppq);
+    mf.addTrack(seq);
     juce::File f = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("DrumPattern.mid");
-    f.deleteFile(); juce::FileOutputStream os(f); mf.writeTo(os); os.flush(); return f;
+    f.deleteFile();
+    juce::FileOutputStream os(f);
+    mf.writeTo(os);
+    os.flush();
+    return f;
 }
