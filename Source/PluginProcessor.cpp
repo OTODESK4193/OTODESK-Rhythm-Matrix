@@ -112,11 +112,24 @@ void AIDrumMachineAudioProcessor::initializeUserTunings() {
             userTuning[g].allowedTimeSigs[t] = false;
             userTuning[g].tracks[t].divLocked = false;
             for (int d = 0; d < 8; ++d) userTuning[g].tracks[t].allowedDivs[d] = false;
-            userTuning[g].tracks[t].cmplx.min = 0; userTuning[g].tracks[t].cmplx.max = 0;
+
+            // ★ 提案A: ID 22(Euclidean)と23(Chaos)のみデフォルトCmplxを設定
+            if (g == 22 || g == 23) {
+                userTuning[g].tracks[t].cmplx.min = 30;
+                userTuning[g].tracks[t].cmplx.max = 70;
+            }
+            else {
+                userTuning[g].tracks[t].cmplx.min = 0;
+                userTuning[g].tracks[t].cmplx.max = 0;
+            }
             userTuning[g].tracks[t].cmplxLocked = false;
-            userTuning[g].tracks[t].entrp.min = 0; userTuning[g].tracks[t].entrp.max = 0;
+
+            userTuning[g].tracks[t].entrp.min = 0;
+            userTuning[g].tracks[t].entrp.max = 0;
             userTuning[g].tracks[t].entrpLocked = false;
-            userTuning[g].tracks[t].shift.min = 0; userTuning[g].tracks[t].shift.max = 0;
+
+            userTuning[g].tracks[t].shift.min = 0;
+            userTuning[g].tracks[t].shift.max = 0;
             userTuning[g].tracks[t].shiftLocked = false;
         }
 
@@ -242,7 +255,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             for (int j = 0; j < 1024; ++j) drumPatternUI[trk][j] = 0;
             if (!trackDivLocked[trk]) trackDivisionsUI[trk] = masterArpDiv;
 
-            // ★ Arpモード時のSetup 1スライダー（Cmplx, Entrp, Shift）のランダマイズ
+            // ★ Arpモード時のSetup 1スライダーのランダマイズ
             if (!trackCmplxLocked[trk]) trackComplexity[trk] = random.nextInt(101);
             if (!trackEntrpLocked[trk]) trackEntropy[trk] = random.nextInt(101);
             if (!trackShiftLocked[trk]) trackShiftUI[trk] = random.nextInt(21) - 10;
@@ -365,7 +378,6 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             }
 
             if (arpPreset != 7) {
-                // ★ Cmplxを「間引き確率」、Entrpを「ベロシティの揺らぎ」として適用
                 for (int t : tracksToHit) {
                     if (!trackLocked[t]) {
                         int cmplx = trackComplexity[t];
@@ -672,7 +684,15 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                     vel = 0;
                 }
                 else if (cmplx > 0) {
-                    bool isHit = (((static_cast<int64_t>(j) + offset) * k) % n) < k;
+                    bool isHit = false;
+                    // ★ ID 23 (Pure Chaos) の専用ロジック：純粋な確率によるランダム配置
+                    if (genre == 23) {
+                        isHit = (random.nextInt(100) < cmplx);
+                    }
+                    else {
+                        isHit = (((static_cast<int64_t>(j) + offset) * k) % n) < k;
+                    }
+
                     if (entrp > 0 && random.nextInt(100) < (entrp / 3)) isHit = !isHit;
                     vel = isHit ? random.nextInt(juce::Range<int>(40, 90 + (entrp / 10))) : 0;
                     if (isHit && trackDynamic[trk] && stepInBar % div == div - 1) vel = juce::jlimit(80, 127, vel + trackDynamicAmount[trk]);

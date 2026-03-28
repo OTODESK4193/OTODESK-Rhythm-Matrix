@@ -53,7 +53,7 @@ private:
     juce::ComboBox timeSigNumMenu;
     juce::Label timeSigSlash{ "", "/" };
     juce::ComboBox timeSigDenMenu;
-    juce::TextButton btnTimeSigLock{ "L" }; // ★ Time Sigのロックボタン
+    juce::TextButton btnTimeSigLock{ "L" };
 
     juce::Label barCountLabel{ "", "Bars:" };
     juce::ComboBox barCountMenu;
@@ -82,7 +82,6 @@ private:
     juce::Slider octaveSliders[8];
     juce::Label octaveLabels[8];
 
-    // ★ Setting2 (Arpモード) 用のLockボタンとDynamicスライダー
     juce::TextButton btnDegreeLock[8];
     juce::TextButton btnOctaveLock[8];
     juce::TextButton btnDynamic[8];
@@ -129,7 +128,6 @@ private:
     juce::Label tuningTempoMin, tuningTempoMax;
     juce::TextButton tuningTempoLock{ "L" };
 
-    // ★ Tuning用ランダム・クリアボタン (DumpToClipは廃止)
     juce::TextButton btnTuningRandom{ "Random" };
     juce::TextButton btnTuningClear{ "Clear" };
 

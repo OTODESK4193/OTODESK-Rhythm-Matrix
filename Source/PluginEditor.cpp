@@ -94,7 +94,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         resized(); repaint();
         };
 
-    // ★ TimeSig用ロックボタンの初期化
     addAndMakeVisible(btnTimeSigLock);
     btnTimeSigLock.setButtonText("L");
     btnTimeSigLock.setClickingTogglesState(true);
@@ -256,7 +255,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         addChildComponent(midiKeyLabels[i]); midiKeyLabels[i].setText("[" + trackNotes[i] + "]", juce::dontSendNotification);
         midiKeyLabels[i].setColour(juce::Label::textColourId, juce::Colours::grey); midiKeyLabels[i].setJustificationType(juce::Justification::centredRight);
 
-        // Setting2用のLockボタン等
         addAndMakeVisible(btnDegreeLock[i]);
         btnDegreeLock[i].setButtonText("L"); btnDegreeLock[i].setClickingTogglesState(true);
         btnDegreeLock[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
@@ -275,7 +273,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         btnDynamic[i].setToggleState(audioProcessor.trackDynamic[i], juce::dontSendNotification);
         btnDynamic[i].onClick = [this, i] { audioProcessor.trackDynamic[i] = btnDynamic[i].getToggleState(); };
 
-        // ★ 新規: Dynamic スライダー
         addChildComponent(dynamicSliders[i]);
         dynamicSliders[i].setSliderStyle(juce::Slider::LinearHorizontal);
         dynamicSliders[i].setTextBoxStyle(juce::Slider::TextBoxRight, false, 40, 20);
@@ -396,7 +393,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         btnTempoLock.setToggleState(state, juce::dontSendNotification);
         };
 
-    // ★ Tuning画面の Random/Clear ボタン処理
     addChildComponent(btnTuningRandom);
     btnTuningRandom.setColour(juce::TextButton::buttonColourId, juce::Colours::teal);
     btnTuningRandom.onClick = [this] {
@@ -434,7 +430,14 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             if (!t.tracks[i].divLocked) {
                 for (int d = 0; d < 8; ++d) t.tracks[i].allowedDivs[d] = false;
             }
-            if (!t.tracks[i].cmplxLocked) { t.tracks[i].cmplx.min = 0; t.tracks[i].cmplx.max = 0; }
+
+            if (g == 22 || g == 23) {
+                if (!t.tracks[i].cmplxLocked) { t.tracks[i].cmplx.min = 30; t.tracks[i].cmplx.max = 70; }
+            }
+            else {
+                if (!t.tracks[i].cmplxLocked) { t.tracks[i].cmplx.min = 0; t.tracks[i].cmplx.max = 0; }
+            }
+
             if (!t.tracks[i].entrpLocked) { t.tracks[i].entrp.min = 0; t.tracks[i].entrp.max = 0; }
             if (!t.tracks[i].shiftLocked) { t.tracks[i].shift.min = 0; t.tracks[i].shift.max = 0; }
         }
@@ -515,6 +518,15 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
     generateButton.onClick = [safeThis, this] {
         if (safeThis == nullptr) return;
         audioProcessor.generateAllTracks();
+
+        // ★ Arpモード時にランダマイズされた数値を即座にUIスライダーに反映
+        for (int i = 0; i < 8; ++i) {
+            complexitySliders[i].setValue(audioProcessor.trackComplexity[i], juce::dontSendNotification);
+            entropySliders[i].setValue(audioProcessor.trackEntropy[i], juce::dontSendNotification);
+            shiftSliders[i].setValue(audioProcessor.trackShiftUI[i], juce::dontSendNotification);
+            octaveSliders[i].setValue(audioProcessor.trackOctaveUI[i], juce::dontSendNotification);
+        }
+
         updateTrackNames();
         currentViewBar = 0;
         updateTabColors();
@@ -637,7 +649,6 @@ void AIDrumMachineAudioProcessorEditor::updateViewVisibility() {
     bool isS2 = (currentView == Setup2View);
     bool isTuning = (currentView == TuningView);
 
-    // ★ TuningとArpモードの排他制御による無効化設定
     tabTuningButton.setEnabled(!audioProcessor.arpMode.load());
     btnArpMode.setEnabled(currentView != TuningView);
 
@@ -648,7 +659,6 @@ void AIDrumMachineAudioProcessorEditor::updateViewVisibility() {
 
     btnClearAll.setVisible(isSeq);
 
-    // ★ Time Sigのロックボタンの可視性
     btnTimeSigLock.setVisible(isSeq || isS1 || isS2);
 
     arpKeyMenu.setVisible(isS2);
@@ -663,18 +673,15 @@ void AIDrumMachineAudioProcessorEditor::updateViewVisibility() {
         entrpLabels[i].setVisible(isS1); entropySliders[i].setVisible(isS1); btnEntrpLock[i].setVisible(isS1);
         shiftLabels[i].setVisible(isS1); shiftSliders[i].setVisible(isS1); btnShiftLock[i].setVisible(isS1);
 
-        // ★ Arpモード時のトラック名編集ロック
         trackNameLabels[i].setEditable(!isS2);
 
-        // ★ Setting2用のボタン可視性
         btnDegreeLock[i].setVisible(isS2);
         octaveLabels[i].setVisible(isS2);
         octaveSliders[i].setVisible(isS2);
         btnOctaveLock[i].setVisible(isS2);
         btnDynamic[i].setVisible(isS2);
-        dynamicSliders[i].setVisible(isS2); // ★ 新スライダー
+        dynamicSliders[i].setVisible(isS2);
 
-        // ★ ピアノキー表記をSetup 1でのみ表示するように制御
         midiKeyLabels[i].setVisible(isS1);
 
         for (int d = 0; d < 8; ++d) tuningDivBtns[i][d].setVisible(isTuning);
@@ -696,7 +703,6 @@ void AIDrumMachineAudioProcessorEditor::updateViewVisibility() {
 
     tuningTempoMin.setVisible(isTuning); tuningTempoMax.setVisible(isTuning); tuningTempoLock.setVisible(isTuning);
 
-    // ★ Tuning ランダム/クリアボタン
     btnTuningRandom.setVisible(isTuning);
     btnTuningClear.setVisible(isTuning);
 
@@ -772,10 +778,7 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     timeSigNumMenu.setBounds(row1.removeFromLeft(60).reduced(2));
     timeSigSlash.setBounds(row1.removeFromLeft(15));
     timeSigDenMenu.setBounds(row1.removeFromLeft(60).reduced(2));
-    // ★ Time Sig ロックボタン
     btnTimeSigLock.setBounds(row1.removeFromLeft(25).reduced(2));
-
-    // ★ Row 1のDragAllAreaは削除し、Row 2へ移動します
 
     area.removeFromTop(10);
     auto row2 = area.removeFromTop(30);
@@ -785,7 +788,6 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     btnAutoFollow.setBounds(row2.removeFromLeft(70)); row2.removeFromLeft(10);
     btnArpMode.setBounds(row2.removeFromLeft(80)); row2.removeFromLeft(10);
 
-    // ★ DragMIDI ボタンを Arp Modeの右隣（広大な余白）に配置
     dragAllArea = row2.removeFromLeft(100).reduced(2);
 
     row2.removeFromRight(10);
@@ -829,7 +831,6 @@ void AIDrumMachineAudioProcessorEditor::resized() {
         tuningTempoMax.setBounds(tRow1.removeFromLeft(50).reduced(2));
         tuningTempoLock.setBounds(tRow1.removeFromLeft(30).reduced(2));
         tRow1.removeFromLeft(10);
-        // ★ Tempo設定の右隣に Random / Clear ボタンを配置
         btnTuningRandom.setBounds(tRow1.removeFromLeft(80).reduced(2));
         btnTuningClear.setBounds(tRow1.removeFromLeft(80).reduced(2));
 
@@ -886,7 +887,6 @@ void AIDrumMachineAudioProcessorEditor::resized() {
         for (int row = 0; row < rows; ++row) {
             int idx = 7 - row;
             auto lRow = labelArea.withY(labelArea.getY() + row * cellH).withHeight(cellH).reduced(2);
-            // ★ midiKeyLabels は非表示化指示のため領域を確保しない
             trackNameLabels[idx].setBounds(lRow.removeFromLeft(60));
             btnDegreeLock[idx].setBounds(lRow.removeFromLeft(25).reduced(2));
 
@@ -894,14 +894,10 @@ void AIDrumMachineAudioProcessorEditor::resized() {
             ctrlRow.removeFromLeft(10);
 
             octaveLabels[idx].setBounds(ctrlRow.removeFromLeft(50));
-            // ★ Octaveスライダーの幅を縮小しDynamicボタンの領域を確保
             octaveSliders[idx].setBounds(ctrlRow.removeFromLeft(120));
-
-            // ★ OctaveのLock
             btnOctaveLock[idx].setBounds(ctrlRow.removeFromLeft(25).reduced(2));
             ctrlRow.removeFromLeft(15);
 
-            // ★ Dynamicボタンとスライダーを十分な余白に配置
             btnDynamic[idx].setBounds(ctrlRow.removeFromLeft(45).reduced(2));
             dynamicSliders[idx].setBounds(ctrlRow.removeFromLeft(120));
         }
@@ -962,11 +958,9 @@ void AIDrumMachineAudioProcessorEditor::resized() {
 void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
     g.fillAll(juce::Colours::darkgrey);
 
-    // ★ DragMIDI ボタンの描画 (resized()で計算されたdragAllArea領域に描画)
     g.setColour(juce::Colours::cyan.withAlpha(0.6f)); g.fillRoundedRectangle(dragAllArea.toFloat(), 4.0f);
     g.setColour(juce::Colours::white); g.setFont(14.0f); g.drawText("DragMIDI", dragAllArea, juce::Justification::centred, false);
 
-    // ★ TuningViewにおけるラベルの二重描画を完全に削除
     if (currentView == SequencerView) {
         int rows = 8; float cellH = mainGridArea.getHeight() / (float)rows;
         int numBeats = audioProcessor.timeSigNumerator.load();
