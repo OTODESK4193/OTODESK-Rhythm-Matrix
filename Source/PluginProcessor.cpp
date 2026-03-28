@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <cstdint>
 
 static constexpr InstrumentPatch P(int w, float fr, float pD, float pA, float aAt, float aDc, float ns, int fT, float fF, float fR, float dr, float vl) {
     return { w, fr, pD, pA, aAt, aDc, ns, fT, fF, fR, dr, vl };
@@ -33,35 +34,31 @@ static const std::array<InstrumentPatch, PATCH_MAX> patchLibrary = []() {
     return arr;
     }();
 
-#define D_STD {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}
-#define D_BASS {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_BASS, P_808_FX}
-#define D_PLUCK {PLUCK_1, PLUCK_2, PLUCK_3, PLUCK_4, PLUCK_5, PLUCK_6, PLUCK_7, PLUCK_8}
-
 static const std::array<GenreDefinition, 24> genreTable = { {
-    { 4, 4, 125, 135, {"909 Kick", "909 Snare", "CHH", "OHH", "Clap", "Ride", "Tom", "Noise FX"}, D_STD, {{1,2,4,0}, {2,4,0,0}, {4,8,0,0}, {4,8,0,0}, {2,4,0,0}, {3,4,5,0}, {3,5,7,0}, {2,4,8,0}}, {0,0,0,0,0,0,0,0}, {0,0,2,2,0,5,5,10} },
-    { 4, 4, 120, 126, {"Deep Kick", "Rimshot", "Shuff Hat", "Open Hat", "Clap", "Conga", "Bongo", "Vocal Chop"}, D_STD, {{1,2,4,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,5,0,0}, {4,6,8,0}, {2,3,4,0}}, {-2,0, 5,0,-2, -5, -5, 0}, {2,5, 15,5, 5, 10, 10, 15} },
-    { 4, 4, 130, 138, {"Punch Kick", "Snare/Rim", "Garage Hat", "Ride", "Clap", "Sub Bass", "Perc 1", "Perc 2"}, D_BASS, {{2,3,4,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {2,4,0,0}, {2,3,4,0}, {3,5,0,0}, {5,7,0,0}}, {-5,5, 10,5, 0, -10, 0, 0}, {5,15, 25,15, 10, 10, 15, 15} },
-    { 4, 4, 165, 175, {"Heavy Kick", "Tight Snr", "Fast Hat", "Ride", "Break Rim", "Break 1", "Break 2", "Sub"}, D_BASS, {{2,4,0,0}, {2,4,0,0}, {4,8,0,0}, {4,8,0,0}, {2,4,0,0}, {4,6,8,0}, {4,6,8,0}, {2,4,0,0}}, {0,0, -5,-5, 0, -10, -10, 0}, {2,2, 5,5, 5, 10, 10, 5} },
-    { 4, 4, 135, 150, {"808 Kick", "808 Snare", "Roll Hat", "Open Hat", "Clap", "Perc", "808 Bass", "FX"}, D_BASS, {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {2,4,0,0}, {4,8,0,0}, {2,4,0,0}, {2,4,0,0}}, {0,0, 0,0, 0, 0, 0, 0}, {0,0, 0,0, 0, 0, 0, 0} },
-    { 4, 4, 160, 160, {"Juke Kick", "Snare", "Fast Hat", "Hat 2", "Clap", "Tom", "Vocal 1", "Vocal 2"}, D_STD, {{3,4,6,0}, {3,4,6,0}, {4,6,8,0}, {4,6,8,0}, {2,4,0,0}, {3,5,6,0}, {3,4,5,0}, {4,6,7,0}}, {-5,-5, -5,-5, 0, -10, -5, -5}, {5,5, 5,5, 5, 10, 15, 15} },
-    { 4, 4, 140, 180, {"Glitch Kick", "Drill Snr", "Hat 1", "Hat 2", "Noise", "Perc 1", "Perc 2", "Glitch FX"}, D_STD, {{4,5,7,0}, {4,6,8,0}, {5,7,9,0}, {6,8,9,0}, {3,5,7,0}, {5,7,9,0}, {4,6,8,0}, {3,5,7,0}}, {-10,-10, -15,-15, -20, -20, -20, -20}, {10,10, 15,15, 20, 20, 20, 20} },
-    { 4, 4, 140, 150, {"Stomp Kick", "Fat Snare", "Hat", "Ride", "Clap", "Wobble", "Growl", "Sub"}, D_BASS, {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,8,0}, {2,4,0,0}, {1,2,4,0}}, {0,0, 0,0, 0, 0, 0, 0}, {0,0, 5,5, 0, 10, 5, 0} },
-    { 4, 4, 95, 115,  {"Acoustic Kick", "Snare", "Shaker 1", "Shaker 2", "Clave", "Conga", "Djembe", "Agogo"}, D_STD, {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {3,4,0,0}, {3,4,5,0}, {3,4,6,0}, {2,3,4,0}}, {0,0, 3,3, 5, 5, 5, 5}, {5,10, 15,15, 20, 20, 20, 20} },
-    { 4, 4, 98, 108,  {"Heavy Kick", "Snare", "Hat", "Open Hat", "Clap", "Tom 1", "Tom 2", "Chant"}, D_STD, {{3,4,0,0}, {2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {2,3,4,0}}, {-5,0, 0,0, -5, -5, -5, 0}, {0,5, 10,5, 0, 10, 10, 10} },
-    { 4, 4, 110, 115, {"Log Drum", "Snare/Rim", "Shaker", "Open Hat", "Clap", "Conga", "Woodblock", "Whistle"}, D_STD, {{3,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {2,3,4,0}}, {0,0, 5,0, 0, 5, 5, 0}, {10,5, 15,5, 5, 15, 15, 10} },
-    { 7, 8, 40, 60,   {"Bayan", "Dayan", "Tabla", "Manjira", "Ghungroo", "Dholak 1", "Dholak 2", "Vocal"}, D_STD, {{2,3,4,0}, {2,3,4,5}, {2,3,4,5}, {2,3,4,0}, {3,4,5,6}, {2,3,4,0}, {2,3,4,0}, {1,2,3,0}}, {-5,-5, -5, -2, -2, -5, -5, -10}, {5,5, 5, 5, 5, 5, 5, 10} },
-    { 4, 4, 90, 120,  {"Surdo", "Caixa", "Pandeiro", "Ganza", "Tamborim", "Agogo", "Cuica", "Repique"}, D_STD, {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {3,4,0,0}, {3,4,0,0}, {3,4,0,0}, {4,6,0,0}}, {0,5, 5,5, 5, 5, 5, 5}, {5,15, 20,20, 20, 20, 20, 20} },
-    { 4, 4, 90, 105,  {"Kick", "Snare (Tresillo)", "Hat", "Open Hat", "Clap", "Timbales", "Perc", "Vocal FX"}, D_STD, {{2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,0,0}, {2,4,0,0}}, {0,-6, 0,0, 0, 0, 0, 0}, {5,0, 5,5, 5, 10, 10, 10} },
-    { 8, 4, 40, 55,   {"Gong", "Kempul", "Kendang", "Bonang", "Saron", "Kenong", "Kethuk", "Slenthem"}, D_STD, {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}}, {-10,-10, -5,-5, -5, -10, -5, -10}, {10,10, 10,10, 10, 10, 10, 10} },
-    { 4, 4, 100, 115, {"Kick", "Snare", "Hi-Hat", "Open Hat", "Clap", "Tom", "Conga", "Tambourine"}, D_STD, {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,6,0}, {4,6,0,0}}, {0,0, 5,0, 0, 0, 5, 5}, {5,10, 20,5, 5, 10, 15, 20} },
-    { 4, 4, 100, 112, {"Punch Kick", "Snare", "Swing Hat", "Open Hat", "Clap", "Tom 1", "Tom 2", "Orch Hit"}, D_STD, {{2,4,0,0}, {2,4,0,0}, {6,12,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}}, {0,0, 15,0, 0, 0, 0, 0}, {5,5, 25,5, 5, 5, 5, 5} },
-    { 4, 4, 80, 95,   {"Soft Kick", "Rimshot", "Loose Hat", "Ride", "Snap", "Tom", "Shaker", "Vinyl FX"}, D_STD, {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {3,4,0,0}, {2,4,0,0}, {2,3,4,0}, {4,6,0,0}, {1,2,0,0}}, {-5, 10, 20, 10, 5, 0, 15, 0}, {2, 25, 40, 25, 20, 10, 30, 0} },
-    { 4, 4, 85, 95,   {"Gritty Kick", "Fat Snare", "Hi-Hat", "Open Hat", "Clap", "Perc", "Scratch", "Sample"}, D_STD, {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {1,2,4,0}}, {2, 5, 5, 0, 0, 0, 0, 0}, {8, 12, 15, 5, 5, 10, 5, 0} },
-    { 5, 4, 120, 160, {"Kick", "Snare", "Hi-Hat", "Ride", "Ghost Snr", "Tom 1", "Tom 2", "Crash"}, D_STD, {{2,3,4,0}, {2,3,4,0}, {4,5,6,0}, {3,4,5,0}, {4,6,8,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}}, {0,0, 0,0, 0, 0, 0, 0}, {5,5, 5,5, 5, 5, 5, 5} },
-    { 13, 8, 60, 85,  {"Kick (Click)", "Snare (Fat)", "Max Stax", "Hat Bark", "High Tom", "Mid Tom", "Floor Tom", "Splash"}, D_STD, {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}}, {0, 2, 0, 4, 1, 2, 3, 0}, {0, 2, 0, 6, 1, 2, 3, 0} },
-    { 12, 8, 60, 75,  {"Clap 1", "Clap 2", "Marimba 1", "Marimba 2", "Woodblock", "Pulse", "Phase 1", "Phase 2"}, D_STD, {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}}, {0,0, 0,0, 0, 0, -20, 20}, {0,0, 0,0, 0, 0, -20, 20} },
-    { 4, 4, 120, 150, {"Node C", "Node D", "Node F", "Node G", "Node A", "Node C^", "Node D^", "Node F^"}, D_PLUCK, {{2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}}, {0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0} },
-    { 4, 4, 120, 150, {"Chaos C", "Chaos D", "Chaos F", "Chaos G", "Chaos A", "Chaos C^", "Chaos D^", "Chaos F^"}, D_PLUCK, {{1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}}, {-20,-20,-20,-20,-20,-20,-20,-20}, {20,20,20,20,20,20,20,20} }
+    { 4, 4, 125, 135, {"909 Kick", "909 Snare", "CHH", "OHH", "Clap", "Ride", "Tom", "Noise FX"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{1,2,4,0}, {2,4,0,0}, {4,8,0,0}, {4,8,0,0}, {2,4,0,0}, {3,4,5,0}, {3,5,7,0}, {2,4,8,0}}, {0,0,0,0,0,0,0,0}, {0,0,2,2,0,5,5,10} },
+    { 4, 4, 120, 126, {"Deep Kick", "Rimshot", "Shuff Hat", "Open Hat", "Clap", "Conga", "Bongo", "Vocal Chop"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{1,2,4,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,5,0,0}, {4,6,8,0}, {2,3,4,0}}, {-2,0, 5,0,-2, -5, -5, 0}, {2,5, 15,5, 5, 10, 10, 15} },
+    { 4, 4, 130, 138, {"Punch Kick", "Snare/Rim", "Garage Hat", "Ride", "Clap", "Sub Bass", "Perc 1", "Perc 2"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_BASS, P_808_FX}, {{2,3,4,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {2,4,0,0}, {2,3,4,0}, {3,5,0,0}, {5,7,0,0}}, {-5,5, 10,5, 0, -10, 0, 0}, {5,15, 25,15, 10, 10, 15, 15} },
+    { 4, 4, 165, 175, {"Heavy Kick", "Tight Snr", "Fast Hat", "Ride", "Break Rim", "Break 1", "Break 2", "Sub"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_BASS, P_808_FX}, {{2,4,0,0}, {2,4,0,0}, {4,8,0,0}, {4,8,0,0}, {2,4,0,0}, {4,6,8,0}, {4,6,8,0}, {2,4,0,0}}, {0,0, -5,-5, 0, -10, -10, 0}, {2,2, 5,5, 5, 10, 10, 5} },
+    { 4, 4, 135, 150, {"808 Kick", "808 Snare", "Roll Hat", "Open Hat", "Clap", "Perc", "808 Bass", "FX"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_BASS, P_808_FX}, {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {2,4,0,0}, {4,8,0,0}, {2,4,0,0}, {2,4,0,0}}, {0,0, 0,0, 0, 0, 0, 0}, {0,0, 0,0, 0, 0, 0, 0} },
+    { 4, 4, 160, 160, {"Juke Kick", "Snare", "Fast Hat", "Hat 2", "Clap", "Tom", "Vocal 1", "Vocal 2"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{3,4,6,0}, {3,4,6,0}, {4,6,8,0}, {4,6,8,0}, {2,4,0,0}, {3,5,6,0}, {3,4,5,0}, {4,6,7,0}}, {-5,-5, -5,-5, 0, -10, -5, -5}, {5,5, 5,5, 5, 10, 15, 15} },
+    { 4, 4, 140, 180, {"Glitch Kick", "Drill Snr", "Hat 1", "Hat 2", "Noise", "Perc 1", "Perc 2", "Glitch FX"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{4,5,7,0}, {4,6,8,0}, {5,7,9,0}, {6,8,9,0}, {3,5,7,0}, {5,7,9,0}, {4,6,8,0}, {3,5,7,0}}, {-10,-10, -15,-15, -20, -20, -20, -20}, {10,10, 15,15, 20, 20, 20, 20} },
+    { 4, 4, 140, 150, {"Stomp Kick", "Fat Snare", "Hat", "Ride", "Clap", "Wobble", "Growl", "Sub"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_BASS, P_808_FX}, {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,8,0}, {2,4,0,0}, {1,2,4,0}}, {0,0, 0,0, 0, 0, 0, 0}, {0,0, 5,5, 0, 10, 5, 0} },
+    { 4, 4, 95, 115,  {"Acoustic Kick", "Snare", "Shaker 1", "Shaker 2", "Clave", "Conga", "Djembe", "Agogo"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {3,4,0,0}, {3,4,5,0}, {3,4,6,0}, {2,3,4,0}}, {0,0, 3,3, 5, 5, 5, 5}, {5,10, 15,15, 20, 20, 20, 20} },
+    { 4, 4, 98, 108,  {"Heavy Kick", "Snare", "Hat", "Open Hat", "Clap", "Tom 1", "Tom 2", "Chant"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{3,4,0,0}, {2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {2,3,4,0}}, {-5,0, 0,0, -5, -5, -5, 0}, {0,5, 10,5, 0, 10, 10, 10} },
+    { 4, 4, 110, 115, {"Log Drum", "Snare/Rim", "Shaker", "Open Hat", "Clap", "Conga", "Woodblock", "Whistle"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{3,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {2,3,4,0}}, {0,0, 5,0, 0, 5, 5, 0}, {10,5, 15,5, 5, 15, 15, 10} },
+    { 7, 8, 40, 60,   {"Bayan", "Dayan", "Tabla", "Manjira", "Ghungroo", "Dholak 1", "Dholak 2", "Vocal"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{2,3,4,0}, {2,3,4,5}, {2,3,4,5}, {2,3,4,0}, {3,4,5,6}, {2,3,4,0}, {2,3,4,0}, {1,2,3,0}}, {-5,-5, -5, -2, -2, -5, -5, -10}, {5,5, 5, 5, 5, 5, 5, 10} },
+    { 4, 4, 90, 120,  {"Surdo", "Caixa", "Pandeiro", "Ganza", "Tamborim", "Agogo", "Cuica", "Repique"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {4,6,0,0}, {3,4,0,0}, {3,4,0,0}, {3,4,0,0}, {4,6,0,0}}, {0,5, 5,5, 5, 5, 5, 5}, {5,15, 20,20, 20, 20, 20, 20} },
+    { 4, 4, 90, 105,  {"Kick", "Snare (Tresillo)", "Hat", "Open Hat", "Clap", "Timbales", "Perc", "Vocal FX"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,0,0}, {2,4,0,0}}, {0,-6, 0,0, 0, 0, 0, 0}, {5,0, 5,5, 5, 10, 10, 10} },
+    { 8, 4, 40, 55,   {"Gong", "Kempul", "Kendang", "Bonang", "Saron", "Kenong", "Kethuk", "Slenthem"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}}, {-10,-10, -5,-5, -5, -10, -5, -10}, {10,10, 10,10, 10, 10, 10, 10} },
+    { 4, 4, 100, 115, {"Kick", "Snare", "Hi-Hat", "Open Hat", "Clap", "Tom", "Conga", "Tambourine"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{2,4,0,0}, {2,4,0,0}, {4,6,0,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {3,4,6,0}, {4,6,0,0}}, {0,0, 5,0, 0, 0, 5, 5}, {5,10, 20,5, 5, 10, 15, 20} },
+    { 4, 4, 100, 112, {"Punch Kick", "Snare", "Swing Hat", "Open Hat", "Clap", "Tom 1", "Tom 2", "Orch Hit"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{2,4,0,0}, {2,4,0,0}, {6,12,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}, {2,4,0,0}}, {0,0, 15,0, 0, 0, 0, 0}, {5,5, 25,5, 5, 5, 5, 5} },
+    { 4, 4, 80, 95,   {"Soft Kick", "Rimshot", "Loose Hat", "Ride", "Snap", "Tom", "Shaker", "Vinyl FX"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {3,4,0,0}, {2,4,0,0}, {2,3,4,0}, {4,6,0,0}, {1,2,0,0}}, {-5, 10, 20, 10, 5, 0, 15, 0}, {2, 25, 40, 25, 20, 10, 30, 0} },
+    { 4, 4, 85, 95,   {"Gritty Kick", "Fat Snare", "Hi-Hat", "Open Hat", "Clap", "Perc", "Scratch", "Sample"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{2,4,0,0}, {2,4,0,0}, {3,4,6,0}, {2,4,0,0}, {2,4,0,0}, {3,4,0,0}, {2,4,0,0}, {1,2,4,0}}, {2, 5, 5, 0, 0, 0, 0, 0}, {8, 12, 15, 5, 5, 10, 5, 0} },
+    { 5, 4, 120, 160, {"Kick", "Snare", "Hi-Hat", "Ride", "Ghost Snr", "Tom 1", "Tom 2", "Crash"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{2,3,4,0}, {2,3,4,0}, {4,5,6,0}, {3,4,5,0}, {4,6,8,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}}, {0,0, 0,0, 0, 0, 0, 0}, {5,5, 5,5, 5, 5, 5, 5} },
+    { 13, 8, 60, 85,  {"Kick (Click)", "Snare (Fat)", "Max Stax", "Hat Bark", "High Tom", "Mid Tom", "Floor Tom", "Splash"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{2,4,0,0}, {2,4,0,0}, {4,6,8,0}, {2,4,0,0}, {3,4,5,0}, {3,4,5,0}, {3,4,5,0}, {1,2,0,0}}, {0, 2, 0, 4, 1, 2, 3, 0}, {0, 2, 0, 6, 1, 2, 3, 0} },
+    { 12, 8, 60, 75,  {"Clap 1", "Clap 2", "Marimba 1", "Marimba 2", "Woodblock", "Pulse", "Phase 1", "Phase 2"}, {P_808_KICK, P_808_SNARE, P_808_CHH, P_808_OHH, P_808_CLAP, P_808_TOM, P_808_PERC, P_808_FX}, {{1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}, {1,2,0,0}}, {0,0, 0,0, 0, 0, -20, 20}, {0,0, 0,0, 0, 0, -20, 20} },
+    { 4, 4, 120, 150, {"Node C", "Node D", "Node F", "Node G", "Node A", "Node C^", "Node D^", "Node F^"}, {PLUCK_1, PLUCK_2, PLUCK_3, PLUCK_4, PLUCK_5, PLUCK_6, PLUCK_7, PLUCK_8}, {{2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}, {2,3,5,7}}, {0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0} },
+    { 4, 4, 120, 150, {"Chaos C", "Chaos D", "Chaos F", "Chaos G", "Chaos A", "Chaos C^", "Chaos D^", "Chaos F^"}, {PLUCK_1, PLUCK_2, PLUCK_3, PLUCK_4, PLUCK_5, PLUCK_6, PLUCK_7, PLUCK_8}, {{1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}, {1,3,6,9}}, {-20,-20,-20,-20,-20,-20,-20,-20}, {20,20,20,20,20,20,20,20} }
 } };
 
 const int scalePatterns[19][8] = {
@@ -110,29 +107,33 @@ void AIDrumMachineAudioProcessor::initializeUserTunings() {
         userTuning[g].tempo.min = genreTable[g].minTempo;
         userTuning[g].tempo.max = genreTable[g].maxTempo;
         userTuning[g].tempoLocked = false;
+
         for (int t = 0; t < 8; ++t) {
-            userTuning[g].allowedTimeSigs[t] = (t == 0);
+            userTuning[g].allowedTimeSigs[t] = false;
             userTuning[g].tracks[t].divLocked = false;
-            for (int d = 0; d < 8; ++d) userTuning[g].tracks[t].allowedDivs[d] = (d == 0 || d == 3);
-            userTuning[g].tracks[t].cmplx.min = 20; userTuning[g].tracks[t].cmplx.max = 50;
+            for (int d = 0; d < 8; ++d) userTuning[g].tracks[t].allowedDivs[d] = false;
+            userTuning[g].tracks[t].cmplx.min = 0; userTuning[g].tracks[t].cmplx.max = 0;
             userTuning[g].tracks[t].cmplxLocked = false;
-            userTuning[g].tracks[t].entrp.min = 10; userTuning[g].tracks[t].entrp.max = 50;
+            userTuning[g].tracks[t].entrp.min = 0; userTuning[g].tracks[t].entrp.max = 0;
             userTuning[g].tracks[t].entrpLocked = false;
             userTuning[g].tracks[t].shift.min = 0; userTuning[g].tracks[t].shift.max = 0;
             userTuning[g].tracks[t].shiftLocked = false;
         }
-        for (int f = 0; f < 4; ++f) userTuning[g].allowedFills[f] = true;
+
+        for (int f = 0; f < 4; ++f) userTuning[g].allowedFills[f] = false;
+        if (g == 0 || g == 1 || g == 4 || g == 7 || g == 9 || g == 10 || g == 13 || g == 18) {
+            userTuning[g].allowedFills[1] = true;
+            userTuning[g].allowedFills[3] = true;
+        }
+        else if (g == 3 || g == 5 || g == 6 || g == 19 || g == 20 || g == 22 || g == 23) {
+            userTuning[g].allowedFills[0] = true;
+            userTuning[g].allowedFills[2] = true;
+        }
+        else {
+            userTuning[g].allowedFills[0] = true;
+            userTuning[g].allowedFills[1] = true;
+        }
     }
-
-    // =========================================================================
-    // ⬇️ DUMP TO CLIPBOARD で取得したコードをここにペーストしてください ⬇️
-    // =========================================================================
-
-
-
-    // =========================================================================
-    // ⬆️ ペーストエリアここまで ⬆️
-    // =========================================================================
 }
 
 const GenreDefinition& AIDrumMachineAudioProcessor::getGenreDef(int index) {
@@ -193,14 +194,19 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     if (!tuning.tempoLocked && !tempoLocked.load() && !isSyncEnabled.load() && !isArp) {
         int tMin = std::min(tuning.tempo.min, tuning.tempo.max);
         int tMax = std::max(tuning.tempo.min, tuning.tempo.max);
-        int newBpm = random.nextInt(juce::Range<int>(tMin, tMax + 1));
-        internalTempo.store((double)newBpm);
+        if (tMax > tMin) {
+            int newBpm = random.nextInt(juce::Range<int>(tMin, tMax + 1));
+            internalTempo.store((double)newBpm);
+        }
+        else {
+            internalTempo.store((double)tMin);
+        }
     }
 
     int num = timeSigNumerator.load();
     int den = timeSigDenominator.load();
 
-    if (!isArp) {
+    if (!isArp && !timeSigLocked.load()) {
         int tsChoices[8];
         int numTsChoices = 0;
         for (int i = 0; i < 8; ++i) {
@@ -228,11 +234,18 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             }
         }
 
+        int masterArpDiv = 1 + random.nextInt(4);
+
         for (int trk = 0; trk < 8; ++trk) {
             if (trackLocked[trk]) continue;
 
             for (int j = 0; j < 1024; ++j) drumPatternUI[trk][j] = 0;
-            if (!trackDivLocked[trk]) trackDivisionsUI[trk] = (arpPreset == 7) ? ((trk % 4) + 2) : 4;
+            if (!trackDivLocked[trk]) trackDivisionsUI[trk] = masterArpDiv;
+
+            // ★ Arpモード時のSetup 1スライダー（Cmplx, Entrp, Shift）のランダマイズ
+            if (!trackCmplxLocked[trk]) trackComplexity[trk] = random.nextInt(101);
+            if (!trackEntrpLocked[trk]) trackEntropy[trk] = random.nextInt(101);
+            if (!trackShiftLocked[trk]) trackShiftUI[trk] = random.nextInt(21) - 10;
 
             int degree = trackDegreeUI[trk];
             int octave = trackOctaveUI[trk];
@@ -300,7 +313,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             if (arpPreset == 8) {
                 int k = (n * (20 + random.nextInt(60))) / 100;
                 int eucOffset = random.nextInt(juce::jmax(1, n));
-                stepActive = (((j + eucOffset) * k) % n < k);
+                stepActive = (((static_cast<int64_t>(j) + eucOffset) * k) % n < k);
             }
             else if (arpPreset == 9) {
                 if (currentBarOfStep < 2) {
@@ -344,9 +357,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             case 6: tracksToHit.push_back(currentChordBase % 8); tracksToHit.push_back((currentChordBase + 3) % 8); tracksToHit.push_back((currentChordBase + 6) % 8); currentChordBase = (currentChordBase + 1) % 8; break;
             case 7: break;
             case 8: tracksToHit.push_back(currentTrk); currentTrk = (currentTrk + 1) % 8; break;
-            case 9:
-                tracksToHit.push_back(currentTrk);
-                break;
+            case 9: tracksToHit.push_back(currentTrk); break;
             default:
                 int nextTrk = random.nextInt(8);
                 while (nextTrk == currentTrk) nextTrk = random.nextInt(8);
@@ -354,25 +365,26 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             }
 
             if (arpPreset != 7) {
-                if (isMono && tracksToHit.size() > 0) {
-                    if (!stepOccupied[j]) {
-                        int t = tracksToHit[0];
-                        if (!trackLocked[t]) {
-                            if (trackDynamic[t] && (stepInBar % baseDiv == 0 || stepInBar % baseDiv == baseDiv - 1)) {
-                                vel = juce::jlimit(100, 127, vel + 30);
+                // ★ Cmplxを「間引き確率」、Entrpを「ベロシティの揺らぎ」として適用
+                for (int t : tracksToHit) {
+                    if (!trackLocked[t]) {
+                        int cmplx = trackComplexity[t];
+                        int entrp = trackEntropy[t];
+                        int prob = cmplx; if (prob < 5) prob = 5;
+
+                        if (random.nextInt(100) < prob) {
+                            if (isMono && stepOccupied[j]) continue;
+
+                            int finalVel = vel;
+                            if (entrp > 0) {
+                                int jitter = (int)((entrp / 100.0f) * 50.0f);
+                                finalVel -= random.nextInt(jitter + 1);
                             }
-                            drumPatternUI[t][j] = vel;
-                        }
-                        stepOccupied[j] = true;
-                    }
-                }
-                else {
-                    for (int t : tracksToHit) {
-                        if (!trackLocked[t]) {
                             if (trackDynamic[t] && (stepInBar % baseDiv == 0 || stepInBar % baseDiv == baseDiv - 1)) {
-                                vel = juce::jlimit(100, 127, vel + 30);
+                                finalVel = juce::jlimit(1, 127, finalVel + trackDynamicAmount[t]);
                             }
-                            drumPatternUI[t][j] = vel;
+                            drumPatternUI[t][j] = finalVel;
+                            if (isMono) stepOccupied[j] = true;
                         }
                     }
                 }
@@ -381,20 +393,37 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
 
         if (arpPreset == 7) {
             std::vector<int> trkOrder = { 0, 1, 2, 3, 4, 5, 6, 7 };
+            for (int i = 7; i > 0; --i) {
+                int rIdx = random.nextInt(i + 1);
+                std::swap(trkOrder[i], trkOrder[rIdx]);
+            }
+
             for (int j = 0; j < 1024; ++j) {
                 if (j >= n) break;
-                std::random_shuffle(trkOrder.begin(), trkOrder.end());
+                for (int i = 7; i > 0; --i) {
+                    int rIdx = random.nextInt(i + 1);
+                    std::swap(trkOrder[i], trkOrder[rIdx]);
+                }
+
                 for (int trk : trkOrder) {
                     if (trackLocked[trk]) continue;
                     int tDiv = trackDivisionsUI[trk];
+                    int cmplx = trackComplexity[trk];
+                    int entrp = trackEntropy[trk];
 
-                    int absoluteStepT = (j * tDiv) / baseDiv;
-                    if ((j * tDiv) % baseDiv == 0) {
-                        if (random.nextInt(100) < 60) {
+                    int absoluteStepT = static_cast<int>((static_cast<int64_t>(j) * tDiv) / baseDiv);
+
+                    if ((static_cast<int64_t>(j) * tDiv) % baseDiv == 0) {
+                        int prob = cmplx; if (prob < 5) prob = 5;
+                        if (random.nextInt(100) < prob) {
                             if (isMono && stepOccupied[j]) continue;
-                            int vel = 70 + random.nextInt(30);
-                            if (trackDynamic[trk] && absoluteStepT % (tDiv * 2) == 0) vel = juce::jlimit(100, 127, vel + 30);
-                            drumPatternUI[trk][absoluteStepT] = vel;
+                            int finalVel = 70 + random.nextInt(30);
+                            if (entrp > 0) {
+                                int jitter = (int)((entrp / 100.0f) * 50.0f);
+                                finalVel -= random.nextInt(jitter + 1);
+                            }
+                            if (trackDynamic[trk] && absoluteStepT % (tDiv * 2) == 0) finalVel = juce::jlimit(1, 127, finalVel + trackDynamicAmount[trk]);
+                            drumPatternUI[trk][absoluteStepT] = finalVel;
                             if (isMono) stepOccupied[j] = true;
                         }
                     }
@@ -403,7 +432,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
         }
     }
     else {
-        int fillChoices[4];
+        int fillChoices[4] = { 0, 0, 0, 0 };
         int numFillChoices = 0;
         for (int i = 0; i < 4; ++i) if (tuning.allowedFills[i]) fillChoices[numFillChoices++] = i;
         int fillTypology = numFillChoices > 0 ? fillChoices[random.nextInt(numFillChoices)] : 0;
@@ -428,21 +457,24 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
             if (!cmplxLck) {
                 int cMin = std::min(tt.cmplx.min, tt.cmplx.max);
                 int cMax = std::max(tt.cmplx.min, tt.cmplx.max);
-                trackComplexity[trk] = isAlgorithmMode ? 50 : random.nextInt(juce::Range<int>(cMin, cMax + 1));
+                if (cMax > cMin) trackComplexity[trk] = random.nextInt(juce::Range<int>(cMin, cMax + 1));
+                else trackComplexity[trk] = cMin;
             }
 
             bool entrpLck = trackEntrpLocked[trk] || (!isAlgorithmMode && tt.entrpLocked);
             if (!entrpLck) {
                 int eMin = std::min(tt.entrp.min, tt.entrp.max);
                 int eMax = std::max(tt.entrp.min, tt.entrp.max);
-                trackEntropy[trk] = random.nextInt(juce::Range<int>(eMin, eMax + 1));
+                if (eMax > eMin) trackEntropy[trk] = random.nextInt(juce::Range<int>(eMin, eMax + 1));
+                else trackEntropy[trk] = eMin;
             }
 
             bool shiftLck = trackShiftLocked[trk] || (!isAlgorithmMode && tt.shiftLocked);
             if (!shiftLck) {
                 int sMin = std::min(tt.shift.min, tt.shift.max);
                 int sMax = std::max(tt.shift.min, tt.shift.max);
-                trackShiftUI[trk] = random.nextInt(juce::Range<int>(sMin, sMax + 1));
+                if (sMax > sMin) trackShiftUI[trk] = random.nextInt(juce::Range<int>(sMin, sMax + 1));
+                else trackShiftUI[trk] = sMin;
             }
 
             int div = trackDivisionsUI[trk];
@@ -634,16 +666,16 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 if (isAnchor) {
                     int velJitter = (int)((entrp / 100.0f) * 20.0f);
                     vel = anchorVel - random.nextInt(juce::Range<int>(0, velJitter + 1));
-                    if (trackDynamic[trk]) vel = juce::jlimit(80, 127, vel + 20);
+                    if (trackDynamic[trk]) vel = juce::jlimit(80, 127, vel + trackDynamicAmount[trk]);
                 }
                 else if (isNegativeAnchor) {
                     vel = 0;
                 }
                 else if (cmplx > 0) {
-                    bool isHit = (((j + offset) * k) % n) < k;
+                    bool isHit = (((static_cast<int64_t>(j) + offset) * k) % n) < k;
                     if (entrp > 0 && random.nextInt(100) < (entrp / 3)) isHit = !isHit;
                     vel = isHit ? random.nextInt(juce::Range<int>(40, 90 + (entrp / 10))) : 0;
-                    if (isHit && trackDynamic[trk] && stepInBar % div == div - 1) vel = juce::jlimit(80, 127, vel + 15);
+                    if (isHit && trackDynamic[trk] && stepInBar % div == div - 1) vel = juce::jlimit(80, 127, vel + trackDynamicAmount[trk]);
                 }
                 drumPatternUI[trk][j] = vel;
             }
@@ -855,10 +887,12 @@ void AIDrumMachineAudioProcessor::getStateInformation(juce::MemoryBlock& destDat
         dynStr += trackDynamic[i] ? "1" : "0";
         degLckStr += trackDegreeLocked[i] ? "1" : "0";
         octLckStr += trackOctaveLocked[i] ? "1" : "0";
+        xml.setAttribute("dynAmt" + juce::String(i), trackDynamicAmount[i]);
     }
     xml.setAttribute("dyn", dynStr);
     xml.setAttribute("degLck", degLckStr);
     xml.setAttribute("octLck", octLckStr);
+    xml.setAttribute("tsLock", timeSigLocked.load());
 
     auto* tuningsXml = new juce::XmlElement("UserTunings");
     for (int g = 0; g < 24; ++g) {
@@ -914,36 +948,38 @@ void AIDrumMachineAudioProcessor::setStateInformation(const void* data, int size
             trackDynamic[i] = (dynStr[i] == '1');
             trackDegreeLocked[i] = (degLckStr[i] == '1');
             trackOctaveLocked[i] = (octLckStr[i] == '1');
+            trackDynamicAmount[i] = xmlState->getIntAttribute("dynAmt" + juce::String(i), 30);
         }
+        timeSigLocked.store(xmlState->getBoolAttribute("tsLock", false));
 
         if (auto* tuningsXml = xmlState->getChildByName("UserTunings")) {
             for (auto* gXml : tuningsXml->getChildIterator()) {
                 int g = gXml->getIntAttribute("id", -1);
                 if (g >= 0 && g < 24) {
-                    userTuning[g].tempo.min = gXml->getIntAttribute("tMin", 120);
-                    userTuning[g].tempo.max = gXml->getIntAttribute("tMax", 120);
+                    userTuning[g].tempo.min = gXml->getIntAttribute("tMin", 0);
+                    userTuning[g].tempo.max = gXml->getIntAttribute("tMax", 0);
                     userTuning[g].tempoLocked = gXml->getBoolAttribute("tLock", false);
 
-                    juce::String tsStr = gXml->getStringAttribute("ts", "10000000");
+                    juce::String tsStr = gXml->getStringAttribute("ts", "00000000");
                     for (int i = 0; i < 8; ++i) userTuning[g].allowedTimeSigs[i] = (tsStr[i] == '1');
 
-                    juce::String fStr = gXml->getStringAttribute("fills", "1111");
+                    juce::String fStr = gXml->getStringAttribute("fills", "0000");
                     for (int i = 0; i < 4; ++i) userTuning[g].allowedFills[i] = (fStr[i] == '1');
 
                     for (auto* tXml : gXml->getChildIterator()) {
                         int t = tXml->getIntAttribute("id", -1);
                         if (t >= 0 && t < 8) {
-                            juce::String dStr = tXml->getStringAttribute("divs", "10010000");
+                            juce::String dStr = tXml->getStringAttribute("divs", "00000000");
                             for (int d = 0; d < 8; ++d) userTuning[g].tracks[t].allowedDivs[d] = (dStr[d] == '1');
 
                             userTuning[g].tracks[t].divLocked = tXml->getBoolAttribute("dLck", false);
 
-                            userTuning[g].tracks[t].cmplx.min = tXml->getIntAttribute("cMin", 20);
-                            userTuning[g].tracks[t].cmplx.max = tXml->getIntAttribute("cMax", 50);
+                            userTuning[g].tracks[t].cmplx.min = tXml->getIntAttribute("cMin", 0);
+                            userTuning[g].tracks[t].cmplx.max = tXml->getIntAttribute("cMax", 0);
                             userTuning[g].tracks[t].cmplxLocked = tXml->getBoolAttribute("cLck", false);
 
-                            userTuning[g].tracks[t].entrp.min = tXml->getIntAttribute("eMin", 10);
-                            userTuning[g].tracks[t].entrp.max = tXml->getIntAttribute("eMax", 50);
+                            userTuning[g].tracks[t].entrp.min = tXml->getIntAttribute("eMin", 0);
+                            userTuning[g].tracks[t].entrp.max = tXml->getIntAttribute("eMax", 0);
                             userTuning[g].tracks[t].entrpLocked = tXml->getBoolAttribute("eLck", false);
 
                             userTuning[g].tracks[t].shift.min = tXml->getIntAttribute("sMin", 0);

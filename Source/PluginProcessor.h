@@ -44,7 +44,7 @@ struct TuningRange { int min; int max; };
 struct TimeSigDef { int num; int den; };
 
 struct TrackTuning {
-    bool allowedDivs[8] = { true, false, false, true, false, false, false, false };
+    bool allowedDivs[8] = { false, false, false, false, false, false, false, false }; // デフォルトゼロ
     bool divLocked = false;
     TuningRange cmplx; bool cmplxLocked = false;
     TuningRange entrp; bool entrpLocked = false;
@@ -53,9 +53,9 @@ struct TrackTuning {
 
 struct GenreTuning {
     TuningRange tempo; bool tempoLocked = false;
-    bool allowedTimeSigs[8] = { true, false, false, false, false, false, false, false };
+    bool allowedTimeSigs[8] = { false, false, false, false, false, false, false, false }; // デフォルトゼロ
     TimeSigDef timeSigOptions[8] = { {4,4}, {3,4}, {5,4}, {7,8}, {12,8}, {13,8}, {15,16}, {5,8} };
-    bool allowedFills[4] = { true, true, true, true };
+    bool allowedFills[4] = { false, false, false, false }; // デフォルトでジャンルごとに設定
     TrackTuning tracks[8];
 };
 
@@ -158,6 +158,7 @@ public:
     bool trackDegreeLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackOctaveLocked[8] = { false, false, false, false, false, false, false, false };
     bool trackDynamic[8] = { false, false, false, false, false, false, false, false };
+    int trackDynamicAmount[8] = { 30, 30, 30, 30, 30, 30, 30, 30 }; // Dynamicスライダー用
 
     std::atomic<bool> arpMode{ false }; std::atomic<bool> arpMono{ true }; std::atomic<int> arpKey{ 0 }; std::atomic<int> arpScale{ 1 };
     int trackOctaveUI[8] = { -1, -1, 0, 0, 1, 1, 2, 2 }; int trackDegreeUI[8] = { 0, 2, 4, 0, 2, 4, 0, 2 };
@@ -165,6 +166,10 @@ public:
     std::atomic<int> currentGenre{ 0 }; SavedPattern savedPatterns[4]; bool isPatternSaved[4] = { false, false, false, false };
     std::atomic<bool> isSyncEnabled{ false }; std::atomic<bool> isPlayingInternal{ false }; std::atomic<bool> autoFollowEnabled{ true };
     std::atomic<bool> tempoLocked{ false }; std::atomic<double> internalTempo{ 120.0 }; std::atomic<double> currentBpm{ 120.0 };
+    std::atomic<bool> timeSigLocked{ false }; // ★ Time Sigのロック用
+
+    // ★ Editorからアクセスできるよう public へ移動
+    juce::Random random;
 
     int getTrackCurrentStep(int trackIndex) const { return (trackIndex >= 0 && trackIndex < 8) ? trackCurrentStep[trackIndex] : 0; }
     void resetPosition() { samplesInLoop = 0; currentPlayingBar.store(0); for (int i = 0; i < 8; ++i) trackCurrentStep[i] = -1; }
@@ -185,7 +190,7 @@ private:
     int timeSigNumDSP = 4, timeSigDenDSP = 4, globalBarCountDSP = 4, samplesInLoop = 0;
     int trackCurrentStep[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
 
-    juce::Random random; DrumVoice synthVoices[8]; juce::AudioFormatManager formatManager;
+    DrumVoice synthVoices[8]; juce::AudioFormatManager formatManager;
     juce::AudioSampleBuffer sampleBuffers[8]; bool hasSample[8] = { false, false, false, false, false, false, false, false };
     int samplePlayPos[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
     float sampleVolume[8] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };

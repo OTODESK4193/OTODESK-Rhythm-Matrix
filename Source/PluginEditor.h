@@ -5,7 +5,6 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
-#include "Network/GeminiClient.h"
 
 class AIDrumMachineAudioProcessorEditor : public juce::AudioProcessorEditor,
     public juce::Timer,
@@ -54,6 +53,7 @@ private:
     juce::ComboBox timeSigNumMenu;
     juce::Label timeSigSlash{ "", "/" };
     juce::ComboBox timeSigDenMenu;
+    juce::TextButton btnTimeSigLock{ "L" }; // ★ Time Sigのロックボタン
 
     juce::Label barCountLabel{ "", "Bars:" };
     juce::ComboBox barCountMenu;
@@ -77,15 +77,16 @@ private:
 
     juce::ComboBox arpKeyMenu;
     juce::ComboBox arpScaleMenu;
-    juce::TextButton btnArpMono{ "Mono Mode" }; // ★ 点灯式に変更
+    juce::TextButton btnArpMono{ "Mono Mode" };
 
     juce::Slider octaveSliders[8];
     juce::Label octaveLabels[8];
 
-    // ★ Setting2 (Arpモード) 用の新機能ボタン
+    // ★ Setting2 (Arpモード) 用のLockボタンとDynamicスライダー
     juce::TextButton btnDegreeLock[8];
     juce::TextButton btnOctaveLock[8];
     juce::TextButton btnDynamic[8];
+    juce::Slider dynamicSliders[8];
 
     const juce::String trackNotes[8] = { "C1", "D1", "F#1", "A#1", "D#1", "F1", "A1", "D2" };
 
@@ -127,6 +128,11 @@ private:
 
     juce::Label tuningTempoMin, tuningTempoMax;
     juce::TextButton tuningTempoLock{ "L" };
+
+    // ★ Tuning用ランダム・クリアボタン (DumpToClipは廃止)
+    juce::TextButton btnTuningRandom{ "Random" };
+    juce::TextButton btnTuningClear{ "Clear" };
+
     juce::ToggleButton tuningTsBtns[8];
     juce::ToggleButton tuningFillBtns[4];
 
@@ -136,8 +142,6 @@ private:
     juce::Label tuningCmplxMin[8], tuningCmplxMax[8]; juce::TextButton tuningCmplxLock[8];
     juce::Label tuningEntrpMin[8], tuningEntrpMax[8]; juce::TextButton tuningEntrpLock[8];
     juce::Label tuningShiftMin[8], tuningShiftMax[8]; juce::TextButton tuningShiftLock[8];
-
-    juce::TextButton btnDumpTuning{ "DUMP TO CLIPBOARD" };
 
     void setupNumBox(juce::Label& lbl, std::function<void(int)> onChange);
     void updateTuningUIFromProcessor();
@@ -162,8 +166,6 @@ private:
     void updateStyleMenu();
 
     juce::File exportMidi(int trackIndex);
-
-    GeminiClient gemini;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AIDrumMachineAudioProcessorEditor)
 };
