@@ -1,4 +1,4 @@
-// ==============================================================================
+Ôªø// ==============================================================================
 // Source/PluginEditor.cpp
 // ==============================================================================
 #include "PluginProcessor.h"
@@ -393,29 +393,42 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         btnTempoLock.setToggleState(state, juce::dontSendNotification);
         };
 
+    // ==============================================================================
+    // ‚òÖ TuningÁîªÈù¢„ÅÆ Random „Éú„Çø„É≥„ÅÆ‰øÆÊ≠£
+    // ==============================================================================
     addChildComponent(btnTuningRandom);
     btnTuningRandom.setColour(juce::TextButton::buttonColourId, juce::Colours::teal);
     btnTuningRandom.onClick = [this] {
         int g = audioProcessor.currentGenre.load();
         auto& t = audioProcessor.userTuning[g];
         for (int i = 0; i < 8; ++i) {
-            if (!t.tracks[i].divLocked) {
-                for (int d = 0; d < 8; ++d) t.tracks[i].allowedDivs[d] = (audioProcessor.random.nextInt(100) < 30);
-            }
+            // ‚òÖ Div„ÅØ„É©„É≥„ÉÄ„Éû„Ç§„Ç∫„Åó„Å™„ÅÑÔºàÁ¥ÑÊùü‰∫ãÈ†ÖÂèçÊò†Ôºâ
+
+            // ‚òÖ Cmplx„ÅØ 0-10 „Å´Âà∂Èôê
             if (!t.tracks[i].cmplxLocked) {
-                t.tracks[i].cmplx.min = audioProcessor.random.nextInt(101);
-                t.tracks[i].cmplx.max = audioProcessor.random.nextInt(101);
+                t.tracks[i].cmplx.min = audioProcessor.random.nextInt(11);
+                t.tracks[i].cmplx.max = audioProcessor.random.nextInt(11);
                 if (t.tracks[i].cmplx.min > t.tracks[i].cmplx.max) std::swap(t.tracks[i].cmplx.min, t.tracks[i].cmplx.max);
             }
+
+            // ‚òÖ Entrp„ÅØ 0-10 „Å´Âà∂Èôê
             if (!t.tracks[i].entrpLocked) {
-                t.tracks[i].entrp.min = audioProcessor.random.nextInt(101);
-                t.tracks[i].entrp.max = audioProcessor.random.nextInt(101);
+                t.tracks[i].entrp.min = audioProcessor.random.nextInt(11);
+                t.tracks[i].entrp.max = audioProcessor.random.nextInt(11);
                 if (t.tracks[i].entrp.min > t.tracks[i].entrp.max) std::swap(t.tracks[i].entrp.min, t.tracks[i].entrp.max);
             }
+
+            // ‚òÖ Shift„ÅØ „Éà„É©„ÉÉ„ÇØ0Èô§Â§ñ„ÄÅ„Åù„Çå‰ª•Â§ñ„ÅØ -5„Äú5 „Å´Âà∂Èôê
             if (!t.tracks[i].shiftLocked) {
-                t.tracks[i].shift.min = audioProcessor.random.nextInt(21) - 10;
-                t.tracks[i].shift.max = audioProcessor.random.nextInt(21) - 10;
-                if (t.tracks[i].shift.min > t.tracks[i].shift.max) std::swap(t.tracks[i].shift.min, t.tracks[i].shift.max);
+                if (i == 0) {
+                    t.tracks[i].shift.min = 0;
+                    t.tracks[i].shift.max = 0;
+                }
+                else {
+                    t.tracks[i].shift.min = audioProcessor.random.nextInt(11) - 5;
+                    t.tracks[i].shift.max = audioProcessor.random.nextInt(11) - 5;
+                    if (t.tracks[i].shift.min > t.tracks[i].shift.max) std::swap(t.tracks[i].shift.min, t.tracks[i].shift.max);
+                }
             }
         }
         updateTuningUIFromProcessor();
@@ -519,7 +532,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         if (safeThis == nullptr) return;
         audioProcessor.generateAllTracks();
 
-        // Åö ArpÉÇÅ[ÉhéûÇ…ÉâÉìÉ_É}ÉCÉYÇ≥ÇÍÇΩêîílÇë¶ç¿Ç…UIÉXÉâÉCÉ_Å[Ç…îΩâf
         for (int i = 0; i < 8; ++i) {
             complexitySliders[i].setValue(audioProcessor.trackComplexity[i], juce::dontSendNotification);
             entropySliders[i].setValue(audioProcessor.trackEntropy[i], juce::dontSendNotification);
