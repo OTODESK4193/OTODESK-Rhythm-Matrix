@@ -258,19 +258,18 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
         std::vector<std::vector<int>> popMotif;
         int masterCmplx = trackComplexity[0] * 10;
 
-        // ★ ARP ID 7 (Polyrhythm Plucks) のバグ修正と独立グリッド処理
         if (arpPreset == 7) {
             std::vector<int> trkOrder = { 0, 1, 2, 3, 4, 5, 6, 7 };
             for (int i = 7; i > 0; --i) { int rIdx = random.nextInt(i + 1); std::swap(trkOrder[i], trkOrder[rIdx]); }
             for (int trk : trkOrder) {
                 if (trackLocked[trk]) continue;
                 int tDiv = juce::jmax(1, trackDivisionsUI[trk]);
-                int cmplx = trackComplexity[trk]; // 0-100
+                int cmplx = trackComplexity[trk];
                 int entrp = trackEntropy[trk];
                 int trkSteps = tDiv * num * bars;
 
                 for (int s = 0; s < trkSteps && s < 1024; ++s) {
-                    int globalJ = (s * baseDiv) / tDiv; // Mono排他制御用の近似時間
+                    int globalJ = (s * baseDiv) / tDiv;
                     if (globalJ >= 1024) globalJ = 1023;
 
                     int prob = cmplx; if (prob < 5) prob = 5;
@@ -392,7 +391,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
 
             int div = juce::jmax(1, trackDivisionsUI[trk]); int n = div * num * bars;
             int offset = random.nextInt(juce::Range<int>(0, juce::jmax(1, n)));
-            int cmplx = trackComplexity[trk]; // 0-100 pure value
+            int cmplx = trackComplexity[trk];
             int entrp = trackEntropy[trk];
 
             for (int j = 0; j < 1024; ++j) {
@@ -405,6 +404,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 bool isFillActiveBar = (fillBar > 0) && (currentBarOfStep == (fillBar - 1));
                 bool isFillPortion = isFillActiveBar && (beatInBar >= juce::jmax(1, num / 2));
                 bool isAnchor = false; bool isNegativeAnchor = false; int anchorVel = 100;
+                bool isSubAnchor = false; int subAnchorProb = cmplx;
 
                 // =========================================================================
                 // ★ 96 INDEPENDENT FILL PATTERNS (24 Genres x 4 Types)
@@ -451,11 +451,11 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         else if (fillTypology == 2) { int k = 5; if ((localStep * k) % juce::jmax(1, div * 2) < k) { if (trk == 5 || trk == 6) { isAnchor = true; anchorVel = 80; isNegativeAnchor = false; } } }
                         else if (fillTypology == 3) { if (trk == 1 || trk == 4) { if (localStep % juce::jmax(1, div / 2) == 0) { isAnchor = true; anchorVel = 90; isNegativeAnchor = false; } } if (trk == 0 && localStep % juce::jmax(1, div * 3) == 0) { isAnchor = true; isNegativeAnchor = false; } }
                         break;
-                    case 6: // IDM/Breakcore (Updated from Document)
-                        if (fillTypology == 0) { if (random.nextInt(100) < 40) { isAnchor = true; anchorVel = 10 + random.nextInt(110); isNegativeAnchor = false; } } // Chaotic Scatter
-                        else if (fillTypology == 1) { if (trk == 6 && localStep % 3 == 0) { isAnchor = true; anchorVel = 50 - (localStep * 2); isNegativeAnchor = false; } else { isNegativeAnchor = true; } } // Echo Drop
-                        else if (fillTypology == 2) { int k = (trk % 2 == 0) ? 5 : 7; if ((localStep * k) % juce::jmax(1, div * 2) < k) { isAnchor = true; anchorVel = 70; isNegativeAnchor = false; } } // Poly Euclid
-                        else if (fillTypology == 3) { if (trk == 1 || trk == 4) { if (localStep % juce::jmax(1, div / 4) == 0) { isAnchor = true; anchorVel = 90; isNegativeAnchor = false; } } } // Micro Stutter
+                    case 6: // IDM/Breakcore
+                        if (fillTypology == 0) { if (random.nextInt(100) < 40) { isAnchor = true; anchorVel = 10 + random.nextInt(110); isNegativeAnchor = false; } }
+                        else if (fillTypology == 1) { if (trk == 6 && localStep % 3 == 0) { isAnchor = true; anchorVel = 50 - (localStep * 2); isNegativeAnchor = false; } else { isNegativeAnchor = true; } }
+                        else if (fillTypology == 2) { int k = (trk % 2 == 0) ? 5 : 7; if ((localStep * k) % juce::jmax(1, div * 2) < k) { isAnchor = true; anchorVel = 70; isNegativeAnchor = false; } }
+                        else if (fillTypology == 3) { if (trk == 1 || trk == 4) { if (localStep % juce::jmax(1, div / 4) == 0) { isAnchor = true; anchorVel = 90; isNegativeAnchor = false; } } }
                         break;
                     case 7: // Dubstep
                         if (fillTypology == 0) { if (trk == 5 || trk == 6) { if (localStep % juce::jmax(1, div / 2) == 0 && random.nextInt(100) < 60) { isAnchor = true; anchorVel = 90; isNegativeAnchor = false; } } if (trk == 0 && localStep == 0) { isAnchor = true; isNegativeAnchor = false; } }
@@ -487,11 +487,11 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         else if (fillTypology == 2) { int k = 7; if ((localStep * k) % juce::jmax(1, div * 2) < k) { if (trk == 5 || trk == 6) { isAnchor = true; anchorVel = 80; isNegativeAnchor = false; } } }
                         else if (fillTypology == 3) { if (trk >= 1 && trk <= 3) { if (random.nextInt(100) < 70) { isAnchor = true; anchorVel = 60 + random.nextInt(40); isNegativeAnchor = false; } } }
                         break;
-                    case 12: // Samba/Bossa (Updated from Document)
+                    case 12: // Samba/Bossa
                         if (fillTypology == 0) { if (trk >= 4) { if (localStep % juce::jmax(1, div / 2) != 0 && random.nextInt(100) < 60) { isAnchor = true; anchorVel = 75; isNegativeAnchor = false; } } }
-                        else if (fillTypology == 1) { if (localStep == div * (num / 2) - 1) { if (trk == 0 || trk == 7) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; } } else if (localStep == div * (num / 2) - juce::jmax(1, div / 2)) { if (trk == 1) { isAnchor = true; anchorVel = 90; isNegativeAnchor = false; } } else { isNegativeAnchor = true; } } // Anticipation drop
+                        else if (fillTypology == 1) { if (localStep == div * (num / 2) - 1) { if (trk == 0 || trk == 7) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; } } else if (localStep == div * (num / 2) - juce::jmax(1, div / 2)) { if (trk == 1) { isAnchor = true; anchorVel = 90; isNegativeAnchor = false; } } else { isNegativeAnchor = true; } }
                         else if (fillTypology == 2) { int k = 5; if ((localStep * k) % juce::jmax(1, div * 2) < k) { if (trk == 5 || trk == 6) { isAnchor = true; anchorVel = 80; isNegativeAnchor = false; } } }
-                        else if (fillTypology == 3) { if (trk >= 4 && trk <= 6) { if (localStep % juce::jmax(1, div / 2) == 0) { isAnchor = true; anchorVel = 60 + (int)(40.0f * localStep / juce::jmax(1, div * (num / 2))); isNegativeAnchor = false; } } } // Tom crescendo
+                        else if (fillTypology == 3) { if (trk >= 4 && trk <= 6) { if (localStep % juce::jmax(1, div / 2) == 0) { isAnchor = true; anchorVel = 60 + (int)(40.0f * localStep / juce::jmax(1, div * (num / 2))); isNegativeAnchor = false; } } }
                         break;
                     case 13: // Reggaeton
                         if (fillTypology == 0) { if (trk == 4 || trk == 5) { if (localStep % juce::jmax(1, div / 2) == 0 && random.nextInt(100) < 70) { isAnchor = true; anchorVel = 80; isNegativeAnchor = false; } } if (trk == 0 && localStep == 0) { isAnchor = true; isNegativeAnchor = false; } }
@@ -505,9 +505,9 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         else if (fillTypology == 2) { int k = 5; if ((localStep * k) % juce::jmax(1, div * 2) < k) { if (trk == 5 || trk == 6) { isAnchor = true; anchorVel = 80; isNegativeAnchor = false; } } }
                         else if (fillTypology == 3) { if (trk >= 1 && trk <= 3) { if (random.nextInt(100) < 80) { isAnchor = true; anchorVel = 90; isNegativeAnchor = false; } } }
                         break;
-                    case 15: // Funk (Updated from Document: Linear Fill)
-                        if (fillTypology == 0) { if (trk == 3) { if (localStep % juce::jmax(1, div / 2) != 0 && random.nextInt(100) < 70) { isAnchor = true; anchorVel = 40 + random.nextInt(30); isNegativeAnchor = false; } } } // Ghost scatter
-                        else if (fillTypology == 1) { if (localStep == div * (num / 2) - 1) { if (trk == 0 || trk == 1) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; } } else if (localStep == div * (num / 2) - juce::jmax(1, div / 2)) { if (trk == 3) { isAnchor = true; anchorVel = 50; isNegativeAnchor = false; } } else { isNegativeAnchor = true; } } // The One setup
+                    case 15: // Funk
+                        if (fillTypology == 0) { if (trk == 3) { if (localStep % juce::jmax(1, div / 2) != 0 && random.nextInt(100) < 70) { isAnchor = true; anchorVel = 40 + random.nextInt(30); isNegativeAnchor = false; } } }
+                        else if (fillTypology == 1) { if (localStep == div * (num / 2) - 1) { if (trk == 0 || trk == 1) { isAnchor = true; anchorVel = 100; isNegativeAnchor = false; } } else if (localStep == div * (num / 2) - juce::jmax(1, div / 2)) { if (trk == 3) { isAnchor = true; anchorVel = 50; isNegativeAnchor = false; } } else { isNegativeAnchor = true; } }
                         else if (fillTypology == 2 || fillTypology == 3) {
                             bool occ = false; for (int t = 0; t < trk; ++t) { if (drumPatternUI[t][j] > 0) occ = true; }
                             if (!occ) { int phase = localStep % juce::jmax(1, div); if (phase == 0 && trk == 1) { isAnchor = true; anchorVel = 90; isNegativeAnchor = false; } else if (phase == juce::jmax(1, div / 4) && trk == 3) { isAnchor = true; anchorVel = 60; isNegativeAnchor = false; } else if (phase == juce::jmax(1, div / 2) && trk == 0) { isAnchor = true; anchorVel = 85; isNegativeAnchor = false; } else if (phase == juce::jmax(1, div * 3 / 4) && (trk == 0 || trk == 4)) { isAnchor = true; anchorVel = 80; isNegativeAnchor = false; } else { isNegativeAnchor = true; } }
@@ -565,83 +565,83 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                     }
                 }
                 // =========================================================================
-                // ★ Normal Seq Mode: 24 Genres x 8 Tracks Hand-coded Anchor Logic
+                // ★ Normal Seq Mode: 24 Genres x 8 Tracks Hand-coded Anchor & Sub-Anchor
                 // =========================================================================
                 else {
                     switch (genre) {
                     case 0: // Techno
-                        if (trk == 0) { if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true; else if (currentBarOfStep % 2 != 0 && stepInBar == (div * num) - juce::jmax(1, div / 2) && random.nextInt(100) < 15) { isAnchor = true; anchorVel = 60; } }
-                        else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 80; } }
-                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2)) isAnchor = true; else if (stepInBar % juce::jmax(1, div / 4) == 0 && random.nextInt(100) < 20) { isAnchor = true; anchorVel = 40; } }
+                        if (trk == 0) { if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true; else if (currentBarOfStep % 2 != 0 && stepInBar == (div * num) - juce::jmax(1, div / 2) && random.nextInt(100) < 15) { isAnchor = true; anchorVel = 60; } else if (stepInBar % juce::jmax(1, div / 4) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
+                        else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 80; } else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div * 3 / 4)) { isSubAnchor = true; subAnchorProb = cmplx + 20; } }
+                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2)) isAnchor = true; else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2 + div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 90; } }
                         else if (trk == 4) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 70; } }
-                        else if (trk == 5) { if (stepInBar % juce::jmax(1, div * 2) == div + juce::jmax(1, div / 2) && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 60; } }
+                        else if (trk == 5) { if (stepInBar % juce::jmax(1, div * 2) == div + juce::jmax(1, div / 2) && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 60; } else if (stepInBar % juce::jmax(1, div * 2) == juce::jmax(1, div + div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 6) { if (stepInBar % juce::jmax(1, div * 3) == 0 && random.nextInt(100) < 25) { isAnchor = true; anchorVel = 50; } }
                         else if (trk == 7) { if (currentBarOfStep % 4 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 80; } }
                         break;
                     case 1: // House
-                        if (trk == 0) { if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true; else if (stepInBar == div * 3 + juce::jmax(1, div / 2) && random.nextInt(100) < 10) { isAnchor = true; anchorVel = 50; } }
+                        if (trk == 0) { if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true; else if (stepInBar == div * 4 - juce::jmax(1, div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 85; } }
-                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2)) isAnchor = true; }
+                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2)) isAnchor = true; else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div * 3 / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 80; } }
-                        else if (trk == 4) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 100; } else if (stepInBar == div * 2 + juce::jmax(1, div / 2) && random.nextInt(100) < 25) { isAnchor = true; anchorVel = 70; } }
+                        else if (trk == 4) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 100; } else if (stepInBar == div + juce::jmax(1, div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 5) { if (stepInBar % juce::jmax(1, div * 2) == div + juce::jmax(1, div / 2) && random.nextInt(100) < 40) { isAnchor = true; anchorVel = 60; } }
                         else if (trk == 6) { if (stepInBar % juce::jmax(1, div * 2) == div * 2 - 1 && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 50; } }
                         else if (trk == 7) { if (stepInBar == div * 2 + juce::jmax(1, div / 2) && random.nextInt(100) < 20) { isAnchor = true; anchorVel = 70; } }
                         break;
                     case 2: // UK Garage
-                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2 + juce::jmax(1, div / 2)) isAnchor = true; else if (stepInBar == div + juce::jmax(1, div / 2) && random.nextInt(100) < 60) { isAnchor = true; anchorVel = 80; } }
+                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2 + juce::jmax(1, div / 2)) isAnchor = true; else if (stepInBar % juce::jmax(1, div * 2) == juce::jmax(1, div + div / 2 + div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 95; } }
-                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div / 2) == 0) isAnchor = true; else if (stepInBar % juce::jmax(1, div) != 0 && random.nextInt(100) < 50) { isAnchor = true; anchorVel = 45; } }
+                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div / 2) == 0) isAnchor = true; else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 4) || stepInBar % juce::jmax(1, div) == juce::jmax(1, div * 3 / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 3) { if (stepInBar == div * 2 + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 70; } }
                         else if (trk == 4) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 80; } }
-                        else if (trk == 5) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2 + div / 4)) { isAnchor = true; anchorVel = 65; } }
+                        else if (trk == 5) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 3)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 6) { if (stepInBar % juce::jmax(1, div / 4) == 0 && random.nextInt(100) < 25) { isAnchor = true; anchorVel = 40; } }
                         else if (trk == 7) { if (currentBarOfStep % 2 != 0 && stepInBar == div * 3) { isAnchor = true; anchorVel = 80; } }
                         break;
                     case 3: // D&B
-                        if (trk == 0) { if (stepInBar == 0 || (stepInBar == div * 2 + juce::jmax(1, div / 2) && random.nextInt(100) < 80)) isAnchor = true; else if (stepInBar == div * 3 + juce::jmax(1, div / 2) && random.nextInt(100) < 40) { isAnchor = true; anchorVel = 70; } }
-                        else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 100; } }
+                        if (trk == 0) { if (stepInBar == 0 || (stepInBar == div * 2 + juce::jmax(1, div / 2) && random.nextInt(100) < 80)) isAnchor = true; else if (stepInBar == div - juce::jmax(1, div / 4) || stepInBar == div - juce::jmax(1, div / 8)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
+                        else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 100; } else if (stepInBar == div + juce::jmax(1, div / 2 + div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 2) { if (stepInBar % juce::jmax(1, div / 2) == 0) { isAnchor = true; anchorVel = 70; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 85; } }
                         else if (trk == 4) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 80; } }
-                        else if (trk == 5) { if (stepInBar % juce::jmax(1, div / 4) == 0 && stepInBar % juce::jmax(1, div) != 0 && random.nextInt(100) < 55) { isAnchor = true; anchorVel = 40 + random.nextInt(20); } }
+                        else if (trk == 5) { if (stepInBar % juce::jmax(1, div / 4) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 6) { if (stepInBar % juce::jmax(1, div / 4) == 0) { isAnchor = true; anchorVel = 50; } }
                         else if (trk == 7) { if (stepInBar == 0 && currentBarOfStep == 0) { isAnchor = true; anchorVel = 90; } }
                         break;
                     case 4: // Trap
-                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2 + juce::jmax(1, div / 2)) isAnchor = true; else if (stepInBar == div * 3 && random.nextInt(100) < 20) { isAnchor = true; anchorVel = 80; } }
+                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2 + juce::jmax(1, div / 2)) isAnchor = true; else if (stepInBar >= div * 3 && stepInBar % juce::jmax(1, div / 4) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 1) { if (stepInBar == div * 2) { isAnchor = true; anchorVel = 100; } }
-                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div / 2) == 0) isAnchor = true; else if (stepInBar % juce::jmax(1, div) != 0 && random.nextInt(100) < 15) { isAnchor = true; anchorVel = 50; } }
+                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div / 2) == 0) isAnchor = true; else if (stepInBar % juce::jmax(1, div / 8) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 3) { if (stepInBar == 0 || stepInBar == div * 2) { isAnchor = true; anchorVel = 80; } }
-                        else if (trk == 4) { if (stepInBar == div * 2) { isAnchor = true; anchorVel = 90; } }
+                        else if (trk == 4) { if (stepInBar == div * 2) { isAnchor = true; anchorVel = 90; } else if (stepInBar % juce::jmax(1, div * 2) == juce::jmax(1, div + div / 2)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 5) { if (stepInBar == div + juce::jmax(1, div / 2) && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 60; } }
                         else if (trk == 6) { if (stepInBar == div * 3 + juce::jmax(1, div / 2) && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 60; } }
                         else if (trk == 7) { if (stepInBar == 0) { isAnchor = true; anchorVel = 100; } }
                         break;
                     case 5: // Footwork
-                        if (trk == 0) { if (stepInBar % juce::jmax(1, div * 3) == 0 || stepInBar % juce::jmax(1, div * 3) == div) isAnchor = true; }
-                        else if (trk == 1) { if (stepInBar == div * 2 || stepInBar == div * 4) isAnchor = true; }
+                        if (trk == 0) { if (stepInBar % juce::jmax(1, div * 3) == 0 || stepInBar % juce::jmax(1, div * 3) == div) isAnchor = true; else if (stepInBar % juce::jmax(1, (div * 3) / 2) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
+                        else if (trk == 1) { if (stepInBar == div * 2 || stepInBar == div * 4) isAnchor = true; else if (stepInBar % juce::jmax(1, div * 2) == juce::jmax(1, div + div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 2) { if (stepInBar % juce::jmax(1, div / 2) == 0) { isAnchor = true; anchorVel = 70; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div * 3) == div * 2 && random.nextInt(100) < 60) { isAnchor = true; anchorVel = 80; } }
                         else if (trk == 4) { if (stepInBar == div * 2 || stepInBar == div * 4) { isAnchor = true; anchorVel = 80; } }
-                        else if (trk >= 5 && trk <= 6) { if (stepInBar % juce::jmax(1, div) == (div > 1 ? div - 1 : 0) && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 60; } }
+                        else if (trk >= 5 && trk <= 6) { if (stepInBar % juce::jmax(1, div / 4) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 7) { if (stepInBar % juce::jmax(1, div * 3) == 0 && random.nextInt(100) < 40) { isAnchor = true; anchorVel = 70; } }
                         break;
-                    case 6: // IDM/Breakcore (Updated from Document)
-                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2 + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 90; } }
+                    case 6: // IDM/Breakcore
+                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2 + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 90; } else if (stepInBar % juce::jmax(1, div / 8) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 100; } }
-                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div / 4) == 0 && random.nextInt(100) < 40) { isAnchor = true; anchorVel = 40 + random.nextInt(40); } } // Ratchet
+                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div / 4) == 0 && random.nextInt(100) < 40) { isAnchor = true; anchorVel = 40 + random.nextInt(40); } else if (stepInBar % juce::jmax(1, div / 8) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div / 2) == 0 && random.nextInt(100) < 60) { isAnchor = true; anchorVel = 60; } }
-                        else if (trk == 4) { if ((stepInBar + 2) % 5 == 0) { isAnchor = true; anchorVel = 70; } } // Polymeter 5
-                        else if (trk == 5) { if (stepInBar % 7 == 0) { isAnchor = true; anchorVel = 65; } } // Polymeter 7
+                        else if (trk == 4) { if ((stepInBar + 2) % 5 == 0) { isAnchor = true; anchorVel = 70; } }
+                        else if (trk == 5) { if (stepInBar % 7 == 0) { isAnchor = true; anchorVel = 65; } }
                         else if (trk == 6) { if (stepInBar % juce::jmax(1, div * 3) == 0 && random.nextInt(100) < 50) { isAnchor = true; anchorVel = 60; } }
                         else if (trk == 7) { if (stepInBar == 0 && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 90; } }
                         break;
                     case 7: // Dubstep
-                        if (trk == 0) { if (stepInBar == 0) isAnchor = true; else if (stepInBar == div * 2 + juce::jmax(1, div / 2) && random.nextInt(100) < 50) isAnchor = true; }
-                        else if (trk == 1) { if (stepInBar == div * 2) { isAnchor = true; anchorVel = 100; } }
-                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true; else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2) && random.nextInt(100) < 40) { isAnchor = true; anchorVel = 60; } }
+                        if (trk == 0) { if (stepInBar == 0) isAnchor = true; else if (stepInBar == div + juce::jmax(1, div / 2)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
+                        else if (trk == 1) { if (stepInBar == div * 2) { isAnchor = true; anchorVel = 100; } else if (stepInBar == div * 2 - juce::jmax(1, div / 8)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
+                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true; else if (stepInBar % juce::jmax(1, div / 4) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 3) { if (stepInBar == div * 3 + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 80; } }
                         else if (trk == 4) { if (stepInBar == div * 2) { isAnchor = true; anchorVel = 90; } }
                         else if (trk == 5) { if (stepInBar == div + juce::jmax(1, div / 2) && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 70; } }
@@ -649,76 +649,76 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         else if (trk == 7) { if (stepInBar == 0) { isAnchor = true; anchorVel = 100; } }
                         break;
                     case 8: // Afrobeat
-                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div + juce::jmax(1, div / 2) || stepInBar == div * 3) isAnchor = true; }
+                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div + juce::jmax(1, div / 2) || stepInBar == div * 3) isAnchor = true; else if (stepInBar % juce::jmax(1, div * 2) == juce::jmax(1, div + div / 2)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 1) { if (stepInBar == div || stepInBar == div * 2 + juce::jmax(1, div / 2) || stepInBar == div * 3 + juce::jmax(1, div / 2)) isAnchor = true; }
                         else if (trk == 2) { if (stepInBar % juce::jmax(1, div / 2) == 0) { isAnchor = true; anchorVel = 75; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div) == 0 && random.nextInt(100) < 40) { isAnchor = true; anchorVel = 60; } }
-                        else if (trk == 4) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 70; } }
-                        else if (trk >= 5 && trk <= 6) { if (stepInBar == div - 1 && random.nextInt(100) < 50) { isAnchor = true; anchorVel = 60; } }
+                        else if (trk == 4) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 70; } else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
+                        else if (trk >= 5 && trk <= 6) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 7) { if (stepInBar == 0 && random.nextInt(100) < 70) { isAnchor = true; anchorVel = 80; } }
                         break;
                     case 9: // Gqom
-                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div + juce::jmax(1, div / 4) || stepInBar == div * 2 + juce::jmax(1, div / 2) || stepInBar == div * 3 + juce::jmax(1, div / 2)) isAnchor = true; }
+                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div + juce::jmax(1, div / 4) || stepInBar == div * 2 + juce::jmax(1, div / 2) || stepInBar == div * 3 + juce::jmax(1, div / 2)) isAnchor = true; else if (stepInBar % juce::jmax(1, div * 3 / 2) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 1) { if (stepInBar == div * 3 + juce::jmax(1, div / 2) && random.nextInt(100) < 60) isAnchor = true; }
-                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 70; } }
+                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 70; } else if (stepInBar % juce::jmax(1, div * 2) == juce::jmax(1, div / 2)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div * 2) == 0 && random.nextInt(100) < 50) { isAnchor = true; anchorVel = 60; } }
                         else if (trk == 4) { if (stepInBar == div * 3 + juce::jmax(1, div / 2) && random.nextInt(100) < 40) { isAnchor = true; anchorVel = 70; } }
                         else if (trk >= 5 && trk <= 6) { if (stepInBar % juce::jmax(1, div * 2) == juce::jmax(1, div / 2) && random.nextInt(100) < 40) { isAnchor = true; anchorVel = 65; } }
                         else if (trk == 7) { if (stepInBar == 0 && currentBarOfStep % 2 != 0) { isAnchor = true; anchorVel = 90; } }
                         break;
                     case 10: // Amapiano
-                        if (trk == 0) { if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true; }
+                        if (trk == 0) { if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true; else if (stepInBar == div * 2 + juce::jmax(1, div / 2)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 1) { if (stepInBar == div * 3 && random.nextInt(100) < 50) { isAnchor = true; anchorVel = 80; } }
                         else if (trk == 2) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 70; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div * 2) == 0 && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 60; } }
                         else if (trk == 4) { if (stepInBar == div * 3) { isAnchor = true; anchorVel = 70; } }
                         else if (trk == 5) { if (stepInBar == div + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 80; } }
-                        else if (trk >= 6) { if (stepInBar == div * 2 + juce::jmax(1, div / 2) || stepInBar == div * 3 + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 100; } }
+                        else if (trk >= 6) { if (stepInBar == div * 2 + juce::jmax(1, div / 2) || stepInBar == div * 3 + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 100; } else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2 + div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         break;
                     case 11: // Indian Classical
-                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2) isAnchor = true; }
+                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2) isAnchor = true; else if (stepInBar % juce::jmax(1, div * 2) == juce::jmax(1, div + div / 2)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk >= 1 && trk <= 3) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2) && random.nextInt(100) < 60) { isAnchor = true; anchorVel = 70; } }
-                        else if (trk >= 4 && trk <= 6) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 4) && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 50; } }
+                        else if (trk >= 4 && trk <= 6) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 4) && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 50; } else if (stepInBar % juce::jmax(1, div / 8) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 7) { if (stepInBar == 0 && currentBarOfStep == 0) { isAnchor = true; anchorVel = 90; } }
                         break;
-                    case 12: // Samba/Bossa (Updated from Document)
-                        if (trk == 0) { if (stepInBar == 0) { isAnchor = true; anchorVel = 70; } else if (stepInBar == div * 2) { isAnchor = true; anchorVel = 100; } } // Surdo weight
-                        else if (trk == 1) { if (stepInBar == div + juce::jmax(1, div / 2) || stepInBar == div * 3 || stepInBar == div * 4 - 1) { isAnchor = true; anchorVel = 90; } } // Clave
-                        else if (trk == 2) { if (stepInBar == 0 || stepInBar == div * 1 + juce::jmax(1, div / 2) || stepInBar == div * 2 + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 85; } }
-                        else if (trk == 3) { if (stepInBar % juce::jmax(1, div / 2) == 0) { isAnchor = true; anchorVel = 60 + ((stepInBar / juce::jmax(1, div / 2)) % 2) * 30; } } // Shaker wave
+                    case 12: // Samba/Bossa
+                        if (trk == 0) { if (stepInBar == 0) { isAnchor = true; anchorVel = 70; } else if (stepInBar == div * 2) { isAnchor = true; anchorVel = 100; } else if (stepInBar % juce::jmax(1, div * 2) == juce::jmax(1, div * 2 - div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
+                        else if (trk == 1) { if (stepInBar == div + juce::jmax(1, div / 2) || stepInBar == div * 3 || stepInBar == div * 4 - 1) { isAnchor = true; anchorVel = 90; } }
+                        else if (trk == 2) { if (stepInBar == 0 || stepInBar == div * 1 + juce::jmax(1, div / 2) || stepInBar == div * 2 + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 85; } else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
+                        else if (trk == 3) { if (stepInBar % juce::jmax(1, div / 2) == 0) { isAnchor = true; anchorVel = 60 + ((stepInBar / juce::jmax(1, div / 2)) % 2) * 30; } }
                         else if (trk == 4) { if (stepInBar % juce::jmax(1, div) == 0 && random.nextInt(100) < 50) { isAnchor = true; anchorVel = 65; } }
-                        else if (trk == 5) { if (stepInBar % juce::jmax(1, div) != 0 && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 70; } } // Agogo comp
+                        else if (trk == 5) { if (stepInBar % juce::jmax(1, div) != 0 && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 70; } }
                         else if (trk == 6) { if (stepInBar == div * 3 + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 75; } }
                         else if (trk == 7) { if (stepInBar == 0 && currentBarOfStep % 2 != 0) { isAnchor = true; anchorVel = 80; } }
                         break;
                     case 13: // Reggaeton
-                        if (trk == 0) { if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true; }
+                        if (trk == 0) { if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true; else if (stepInBar == div * 4 - juce::jmax(1, div / 8)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 1) { if (stepInBar == div - juce::jmax(1, div / 4) || stepInBar == div * 2 + juce::jmax(1, div / 2)) isAnchor = true; }
                         else if (trk == 2) { if (stepInBar % juce::jmax(1, div / 2) == 0) { isAnchor = true; anchorVel = 60; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div) == 0 && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 50; } }
-                        else if (trk == 4) { if (stepInBar == div - juce::jmax(1, div / 4) || stepInBar == div * 2 + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 70; } }
+                        else if (trk == 4) { if (stepInBar == div - juce::jmax(1, div / 4) || stepInBar == div * 2 + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 70; } else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div * 3 / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 5 || trk == 6) { if (stepInBar == div * 3 + juce::jmax(1, div / 2) && random.nextInt(100) < 40) { isAnchor = true; anchorVel = 60; } }
                         else if (trk == 7) { if (stepInBar == 0) { isAnchor = true; anchorVel = 90; } }
                         break;
                     case 14: // Gamelan
                         if (trk == 0) { if (currentBarOfStep % 2 == 0 && stepInBar == 0) { isAnchor = true; anchorVel = 100; } else { isNegativeAnchor = true; } }
                         else if (trk >= 1 && trk <= 4) { if (stepInBar % juce::jmax(1, div * 2) == 0) { isAnchor = true; anchorVel = 70; } }
-                        else if (trk >= 5 && trk <= 6) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2) && random.nextInt(100) < 50) { isAnchor = true; anchorVel = 60; } }
+                        else if (trk >= 5 && trk <= 6) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2) && random.nextInt(100) < 50) { isAnchor = true; anchorVel = 60; } else if (stepInBar % juce::jmax(1, div * 2 - div / 4) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 7) { if (stepInBar % juce::jmax(1, div * 4) == 0 && random.nextInt(100) < 40) { isAnchor = true; anchorVel = 80; } }
                         break;
-                    case 15: // Funk (Updated from Document)
-                        if (trk == 0) { if (stepInBar == 0) { isAnchor = true; anchorVel = 110; } else if (stepInBar == div * 2 + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 80 - (entrp / 2); } } // The One
+                    case 15: // Funk
+                        if (trk == 0) { if (stepInBar == 0) { isAnchor = true; anchorVel = 110; } else if (stepInBar == div * 2 + juce::jmax(1, div / 2)) { isAnchor = true; anchorVel = 80 - (entrp / 2); } else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div * 3 / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 100; } }
                         else if (trk == 2) { if (stepInBar % juce::jmax(1, div / 2) == 0) { isAnchor = true; anchorVel = (stepInBar % div == 0) ? 80 : 50; } }
-                        else if (trk == 3) { int p = stepInBar % juce::jmax(1, div * 4); if (p == juce::jmax(1, div - div / 4) || p == juce::jmax(1, div * 2 - div / 4) || p == juce::jmax(1, div * 2 + div / 2) || p == juce::jmax(1, div * 4 - div / 4)) { if (random.nextInt(100) < 40 + cmplx / 2) { isAnchor = true; anchorVel = 35 + random.nextInt(15); } } } // Ghost Snare
+                        else if (trk == 3) { int p = stepInBar % juce::jmax(1, div * 4); if (p == juce::jmax(1, div - div / 4) || p == juce::jmax(1, div * 2 - div / 4) || p == juce::jmax(1, div * 2 + div / 2) || p == juce::jmax(1, div * 4 - div / 4)) { if (random.nextInt(100) < 40 + cmplx / 2) { isAnchor = true; anchorVel = 35 + random.nextInt(15); } } else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 4) { if (stepInBar == div * 2 - juce::jmax(1, div / 4) && random.nextInt(100) < 50) { isAnchor = true; anchorVel = 60; } }
                         else if (trk == 5) { if (stepInBar == div * 3 + juce::jmax(1, div / 2) && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 70; } }
                         else if (trk == 6) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 4) && random.nextInt(100) < 20) { isAnchor = true; anchorVel = 65; } }
                         else if (trk == 7) { if (stepInBar == 0 && currentBarOfStep == 0) { isAnchor = true; anchorVel = 90; } }
                         break;
                     case 16: // New Jack Swing
-                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2 + juce::jmax(1, div / 2)) isAnchor = true; }
-                        else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) isAnchor = true; }
+                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2 + juce::jmax(1, div / 2)) isAnchor = true; else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2 + div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
+                        else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) isAnchor = true; else if (stepInBar == div + juce::jmax(1, div / 2 + div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 2) { if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true; else if (stepInBar % juce::jmax(1, div) == div - 1 && random.nextInt(100) < 80) { isAnchor = true; anchorVel = 60; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2) && random.nextInt(100) < 50) { isAnchor = true; anchorVel = 70; } }
                         else if (trk == 4) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 90; } }
@@ -726,17 +726,17 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         else if (trk == 7) { if (stepInBar == 0) { isAnchor = true; anchorVel = 95; } }
                         break;
                     case 17: // Neo Soul
-                        if (trk == 0) { if (stepInBar == 0 || (stepInBar == div * 2 + juce::jmax(1, div / 2) && random.nextInt(100) < 60)) isAnchor = true; }
+                        if (trk == 0) { if (stepInBar == 0 || (stepInBar == div * 2 + juce::jmax(1, div / 2) && random.nextInt(100) < 60)) isAnchor = true; else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div - div / 8)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) isAnchor = true; }
-                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div * 2) == div && random.nextInt(100) < 80) { isAnchor = true; anchorVel = 60; } }
+                        else if (trk == 2) { if (stepInBar % juce::jmax(1, div * 2) == div && random.nextInt(100) < 80) { isAnchor = true; anchorVel = 60; } else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2 + div / 8)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div) == 0 && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 50; } }
                         else if (trk == 4) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 70; } }
                         else if (trk == 5 || trk == 6) { if (stepInBar == div * 3 + juce::jmax(1, div / 2) && random.nextInt(100) < 20) { isAnchor = true; anchorVel = 40; } }
                         else if (trk == 7) { if (stepInBar == 0 && currentBarOfStep % 2 == 0) { isAnchor = true; anchorVel = 80; } }
                         break;
                     case 18: // Hip Hop
-                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2 + juce::jmax(1, div / 2)) isAnchor = true; }
-                        else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) isAnchor = true; }
+                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 2 + juce::jmax(1, div / 2)) isAnchor = true; else if (stepInBar % juce::jmax(1, div * 2) == juce::jmax(1, div + div / 2 + div / 8)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
+                        else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) isAnchor = true; else if (stepInBar % juce::jmax(1, div * 2) == juce::jmax(1, div * 2 - div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 2) { if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true; else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2) && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 40; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 4) && random.nextInt(100) < 20) { isAnchor = true; anchorVel = 50; } }
                         else if (trk == 4) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 80; } }
@@ -744,8 +744,8 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         else if (trk == 7) { if (stepInBar == 0) { isAnchor = true; anchorVel = 90; } }
                         break;
                     case 19: // Math Rock
-                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 3) isAnchor = true; }
-                        else if (trk == 1) { if (stepInBar == div * 2 || stepInBar == div * 4) isAnchor = true; }
+                        if (trk == 0) { if (stepInBar == 0 || stepInBar == div * 3) isAnchor = true; else if (stepInBar % juce::jmax(1, div * 3 + div / 2) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
+                        else if (trk == 1) { if (stepInBar == div * 2 || stepInBar == div * 4) isAnchor = true; else if (stepInBar % juce::jmax(1, div * 2) == juce::jmax(1, div + div / 4)) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 2) { if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true; else if (random.nextInt(100) < 20) { isAnchor = true; anchorVel = 50; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2) && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 60; } }
                         else if (trk == 4) { if (stepInBar == div * 2 || stepInBar == div * 4) { isAnchor = true; anchorVel = 80; } }
@@ -756,24 +756,23 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         if (trk == 0) {
                             if (stepInBar % juce::jmax(1, div) == 0) isAnchor = true;
                             else if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div - div / 4) && random.nextInt(100) < 60) { isAnchor = true; anchorVel = 80; }
+                            else if (stepInBar % juce::jmax(1, div / 4) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; }
                         }
                         else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 100; } }
                         else if (trk == 2) { if (stepInBar % juce::jmax(1, div / 2) == 0) { isAnchor = true; anchorVel = 80; } }
                         else if (trk == 3) { if (stepInBar % juce::jmax(1, div) == juce::jmax(1, div / 2) && random.nextInt(100) < 70) { isAnchor = true; anchorVel = 85; } }
-                        else if (trk == 4) { if (stepInBar % juce::jmax(1, div * 3) == 0 && random.nextInt(100) < 30) { isAnchor = true; anchorVel = 75; } }
-                        else if (trk == 5) { if (stepInBar % juce::jmax(1, div * 5) == 0 && random.nextInt(100) < 20) { isAnchor = true; anchorVel = 70; } }
-                        else if (trk == 6) { if (stepInBar % juce::jmax(1, div * 7) == 0 && random.nextInt(100) < 20) { isAnchor = true; anchorVel = 80; } }
+                        else if (trk == 4 || trk == 5 || trk == 6) { if (stepInBar % juce::jmax(1, div * 3) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk == 7) { if (stepInBar == 0) { isAnchor = true; anchorVel = 100; } }
                         break;
                     case 21: // Minimalism
-                        if (trk == 0) { if (stepInBar % juce::jmax(1, div * 3) == 0) isAnchor = true; }
-                        else if (trk == 1) { if ((stepInBar + div) % juce::jmax(1, div * 3) == 0) isAnchor = true; }
+                        if (trk == 0) { if (stepInBar % juce::jmax(1, div * 3) == 0) isAnchor = true; else if (stepInBar % juce::jmax(1, div + div / 4) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
+                        else if (trk == 1) { if ((stepInBar + div) % juce::jmax(1, div * 3) == 0) isAnchor = true; else if (stepInBar % juce::jmax(1, div + div / 4) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } }
                         else if (trk >= 2 && trk <= 4) { if (stepInBar % 2 == 0) isAnchor = true; }
                         else if (trk >= 5 && trk <= 6) { if (stepInBar % 3 == 0) { isAnchor = true; anchorVel = 70; } }
                         else if (trk == 7) { if (stepInBar % 5 == 0 && random.nextInt(100) < 40) { isAnchor = true; anchorVel = 60; } }
                         break;
                     case 22: // Euclidean Math
-                        if (trk == 0) { if (stepInBar % juce::jmax(1, div) == 0 && random.nextInt(100) < 80) isAnchor = true; else isNegativeAnchor = true; }
+                        if (trk == 0) { if (stepInBar % juce::jmax(1, div) == 0 && random.nextInt(100) < 80) isAnchor = true; else if (stepInBar % juce::jmax(1, div / 2) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } else isNegativeAnchor = true; }
                         else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) isAnchor = true; else isNegativeAnchor = true; }
                         else {
                             int k = 3 + (trk % 4);
@@ -786,7 +785,7 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                         }
                         break;
                     case 23: // Chaos Math
-                        if (trk == 0) { if (stepInBar == 0 || (stepInBar == div * 2 && random.nextInt(100) < 50)) isAnchor = true; else isNegativeAnchor = true; }
+                        if (trk == 0) { if (stepInBar == 0 || (stepInBar == div * 2 && random.nextInt(100) < 50)) isAnchor = true; else if (stepInBar % juce::jmax(1, div / 4) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 2; } else isNegativeAnchor = true; }
                         else if (trk == 1) { if (stepInBar == div || stepInBar == div * 3) { isAnchor = true; anchorVel = 90; } else isNegativeAnchor = true; }
                         else {
                             int prob = 10 + (trk * 5);
@@ -815,16 +814,34 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                 }
                 else if (cmplx > 0) {
                     bool isHit = false;
-                    if (genre == 23) {
-                        isHit = (random.nextInt(100) < cmplx);
+                    if (isSubAnchor) {
+                        if (random.nextInt(100) < subAnchorProb) {
+                            isHit = true;
+                            vel = random.nextInt(juce::Range<int>(50, 90 + (entrp / 10)));
+                        }
                     }
                     else {
-                        isHit = (((static_cast<int64_t>(j) + offset) * k) % juce::jmax(1, n)) < k;
+                        if (genre == 23) {
+                            isHit = (random.nextInt(100) < cmplx);
+                        }
+                        else {
+                            isHit = (((static_cast<int64_t>(j) + offset) * k) % juce::jmax(1, n)) < k;
+                            // ユークリッドがサブアンカーを邪魔しないように確率で間引く
+                            if (isHit && random.nextInt(100) > cmplx + 20) isHit = false;
+                        }
+                        if (isHit) {
+                            vel = random.nextInt(juce::Range<int>(40, 80 + (entrp / 10)));
+                        }
                     }
 
-                    if (entrp > 0 && random.nextInt(100) < (entrp / 3)) isHit = !isHit;
-                    vel = isHit ? random.nextInt(juce::Range<int>(40, 90 + (entrp / 10))) : 0;
-                    if (isHit && trackDynamic[trk] && stepInBar % juce::jmax(1, div) == div - 1) vel = juce::jlimit(80, 127, vel + trackDynamicAmount[trk]);
+                    if (isHit && entrp > 0 && random.nextInt(100) < (entrp / 3)) {
+                        isHit = false;
+                        vel = 0;
+                    }
+
+                    if (isHit && trackDynamic[trk] && stepInBar % juce::jmax(1, div) == div - 1) {
+                        vel = juce::jlimit(80, 127, vel + trackDynamicAmount[trk]);
+                    }
                 }
                 drumPatternUI[trk][j] = vel;
             }
