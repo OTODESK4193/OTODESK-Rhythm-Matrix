@@ -873,10 +873,13 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
                             else if (stepInBar % juce::jmax(1, div / 2) == 0) { isSubAnchor = true; subAnchorProb = cmplx * 15; }
                         }
                         else {
-                            int target_k = (trk == 1) ? 3 : (trk == 2) ? 5 : (trk == 3) ? 7 : (trk == 4) ? 11 : (trk == 5) ? 13 : (trk == 6) ? 17 : 19;
-                            int k = juce::jlimit(1, 1024, target_k);
+                            // ★ 空間のサイズを定義
+                            int base_n = juce::jmax(1, div * 4);
 
-                            if (((static_cast<int64_t>(stepInBar) * k) % juce::jmax(1, div * 4)) < k) {
+                            // ★ 打撃数(k)が絶対に空間(base_n)をオーバーしないように制限（最大でも密度の半分程度）
+                            int k = juce::jlimit(1, base_n - 1, trk + 1);
+
+                            if (((static_cast<int64_t>(stepInBar) * k) % base_n) < k) {
                                 isAnchor = true; anchorVel = 60 + random.nextInt(30);
                             }
                             else if (cmplx > 0 && (((static_cast<int64_t>(stepInBar) * k) % juce::jmax(1, div * 2)) < k)) {
@@ -1230,8 +1233,19 @@ void AIDrumMachineAudioProcessor::setStateInformation(const void* data, int size
                 int g = gXml->getIntAttribute("id", -1);
                 // ★ 修正済みサイズ(26)に基づいて安全に復元する
                 if (g >= 0 && g < 26) {
-                    userTuning[g].tempo.min = gXml->getIntAttribute("tMin", 0);
-                    userTuning[g].tempo.max = gXml->getIntAttribute("tMax", 0);
+                    // ★ 過去の破損データを無視して強制的に正しいテンポを適用
+                    if (g == 24) {
+                        userTuning[g].tempo.min = 80;
+                        userTuning[g].tempo.max = 140;
+                    }
+                    else if (g == 25) {
+                        userTuning[g].tempo.min = 80;
+                        userTuning[g].tempo.max = 100;
+                    }
+                    else {
+                        userTuning[g].tempo.min = gXml->getIntAttribute("tMin", 0);
+                        userTuning[g].tempo.max = gXml->getIntAttribute("tMax", 0);
+                    }
                     userTuning[g].tempoLocked = gXml->getBoolAttribute("tLock", false);
 
                     juce::String tsStr = gXml->getStringAttribute("ts", "00000000");
