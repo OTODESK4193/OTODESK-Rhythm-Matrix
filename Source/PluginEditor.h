@@ -2,10 +2,32 @@
 // Source/PluginEditor.h
 // ==============================================================================
 #pragma once
-
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
+
+// ★ 描画負荷軽減のためのシーケンサー専用独立コンポーネント
+class SequencerGrid : public juce::Component {
+public:
+    SequencerGrid(AIDrumMachineAudioProcessor& p);
+    void paint(juce::Graphics& g) override;
+    void mouseDown(const juce::MouseEvent& e) override;
+
+    void updateBar(int barIndex) {
+        if (currentViewBar != barIndex) {
+            currentViewBar = barIndex;
+            repaint();
+        }
+    }
+
+    juce::Rectangle<int> lockArea;
+    juce::Rectangle<int> mainGridArea;
+    juce::Rectangle<int> midiDragArea;
+
+private:
+    AIDrumMachineAudioProcessor& audioProcessor;
+    int currentViewBar = 0;
+};
 
 class AIDrumMachineAudioProcessorEditor : public juce::AudioProcessorEditor,
     public juce::Timer,
@@ -144,14 +166,13 @@ private:
 
     void setupNumBox(juce::Label& lbl, std::function<void(int)> onChange);
     void updateTuningUIFromProcessor();
-    // ==========================================================
 
     juce::Rectangle<int> dragAllArea;
-    juce::Rectangle<int> lockArea;
     juce::Rectangle<int> sampleArea;
-    juce::Rectangle<int> mainGridArea;
-    juce::Rectangle<int> midiDragArea;
     bool isDragging = false;
+
+    // ★ シーケンサー専用の独立コンポーネントを追加
+    SequencerGrid seqGrid;
 
     int dragTargetTrack = -1;
     int getTrackIndexFromMouseY(int y);

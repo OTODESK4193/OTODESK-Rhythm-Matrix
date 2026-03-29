@@ -7,10 +7,114 @@
 // ★ ARPピッチ計算用外部配列の参照
 extern const int scalePatterns[19][8];
 
+// ==============================================================================
+// ★ GUI負荷を劇的に下げるための専用シーケンサーグリッドコンポーネント
+// ==============================================================================
+SequencerGrid::SequencerGrid(AIDrumMachineAudioProcessor& p) : audioProcessor(p) {}
+
+void SequencerGrid::paint(juce::Graphics& g) {
+    int rows = 8;
+    float cellH = mainGridArea.getHeight() / (float)juce::jmax(1, rows);
+    int numBeats = audioProcessor.timeSigNumerator.load();
+    if (numBeats < 1) numBeats = 4;
+
+    for (int row = 0; row < rows; ++row) {
+        int idx = 7 - row;
+
+        // --- Lock Button Draw ---
+        juce::Rectangle<float> lockBtn((float)lockArea.getX(), lockArea.getY() + row * cellH, lockArea.getWidth() - 2.0f, cellH - 2.0f);
+        g.setColour(audioProcessor.trackLocked[idx] ? juce::Colours::red.withAlpha(0.8f) : juce::Colours::grey.withAlpha(0.5f));
+        g.fillRoundedRectangle(lockBtn, 4.0f);
+        g.setColour(juce::Colours::white); g.setFont(10.0f);
+        g.drawText("L", lockBtn, juce::Justification::centred, false);
+
+        // --- MIDI Drag Area Draw ---
+        juce::Rectangle<float> mDrag(midiDragArea.getX() + 4.0f, midiDragArea.getY() + row * cellH, midiDragArea.getWidth() - 4.0f, cellH - 2.0f);
+        g.setColour(juce::Colours::cyan.withAlpha(0.3f));
+        g.fillRoundedRectangle(mDrag, 4.0f);
+        g.setColour(juce::Colours::white); g.setFont(11.0f);
+        g.drawText("MIDI", mDrag, juce::Justification::centred, false);
+
+        // --- Grid Background Draw ---
+        int div = audioProcessor.trackDivisionsUI[idx];
+        if (div < 1) div = 1;
+        int colsToDraw = numBeats * div;
+        float cellW = mainGridArea.getWidth() / (float)juce::jmax(1, colsToDraw);
+
+        for (int b = 0; b < numBeats; ++b) {
+            g.setColour(b % 2 == 0 ? juce::Colours::black.withAlpha(0.15f) : juce::Colours::white.withAlpha(0.05f));
+            g.fillRect(mainGridArea.getX() + b * div * cellW, mainGridArea.getY() + row * cellH, div * cellW, cellH);
+        }
+
+        // --- Grid Notes Draw ---
+        for (int col = 0; col < colsToDraw; ++col) {
+            int globalStep = (currentViewBar * colsToDraw) + col;
+            if (globalStep < 1024) {
+                int vel = audioProcessor.drumPatternUI[idx][globalStep];
+                if (vel > 0) {
+                    juce::Rectangle<float> cell(mainGridArea.getX() + col * cellW + 1, mainGridArea.getY() + row * cellH + 1, cellW - 2, cellH - 2);
+                    float alpha = juce::jlimit(0.0f, 1.0f, 0.2f + 0.8f * (vel / 100.0f));
+                    g.setColour(juce::Colours::orange.withAlpha(alpha));
+                    g.fillRoundedRectangle(cell, 2.0f);
+                }
+
+                if (col % div == 0 && col > 0) {
+                    g.setColour(juce::Colours::white.withAlpha(0.4f));
+                    g.fillRect(mainGridArea.getX() + col * cellW - 1.0f, mainGridArea.getY() + row * cellH, 1.0f, cellH);
+                }
+            }
+        }
+
+        // --- Playhead Draw ---
+        int cur = audioProcessor.getTrackCurrentStep(idx);
+        int startStep = currentViewBar * colsToDraw;
+        if (cur >= startStep && cur < startStep + colsToDraw) {
+            g.setColour(juce::Colours::white.withAlpha(0.3f));
+            g.fillRect(mainGridArea.getX() + (cur - startStep) * cellW, mainGridArea.getY() + row * cellH, cellW, cellH);
+        }
+    }
+}
+
+void SequencerGrid::mouseDown(const juce::MouseEvent& e) {
+    auto pos = e.getPosition();
+    if (lockArea.contains(pos)) {
+        int row = (int)((pos.y - lockArea.getY()) / juce::jmax(1, lockArea.getHeight() / 8));
+        if (row >= 0 && row < 8) {
+            int idx = 7 - row;
+            audioProcessor.trackLocked[idx] = !audioProcessor.trackLocked[idx];
+            repaint();
+        }
+    }
+    else if (mainGridArea.contains(pos)) {
+        int row = (int)((pos.y - mainGridArea.getY()) / juce::jmax(1, mainGridArea.getHeight() / 8));
+        int idx = 7 - row;
+        if (idx >= 0 && idx < 8) {
+            int div = audioProcessor.trackDivisionsUI[idx];
+            if (div < 1) div = 1;
+            int numBeats = audioProcessor.timeSigNumerator.load();
+            if (numBeats < 1) numBeats = 4;
+
+            float cellW = mainGridArea.getWidth() / (float)juce::jmax(1, div * numBeats);
+            int col = (int)((pos.x - mainGridArea.getX()) / juce::jmax(1.0f, cellW));
+            int globalStep = (currentViewBar * div * numBeats) + col;
+
+            if (globalStep >= 0 && globalStep < 1024) {
+                audioProcessor.drumPatternUI[idx][globalStep] = (audioProcessor.drumPatternUI[idx][globalStep] > 0) ? 0 : 100;
+                audioProcessor.patternUpdated.store(true);
+                repaint();
+            }
+        }
+    }
+}
+// ==============================================================================
+
 AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachineAudioProcessor& p)
-    : AudioProcessorEditor(&p), audioProcessor(p)
+    : AudioProcessorEditor(&p), audioProcessor(p), seqGrid(p)
 {
     setSize(1080, 520);
+
+    // ★ 重なりを防ぐため一番最初にグリッドを追加
+    addAndMakeVisible(seqGrid);
 
     addAndMakeVisible(syncButton); addAndMakeVisible(playButton); addAndMakeVisible(stopButton); addAndMakeVisible(tempoLabel);
     syncButton.setToggleState(audioProcessor.isSyncEnabled.load(), juce::dontSendNotification);
@@ -176,7 +280,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         if (genreIndex < 0) genreIndex = 0;
         audioProcessor.currentGenre.store(genreIndex);
 
-        // ★ 修正：Polyrhythm Matrix のデフォルト・オートロックと、他ジャンルへの伝播防止
         if (genreIndex == 25) {
             int targetDivs[8] = { 2, 4, 3, 5, 7, 6, 8, 1 };
             for (int i = 0; i < 8; ++i) {
@@ -189,7 +292,6 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             }
         }
         else {
-            // ID 25以外が選ばれたときは、そのジャンルのTuning設定に基づいてロック状態を正しく復元する
             for (int i = 0; i < 8; ++i) {
                 bool isLocked = audioProcessor.userTuning[genreIndex].tracks[i].divLocked;
                 audioProcessor.trackDivLocked[i] = isLocked;
@@ -223,7 +325,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         };
 
     addAndMakeVisible(tabButton1); addAndMakeVisible(tabButton2); addAndMakeVisible(tabButton3); addAndMakeVisible(tabButton4);
-    auto tabClick = [this](int barIndex) { currentViewBar = barIndex; updateTabColors(); repaint(); };
+    auto tabClick = [this](int barIndex) { currentViewBar = barIndex; updateTabColors(); seqGrid.updateBar(barIndex); repaint(); };
     tabButton1.onClick = [tabClick] { tabClick(0); }; tabButton2.onClick = [tabClick] { tabClick(1); };
     tabButton3.onClick = [tabClick] { tabClick(2); }; tabButton4.onClick = [tabClick] { tabClick(3); };
     updateTabColors();
@@ -326,14 +428,14 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         btnClear[i].onClick = [this, i] {
             juce::NativeMessageBox::showOkCancelBox(
                 juce::MessageBoxIconType::WarningIcon, "Clear Track", "Clear Track " + juce::String(i + 1) + "?", this,
-                juce::ModalCallbackFunction::create([this, i](int result) { if (result == 1) { audioProcessor.clearTrack(i); repaint(); } }));
+                juce::ModalCallbackFunction::create([this, i](int result) { if (result == 1) { audioProcessor.clearTrack(i); seqGrid.repaint(); } }));
             };
-        btnShiftL[i].onClick = [this, i] { audioProcessor.shiftTrackLeft(i); repaint(); };
-        btnShiftR[i].onClick = [this, i] { audioProcessor.shiftTrackRight(i); repaint(); };
+        btnShiftL[i].onClick = [this, i] { audioProcessor.shiftTrackLeft(i); seqGrid.repaint(); };
+        btnShiftR[i].onClick = [this, i] { audioProcessor.shiftTrackRight(i); seqGrid.repaint(); };
 
         addChildComponent(divLabels[i]); divLabels[i].setText("Div:", juce::dontSendNotification);
         addChildComponent(divSelectors[i]);
-        divSelectors[i].onChange = [this, i] { audioProcessor.trackDivisionsUI[i] = divSelectors[i].getSelectedId(); audioProcessor.patternUpdated.store(true); repaint(); };
+        divSelectors[i].onChange = [this, i] { audioProcessor.trackDivisionsUI[i] = divSelectors[i].getSelectedId(); audioProcessor.patternUpdated.store(true); seqGrid.repaint(); };
 
         addChildComponent(btnDivLock[i]); btnDivLock[i].setButtonText("L"); btnDivLock[i].setClickingTogglesState(true);
         btnDivLock[i].setColour(juce::TextButton::buttonOnColourId, juce::Colours::orange);
@@ -432,10 +534,9 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         auto& t = audioProcessor.userTuning[g];
         for (int i = 0; i < 8; ++i) {
             if (!t.tracks[i].cmplxLocked) {
-                // ★ ID25 の Complex制限 (0〜6)
                 if (g == 25) {
-                    t.tracks[i].cmplx.min = audioProcessor.random.nextInt(7);
-                    t.tracks[i].cmplx.max = audioProcessor.random.nextInt(7);
+                    t.tracks[i].cmplx.min = audioProcessor.random.nextInt(4);
+                    t.tracks[i].cmplx.max = audioProcessor.random.nextInt(4);
                 }
                 else {
                     t.tracks[i].cmplx.min = audioProcessor.random.nextInt(11);
@@ -445,13 +546,19 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             }
 
             if (!t.tracks[i].entrpLocked) {
-                t.tracks[i].entrp.min = audioProcessor.random.nextInt(11);
-                t.tracks[i].entrp.max = audioProcessor.random.nextInt(11);
+                if (g == 25) {
+                    t.tracks[i].entrp.min = audioProcessor.random.nextInt(11);
+                    t.tracks[i].entrp.max = audioProcessor.random.nextInt(11);
+                }
+                else {
+                    t.tracks[i].entrp.min = audioProcessor.random.nextInt(11);
+                    t.tracks[i].entrp.max = audioProcessor.random.nextInt(11);
+                }
                 if (t.tracks[i].entrp.min > t.tracks[i].entrp.max) std::swap(t.tracks[i].entrp.min, t.tracks[i].entrp.max);
             }
 
             if (!t.tracks[i].shiftLocked) {
-                if (i == 0) {
+                if (i == 0 || g == 24 || g == 25) {
                     t.tracks[i].shift.min = 0;
                     t.tracks[i].shift.max = 0;
                 }
@@ -476,16 +583,22 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             }
 
             if (g == 25) {
-                if (!t.tracks[i].cmplxLocked) { t.tracks[i].cmplx.min = 0; t.tracks[i].cmplx.max = 6; }
+                if (!t.tracks[i].cmplxLocked) { t.tracks[i].cmplx.min = 0; t.tracks[i].cmplx.max = 3; }
+                if (!t.tracks[i].entrpLocked) { t.tracks[i].entrp.min = 0; t.tracks[i].entrp.max = 10; }
             }
-            else if (g == 22 || g == 23) {
+            else if (g == 24) {
+                if (!t.tracks[i].cmplxLocked) { t.tracks[i].cmplx.min = 0; t.tracks[i].cmplx.max = 0; }
+                if (!t.tracks[i].entrpLocked) { t.tracks[i].entrp.min = 0; t.tracks[i].entrp.max = 0; }
+            }
+            else if (g >= 22) {
                 if (!t.tracks[i].cmplxLocked) { t.tracks[i].cmplx.min = 30; t.tracks[i].cmplx.max = 70; }
+                if (!t.tracks[i].entrpLocked) { t.tracks[i].entrp.min = 0; t.tracks[i].entrp.max = 0; }
             }
             else {
                 if (!t.tracks[i].cmplxLocked) { t.tracks[i].cmplx.min = 0; t.tracks[i].cmplx.max = 0; }
+                if (!t.tracks[i].entrpLocked) { t.tracks[i].entrp.min = 0; t.tracks[i].entrp.max = 0; }
             }
 
-            if (!t.tracks[i].entrpLocked) { t.tracks[i].entrp.min = 0; t.tracks[i].entrp.max = 0; }
             if (!t.tracks[i].shiftLocked) { t.tracks[i].shift.min = 0; t.tracks[i].shift.max = 0; }
         }
         updateTuningUIFromProcessor();
@@ -576,6 +689,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
         updateTrackNames();
         currentViewBar = 0;
         updateTabColors();
+        seqGrid.updateBar(0);
         resized();
         repaint();
         };
@@ -691,7 +805,6 @@ void AIDrumMachineAudioProcessorEditor::updateDivisionMenus() {
         divSelectors[i].setSelectedId(audioProcessor.trackDivisionsUI[i], juce::dontSendNotification);
     }
 }
-
 void AIDrumMachineAudioProcessorEditor::updateViewVisibility() {
     bool isSeq = (currentView == SequencerView);
     bool isS1 = (currentView == Setup1View);
@@ -707,12 +820,13 @@ void AIDrumMachineAudioProcessorEditor::updateViewVisibility() {
     tabTuningButton.setColour(juce::TextButton::buttonColourId, isTuning ? juce::Colours::orange : juce::Colours::darkgrey);
 
     btnClearAll.setVisible(isSeq);
-
     btnTimeSigLock.setVisible(isSeq || isS1 || isS2);
 
     arpKeyMenu.setVisible(isS2);
     arpScaleMenu.setVisible(isS2);
     btnArpMono.setVisible(isS2);
+
+    seqGrid.setVisible(isSeq); // ★ シーケンサーグリッドの表示切り替え
 
     for (int i = 0; i < 8; ++i) {
         btnMute[i].setVisible(isSeq); btnSolo[i].setVisible(isSeq); btnClear[i].setVisible(isSeq); btnShiftL[i].setVisible(isSeq); btnShiftR[i].setVisible(isSeq);
@@ -776,6 +890,7 @@ void AIDrumMachineAudioProcessorEditor::timerCallback() {
     if (audioProcessor.isSyncEnabled.load()) tempoLabel.setText("DAW: " + juce::String(audioProcessor.currentBpm.load(), 1) + " BPM", juce::dontSendNotification);
     else if (!tempoLabel.isBeingEdited()) tempoLabel.setText(juce::String(audioProcessor.internalTempo.load(), 1) + " BPM", juce::dontSendNotification);
 
+    // ★ GUI更新が必要な場合のみレイアウト(resized)と全画面描画を走らせる
     if (audioProcessor.uiNeedsUpdate.exchange(false)) {
         timeSigDenMenu.setSelectedId(audioProcessor.timeSigDenominator.load(), juce::dontSendNotification);
         updateTimeSigNumMenu();
@@ -794,6 +909,8 @@ void AIDrumMachineAudioProcessorEditor::timerCallback() {
         }
         updateTrackNames();
         resized();
+        repaint();
+        seqGrid.repaint();
     }
 
     if (audioProcessor.autoFollowEnabled.load() && (audioProcessor.isPlayingInternal.load() || audioProcessor.isSyncEnabled.load())) {
@@ -801,13 +918,21 @@ void AIDrumMachineAudioProcessorEditor::timerCallback() {
         if (activeBar != currentViewBar && activeBar < audioProcessor.globalBarCount.load() && activeBar >= 0) {
             currentViewBar = activeBar;
             updateTabColors();
+            seqGrid.updateBar(activeBar);
         }
     }
-    repaint();
+
+    // ★ 最適化ポイント：再生中は重い全画面repaintを呼ばず、軽量なseqGridのみを更新する
+    if (currentView == SequencerView && (audioProcessor.isPlayingInternal.load() || audioProcessor.isSyncEnabled.load())) {
+        seqGrid.repaint();
+    }
 }
 
 void AIDrumMachineAudioProcessorEditor::resized() {
     auto area = getLocalBounds().reduced(20);
+
+    // ★ グリッドのオーバーレイ用。座標はEditorと同一で絶対座標参照させる
+    seqGrid.setBounds(getLocalBounds());
 
     auto row1 = area.removeFromTop(30);
     syncButton.setBounds(row1.removeFromLeft(60)); playButton.setBounds(row1.removeFromLeft(60).reduced(2)); stopButton.setBounds(row1.removeFromLeft(60).reduced(2));
@@ -869,7 +994,7 @@ void AIDrumMachineAudioProcessorEditor::resized() {
     juce::Rectangle<int> bottomAreaInt = area;
 
     if (currentView == TuningView) {
-        lockArea = juce::Rectangle<int>(); midiDragArea = juce::Rectangle<int>();
+        seqGrid.lockArea = juce::Rectangle<int>(); seqGrid.midiDragArea = juce::Rectangle<int>();
 
         auto topTuningRow = bottomAreaInt.removeFromTop(90);
 
@@ -928,7 +1053,7 @@ void AIDrumMachineAudioProcessorEditor::resized() {
         btnArpMono.setBounds(s2top.removeFromLeft(100).reduced(2));
         bottomAreaInt.removeFromTop(10);
 
-        lockArea = juce::Rectangle<int>(); midiDragArea = bottomAreaInt.removeFromRight(40);
+        seqGrid.lockArea = juce::Rectangle<int>(); seqGrid.midiDragArea = bottomAreaInt.removeFromRight(40);
         auto labelArea = bottomAreaInt.removeFromLeft(140);
         sampleArea = bottomAreaInt.removeFromLeft(110);
         auto setupControls = bottomAreaInt;
@@ -952,7 +1077,8 @@ void AIDrumMachineAudioProcessorEditor::resized() {
         }
     }
     else if (currentView == SequencerView) {
-        lockArea = bottomAreaInt.removeFromLeft(30);
+        // ★ 分離したシーケンサーグリッドへ座標を渡す
+        seqGrid.lockArea = bottomAreaInt.removeFromLeft(30);
         auto controlArea = bottomAreaInt.removeFromLeft(150);
         sampleArea = bottomAreaInt.removeFromLeft(110);
 
@@ -963,11 +1089,11 @@ void AIDrumMachineAudioProcessorEditor::resized() {
             auto ctrlRow = controlArea.withY(controlArea.getY() + row * cellH).withHeight(cellH).reduced(1);
             btnMute[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1)); btnSolo[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1)); btnClear[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1)); btnShiftL[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1)); btnShiftR[idx].setBounds(ctrlRow.removeFromLeft(30).reduced(1));
         }
-        midiDragArea = bottomAreaInt.removeFromRight(40);
-        mainGridArea = bottomAreaInt;
+        seqGrid.midiDragArea = bottomAreaInt.removeFromRight(40);
+        seqGrid.mainGridArea = bottomAreaInt;
     }
     else if (currentView == Setup1View) {
-        lockArea = juce::Rectangle<int>(); midiDragArea = bottomAreaInt.removeFromRight(40);
+        seqGrid.lockArea = juce::Rectangle<int>(); seqGrid.midiDragArea = bottomAreaInt.removeFromRight(40);
         auto labelArea = bottomAreaInt.removeFromLeft(140);
         sampleArea = bottomAreaInt.removeFromLeft(110);
 
@@ -1000,7 +1126,7 @@ void AIDrumMachineAudioProcessorEditor::resized() {
             btnShiftLock[idx].setBounds(shiftBlock.removeFromRight(20).reduced(1));
             shiftBlock.removeFromRight(5); shiftSliders[idx].setBounds(shiftBlock);
         }
-        mainGridArea = juce::Rectangle<int>();
+        seqGrid.mainGridArea = juce::Rectangle<int>();
     }
 }
 
@@ -1010,61 +1136,9 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colours::cyan.withAlpha(0.6f)); g.fillRoundedRectangle(dragAllArea.toFloat(), 4.0f);
     g.setColour(juce::Colours::white); g.setFont(14.0f); g.drawText("DragMIDI", dragAllArea, juce::Justification::centred, false);
 
-    if (currentView == SequencerView) {
-        int rows = 8; float cellH = mainGridArea.getHeight() / (float)juce::jmax(1, rows);
-        int numBeats = audioProcessor.timeSigNumerator.load();
-        if (numBeats < 1) numBeats = 4;
+    // ★ グリッドの描画は seqGrid.paint() に任せるため、ここでは不要になりました
 
-        for (int row = 0; row < rows; ++row) {
-            int idx = 7 - row;
-
-            juce::Rectangle<float> lockBtn((float)lockArea.getX(), lockArea.getY() + row * cellH, lockArea.getWidth() - 2.0f, cellH - 2.0f);
-            g.setColour(audioProcessor.trackLocked[idx] ? juce::Colours::red.withAlpha(0.8f) : juce::Colours::grey.withAlpha(0.5f));
-            g.fillRoundedRectangle(lockBtn, 4.0f);
-            g.setColour(juce::Colours::white); g.setFont(10.0f);
-            g.drawText("L", lockBtn, juce::Justification::centred, false);
-
-            juce::Rectangle<float> mDrag(midiDragArea.getX() + 4.0f, midiDragArea.getY() + row * cellH, midiDragArea.getWidth() - 4.0f, cellH - 2.0f);
-            g.setColour(juce::Colours::cyan.withAlpha(0.3f));
-            g.fillRoundedRectangle(mDrag, 4.0f);
-            g.setColour(juce::Colours::white); g.setFont(11.0f);
-            g.drawText("MIDI", mDrag, juce::Justification::centred, false);
-
-            int div = audioProcessor.trackDivisionsUI[idx];
-            if (div < 1) div = 1;
-            int colsToDraw = numBeats * div;
-            float cellW = mainGridArea.getWidth() / (float)juce::jmax(1, colsToDraw);
-
-            for (int b = 0; b < numBeats; ++b) {
-                g.setColour(b % 2 == 0 ? juce::Colours::black.withAlpha(0.15f) : juce::Colours::white.withAlpha(0.05f));
-                g.fillRect(mainGridArea.getX() + b * div * cellW, mainGridArea.getY() + row * cellH, div * cellW, cellH);
-            }
-
-            for (int col = 0; col < colsToDraw; ++col) {
-                int globalStep = (currentViewBar * colsToDraw) + col;
-                if (globalStep < 1024) {
-                    int vel = audioProcessor.drumPatternUI[idx][globalStep];
-                    juce::Rectangle<float> cell(mainGridArea.getX() + col * cellW + 1, mainGridArea.getY() + row * cellH + 1, cellW - 2, cellH - 2);
-                    float alpha = juce::jlimit(0.0f, 1.0f, 0.2f + 0.8f * (vel / 100.0f));
-                    g.setColour(vel > 0 ? juce::Colours::orange.withAlpha(alpha) : juce::Colours::black.withAlpha(0.3f));
-                    g.fillRoundedRectangle(cell, 2.0f);
-
-                    if (col % div == 0 && col > 0) {
-                        g.setColour(juce::Colours::white.withAlpha(0.4f));
-                        g.drawVerticalLine((int)(cell.getX() - 1), cell.getY(), cell.getBottom());
-                    }
-                }
-            }
-
-            int cur = audioProcessor.getTrackCurrentStep(idx);
-            int startStep = currentViewBar * colsToDraw;
-            if (cur >= startStep && cur < startStep + colsToDraw) {
-                g.setColour(juce::Colours::white.withAlpha(0.3f));
-                g.fillRect(mainGridArea.getX() + (cur - startStep) * cellW, mainGridArea.getY() + row * cellH, cellW, cellH);
-            }
-        }
-    }
-    else if (currentView == Setup1View) {
+    if (currentView == Setup1View) {
         int rows = 8; float cellH = sampleArea.getHeight() / (float)juce::jmax(1, rows);
         for (int row = 0; row < rows; ++row) {
             int idx = 7 - row; juce::Rectangle<float> sArea(sampleArea.getX(), sampleArea.getY() + row * cellH + 2, sampleArea.getWidth() - 4, cellH - 4);
@@ -1077,6 +1151,7 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
 void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
     auto pos = e.getPosition();
 
+    // ★ 右クリックでのサンプル削除処理のみ残し、グリッドのクリック判定は seqGrid.mouseDown へ委譲
     if (e.mods.isRightButtonDown() && sampleArea.contains(pos) && currentView != Setup2View && currentView != TuningView) {
         int idx = getTrackIndexFromMouseY(pos.y);
         if (idx >= 0 && idx < 8 && audioProcessor.hasSampleLoaded(idx)) {
@@ -1084,43 +1159,13 @@ void AIDrumMachineAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
         }
         return;
     }
-
-    if (currentView == SequencerView) {
-        if (lockArea.contains(pos)) {
-            int row = (int)((pos.y - lockArea.getY()) / juce::jmax(1, lockArea.getHeight() / 8));
-            if (row >= 0 && row < 8) {
-                int idx = 7 - row;
-                audioProcessor.trackLocked[idx] = !audioProcessor.trackLocked[idx];
-                repaint();
-            }
-        }
-        else if (mainGridArea.contains(pos)) {
-            int idx = 7 - (int)((pos.y - mainGridArea.getY()) / juce::jmax(1, mainGridArea.getHeight() / 8));
-            if (idx >= 0 && idx < 8) {
-                int div = audioProcessor.trackDivisionsUI[idx];
-                if (div < 1) div = 1;
-                int numBeats = audioProcessor.timeSigNumerator.load();
-                if (numBeats < 1) numBeats = 4;
-
-                float cellW = mainGridArea.getWidth() / (float)juce::jmax(1, div * numBeats);
-                int col = (int)((pos.x - mainGridArea.getX()) / juce::jmax(1.0f, cellW));
-                int globalStep = (currentViewBar * div * numBeats) + col;
-
-                if (globalStep >= 0 && globalStep < 1024) {
-                    audioProcessor.drumPatternUI[idx][globalStep] = (audioProcessor.drumPatternUI[idx][globalStep] > 0) ? 0 : 100;
-                    audioProcessor.patternUpdated.store(true);
-                    repaint();
-                }
-            }
-        }
-    }
 }
 
 void AIDrumMachineAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e) {
     if (e.mouseWasDraggedSinceMouseDown() && !isDragging) {
         isDragging = true; auto startPos = e.getMouseDownPosition(); int track = -2;
         if (dragAllArea.contains(startPos)) track = -1;
-        else if (midiDragArea.contains(startPos)) track = 7 - (int)((startPos.y - midiDragArea.getY()) / juce::jmax(1, midiDragArea.getHeight() / 8));
+        else if (seqGrid.midiDragArea.contains(startPos)) track = 7 - (int)((startPos.y - seqGrid.midiDragArea.getY()) / juce::jmax(1, seqGrid.midiDragArea.getHeight() / 8));
         if (track >= -1 && track < 8) {
             juce::File f = exportMidi(track);
             if (f.existsAsFile()) { juce::StringArray s; s.add(f.getFullPathName()); performExternalDragDropOfFiles(s, false, this); }
@@ -1150,7 +1195,7 @@ int AIDrumMachineAudioProcessorEditor::getTrackIndexFromMouseY(int y) {
 }
 
 // ==============================================================================
-// ★ MIDI Export: ARP Mode Pitch Tracking & Bounds Safety implemented
+// ★ MIDI Export: 安全な境界チェックを搭載したエクスポート処理
 // ==============================================================================
 juce::File AIDrumMachineAudioProcessorEditor::exportMidi(int trackIndex) {
     juce::MidiMessageSequence seq;
@@ -1173,7 +1218,7 @@ juce::File AIDrumMachineAudioProcessorEditor::exportMidi(int trackIndex) {
         double shiftOffsetTicks = (audioProcessor.trackShiftUI[t] / 100.0) * ticksPerStep;
 
         int totalSteps = div * audioProcessor.timeSigNumerator.load() * audioProcessor.globalBarCount.load();
-        totalSteps = juce::jlimit(1, 1024, totalSteps); // ★ 配列外アクセスのフェイルセーフ
+        totalSteps = juce::jlimit(1, 1024, totalSteps);
 
         int note = notes[t];
         if (isArp) {
@@ -1182,7 +1227,7 @@ juce::File AIDrumMachineAudioProcessorEditor::exportMidi(int trackIndex) {
                 note = 60 + curKey + (audioProcessor.trackOctaveUI[t] * 12) + offset;
             }
         }
-        note = juce::jlimit(0, 127, note); // ★ MIDIノートナンバーの制限
+        note = juce::jlimit(0, 127, note);
 
         for (int s = 0; s < totalSteps; ++s) {
             int vel = audioProcessor.drumPatternUI[t][s];
@@ -1190,10 +1235,7 @@ juce::File AIDrumMachineAudioProcessorEditor::exportMidi(int trackIndex) {
                 double start = (s * ticksPerStep) + shiftOffsetTicks;
                 if (start < 0.0) start = 0.0;
 
-                // velはプロセッサ側で既に1〜127の適正値になっているためそのまま使用
                 seq.addEvent(juce::MidiMessage::noteOn(10, note, (juce::uint8)vel), start);
-
-                // 次のノートと重なってプツッというノイズが出るのを防ぐため、0.85倍で発音オフにする
                 seq.addEvent(juce::MidiMessage::noteOff(10, note), start + ticksPerStep * 0.85);
             }
         }
