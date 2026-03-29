@@ -70,5 +70,4 @@ You are free to use, modify, and distribute this software, but any derivative wo
 
 Developed by OTODESK.
 
-```
-```
+https://x.com/kijyoumusic
