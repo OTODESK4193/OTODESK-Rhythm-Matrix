@@ -55,25 +55,6 @@ The developer assumes no responsibility for any damage or loss caused by the use
 Due to the nature of audio plugins, unexpected loud noises or feedback may occur. Always **lower the volume of your audio interface or speakers** before using the plugin or making significant parameter changes for the first time.
 **Use at your own risk.**
 
-## 🛠 Building from Source (ソースからのビルド方法)
-If you want to build the plugin yourself, you will need **CMake (>= 3.22)** and a **C++20** compatible compiler.
-
-1. Clone this repository:
-   ```bash
-   git clone [https://github.com/YourUsername/OTODESK-Rhythm-Matrix.git](https://github.com/YourUsername/OTODESK-Rhythm-Matrix.git)
-````
-
-2.  **Important:** Open `CMakeLists.txt` and change the `JUCE_DIR` path to where JUCE is installed on your system.
-    *(CMakeLists.txt を開き、`JUCE_DIR` をご自身のJUCEインストールパスに変更してください)*
-
-3.  Build the project:
-
-    ```bash
-    cmake -B build
-    cmake --build build --config Release
-    ```
-
------
 
 ## ⚖️ License (ライセンスと規約)
 
