@@ -33,6 +33,7 @@ I have no intention of monetizing this. It's simply a tool I built for myself, a
 
 ## 📥 Installation (インストール方法)
 Download the latest `.zip` from the [Releases](../../releases) page and extract the `.vst3` file to your plugin folder.
+👉 **[Download FDN Reverb v1.0.0 (GitHub Releases)](https://github.com/OTODESK4193/CHIMERA_Filter/releases/tag/%EF%BD%961.0.0)**
 
 最新のReleaseページからZIPファイルをダウンロードし、以下のフォルダに `.vst3` ファイルを配置してください。
 
