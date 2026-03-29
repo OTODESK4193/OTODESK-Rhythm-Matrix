@@ -1171,6 +1171,20 @@ void AIDrumMachineAudioProcessorEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colours::cyan.withAlpha(0.6f)); g.fillRoundedRectangle(dragAllArea.toFloat(), 4.0f);
     g.setColour(juce::Colours::white); g.setFont(14.0f); g.drawText("DragMIDI", dragAllArea, juce::Justification::centred, false);
 
+    // =========================================================================
+    // ★ ロゴの代わりに「RhythmMatrix」と太字の白色テキストで描画
+    // =========================================================================
+    auto textArea = juce::Rectangle<float>(
+        dragAllArea.getRight() + 15.0f, // DragMIDIボタンの右から15px空ける
+        dragAllArea.getY(),             // 高さはDragMIDIボタンと合わせる
+        200.0f,                         // 表示幅を確保
+        dragAllArea.getHeight()
+    );
+    g.setColour(juce::Colours::white);
+    g.setFont(juce::Font(24.0f, juce::Font::bold)); // ★ 22pxの太字(ボールド)に設定
+    g.drawText("Rhythm Matrix", textArea, juce::Justification::centredLeft, false);
+    // =========================================================================
+
     // ★ グリッドの描画は seqGrid.paint() に任せるため、ここでは不要になりました
 
     if (currentView == Setup1View) {
