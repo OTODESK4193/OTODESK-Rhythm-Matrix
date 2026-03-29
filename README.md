@@ -34,7 +34,7 @@ I have no intention of monetizing this. It's simply a tool I built for myself, a
 ## 📥 Installation (インストール方法)
 Download the latest `.zip` from the [Releases](../../releases) page and extract the `.vst3` file to your plugin folder.
 
-![Downloads](https://img.shields.io/github/downloads/OTODESK4193/CHIMERA_Filter/total.svg)
+![Downloads](https://img.shields.io/github/downloads/OTODESK4193/OTODESK-Rhythm-Matrix/total.svg)
 最新のReleaseページからZIPファイルをダウンロードし、以下のフォルダに `.vst3` ファイルを配置してください。
 
 * **Windows:** `C:\Program Files\Common Files\VST3`
