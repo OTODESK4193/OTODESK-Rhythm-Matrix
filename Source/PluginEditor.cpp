@@ -1232,7 +1232,29 @@ bool AIDrumMachineAudioProcessorEditor::isInterestedInFileDrag(const juce::Strin
 void AIDrumMachineAudioProcessorEditor::filesDropped(const juce::StringArray& files, int x, int y) {
     if (currentView == Setup2View || currentView == TuningView) return;
     int idx = getTrackIndexFromMouseY(y);
-    if (idx >= 0 && idx < 8) { for (const auto& f : files) { audioProcessor.loadSample(idx, f); trackNameLabels[idx].setText(juce::File(f).getFileNameWithoutExtension(), juce::dontSendNotification); repaint(); break; } }
+    if (idx >= 0 && idx < 8) {
+        for (const auto& f : files) {
+            // ★ Abletonの .asd ファイル等を弾き、オーディオ拡張子のみを処理！
+            if (f.endsWithIgnoreCase(".wav") || f.endsWithIgnoreCase(".aif") ||
+                f.endsWithIgnoreCase(".aiff") || f.endsWithIgnoreCase(".mp3") ||
+                f.endsWithIgnoreCase(".flac"))
+            {
+                // ★ 読み込みに「成功」した時だけUIを更新して終了する
+                if (audioProcessor.loadSample(idx, f)) {
+                    trackNameLabels[idx].setText(juce::File(f).getFileNameWithoutExtension(), juce::dontSendNotification);
+                    repaint();
+                    return; // 成功したのでループを完全に抜ける
+                }
+            }
+        }
+
+        // ★ もしオーディオファイルが1つも読み込めなかった場合の警告
+        juce::NativeMessageBox::showMessageBoxAsync(
+            juce::MessageBoxIconType::WarningIcon,
+            "Load Error",
+            "Failed to load sample. Format might be unsupported or locked by DAW."
+        );
+    }
 }
 
 void AIDrumMachineAudioProcessorEditor::fileDragEnter(const juce::StringArray& f, int x, int y) {}

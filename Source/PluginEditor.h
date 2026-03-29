@@ -12,7 +12,14 @@ public:
     SequencerGrid(AIDrumMachineAudioProcessor& p);
     void paint(juce::Graphics& g) override;
     void mouseDown(const juce::MouseEvent& e) override;
-
+    // =========================================================================
+        // ★ ここを追加！
+        // ロックボタンとグリッド部分「以外」のクリックを親(Editor)に素通りさせる
+    bool hitTest(int x, int y) override {
+        juce::Point<int> pt(x, y);
+        return lockArea.contains(pt) || mainGridArea.contains(pt);
+    }
+    // =========================================================================
     void updateBar(int barIndex) {
         if (currentViewBar != barIndex) {
             currentViewBar = barIndex;

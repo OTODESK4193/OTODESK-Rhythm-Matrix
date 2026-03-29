@@ -84,6 +84,12 @@ AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
 #endif
 {
     formatManager.registerBasicFormats();
+    // ★ これを追加：AbletonのAIFCやMP3を強制的に読み込むためのOS標準デコーダー
+#if JUCE_MAC
+    formatManager.registerFormat(new juce::CoreAudioFormat(), false);
+#elif JUCE_WINDOWS
+    formatManager.registerFormat(new juce::WindowsMediaAudioFormat(), false);
+#endif
     initializeUserTunings();
 }
 
@@ -943,19 +949,34 @@ void AIDrumMachineAudioProcessor::generateAllTracks() {
     patternUpdated.store(true);
     uiNeedsUpdate.store(true);
 }
-void AIDrumMachineAudioProcessor::loadSample(int trackIndex, const juce::String& filePath) {
-    if (trackIndex < 0 || trackIndex >= 8) return;
+bool AIDrumMachineAudioProcessor::loadSample(int trackIndex, const juce::String& filePath) {
+    if (trackIndex < 0 || trackIndex >= 8) return false;
     juce::File file(filePath);
+
     if (auto* reader = formatManager.createReaderFor(file)) {
-        juce::AudioSampleBuffer tempBuffer(reader->numChannels, (int)reader->lengthInSamples);
-        reader->read(&tempBuffer, 0, (int)reader->lengthInSamples, 0, true, true);
+        int length = (int)reader->lengthInSamples;
+        int channels = reader->numChannels;
+
+        // ★ 万が一の空ファイルや破損ファイルをブロック
+        if (length <= 0 || channels <= 0) {
+            delete reader;
+            return false;
+        }
+
+        juce::AudioSampleBuffer tempBuffer(channels, length);
+        bool success = reader->read(&tempBuffer, 0, length, 0, true, true);
+        delete reader;
+
+        if (!success) return false; // ★ 読み込み失敗時
 
         juce::ScopedLock sl(sampleLock);
         sampleBuffers[trackIndex] = tempBuffer;
         hasSample[trackIndex] = true;
         samplePlayPos[trackIndex] = -1;
-        delete reader;
+
+        return true; // ★ 成功！
     }
+    return false;
 }
 
 void AIDrumMachineAudioProcessor::clearSample(int trackIndex) {

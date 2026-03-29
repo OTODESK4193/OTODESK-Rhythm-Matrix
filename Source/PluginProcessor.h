@@ -174,7 +174,7 @@ public:
 
     int getTrackCurrentStep(int trackIndex) const { return (trackIndex >= 0 && trackIndex < 8) ? trackCurrentStep[trackIndex] : 0; }
     void resetPosition() { samplesInLoop = 0; currentPlayingBar.store(0); for (int i = 0; i < 8; ++i) trackCurrentStep[i] = -1; }
-    void loadSample(int trackIndex, const juce::String& filePath); bool hasSampleLoaded(int trackIndex) const { return hasSample[trackIndex]; }
+    bool loadSample(int trackIndex, const juce::String& filePath); bool hasSampleLoaded(int trackIndex) const { return hasSample[trackIndex]; } // ★ void を bool に変更！
     void clearSample(int trackIndex); void generateAllTracks(); void shiftTrackLeft(int trackIndex); void shiftTrackRight(int trackIndex); void clearTrack(int trackIndex);
 
     static const GenreDefinition& getGenreDef(int index);

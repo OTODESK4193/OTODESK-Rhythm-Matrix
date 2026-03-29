@@ -3,9 +3,14 @@ cmake_minimum_required(VERSION 3.22)
 # ★ 内部的なプロジェクト名（C++のコードとは無関係なのでこのままでOKです）
 project(AIDrumMachine VERSION 1.0.0)
 
-# VST3の互換エラーと過去キャッシュの干渉を徹底排除
+# VST3の互換エラーと過去キャッシュの干渉を徹底排除 (既存のコード)
 set(JUCE_VST3_AUTO_MANIFEST OFF)
 add_compile_definitions(JUCE_VST3_CAN_REPLACE_VST2=0)
+
+# ==========================================================
+# ★ これを追加：Windows標準のオーディオデコーダーを有効化
+add_compile_definitions(JUCE_USE_WINDOWS_MEDIA_FORMAT=1)
+# ==========================================================
 
 # 1. C++20の有効化（非同期処理に必須）
 set(CMAKE_CXX_STANDARD 20)
