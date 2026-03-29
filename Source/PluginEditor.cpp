@@ -29,7 +29,7 @@ void SequencerGrid::paint(juce::Graphics& g) {
         g.drawText("L", lockBtn, juce::Justification::centred, false);
 
         // --- MIDI Drag Area Draw ---
-        juce::Rectangle<float> mDrag(midiDragArea.getX() + 4.0f, midiDragArea.getY() + row * cellH, midiDragArea.getWidth() - 4.0f, cellH - 2.0f);
+        juce::Rectangle<float> mDrag((float)midiDragArea.getX() + 4.0f, midiDragArea.getY() + row * cellH, midiDragArea.getWidth() - 4.0f, cellH - 2.0f);
         g.setColour(juce::Colours::cyan.withAlpha(0.3f));
         g.fillRoundedRectangle(mDrag, 4.0f);
         g.setColour(juce::Colours::white); g.setFont(11.0f);
@@ -41,10 +41,44 @@ void SequencerGrid::paint(juce::Graphics& g) {
         int colsToDraw = numBeats * div;
         float cellW = mainGridArea.getWidth() / (float)juce::jmax(1, colsToDraw);
 
+        // 背景のシマシマ（拍ごと）- ★ float に明示的キャスト
         for (int b = 0; b < numBeats; ++b) {
             g.setColour(b % 2 == 0 ? juce::Colours::black.withAlpha(0.15f) : juce::Colours::white.withAlpha(0.05f));
-            g.fillRect(mainGridArea.getX() + b * div * cellW, mainGridArea.getY() + row * cellH, div * cellW, cellH);
+            g.fillRect((float)(mainGridArea.getX() + b * div * cellW),
+                (float)(mainGridArea.getY() + row * cellH),
+                (float)(div * cellW),
+                cellH);
         }
+
+        // 各ステップの区切り線と、トラックの横線を描画 - ★ float に明示的キャスト
+        for (int col = 0; col <= colsToDraw; ++col) {
+            if (col > 0 && col < colsToDraw) {
+                if (col % div == 0) {
+                    // 拍の区切り（太めの白線で目立たせる）
+                    g.setColour(juce::Colours::white.withAlpha(0.25f));
+                    g.fillRect((float)(mainGridArea.getX() + col * cellW - 1.0f),
+                        (float)(mainGridArea.getY() + row * cellH),
+                        2.0f,
+                        cellH);
+                }
+                else {
+                    // 各ステップの区切り（細い黒線）
+                    g.setColour(juce::Colours::black.withAlpha(0.3f));
+                    g.fillRect((float)(mainGridArea.getX() + col * cellW),
+                        (float)(mainGridArea.getY() + row * cellH),
+                        1.0f,
+                        cellH);
+                }
+            }
+        }
+
+        // トラック（行）を分ける横線 - ★ float に明示的キャスト
+        g.setColour(juce::Colours::black.withAlpha(0.4f));
+        g.fillRect((float)mainGridArea.getX(),
+            (float)(mainGridArea.getY() + row * cellH + cellH - 1.0f),
+            (float)mainGridArea.getWidth(),
+            1.0f);
+
 
         // --- Grid Notes Draw ---
         for (int col = 0; col < colsToDraw; ++col) {
@@ -52,15 +86,13 @@ void SequencerGrid::paint(juce::Graphics& g) {
             if (globalStep < 1024) {
                 int vel = audioProcessor.drumPatternUI[idx][globalStep];
                 if (vel > 0) {
-                    juce::Rectangle<float> cell(mainGridArea.getX() + col * cellW + 1, mainGridArea.getY() + row * cellH + 1, cellW - 2, cellH - 2);
+                    juce::Rectangle<float> cell((float)(mainGridArea.getX() + col * cellW + 1),
+                        (float)(mainGridArea.getY() + row * cellH + 1),
+                        cellW - 2.0f,
+                        cellH - 2.0f);
                     float alpha = juce::jlimit(0.0f, 1.0f, 0.2f + 0.8f * (vel / 100.0f));
                     g.setColour(juce::Colours::orange.withAlpha(alpha));
                     g.fillRoundedRectangle(cell, 2.0f);
-                }
-
-                if (col % div == 0 && col > 0) {
-                    g.setColour(juce::Colours::white.withAlpha(0.4f));
-                    g.fillRect(mainGridArea.getX() + col * cellW - 1.0f, mainGridArea.getY() + row * cellH, 1.0f, cellH);
                 }
             }
         }
@@ -70,7 +102,10 @@ void SequencerGrid::paint(juce::Graphics& g) {
         int startStep = currentViewBar * colsToDraw;
         if (cur >= startStep && cur < startStep + colsToDraw) {
             g.setColour(juce::Colours::white.withAlpha(0.3f));
-            g.fillRect(mainGridArea.getX() + (cur - startStep) * cellW, mainGridArea.getY() + row * cellH, cellW, cellH);
+            g.fillRect((float)(mainGridArea.getX() + (cur - startStep) * cellW),
+                (float)(mainGridArea.getY() + row * cellH),
+                cellW,
+                cellH);
         }
     }
 }
