@@ -1233,30 +1233,35 @@ void AIDrumMachineAudioProcessorEditor::filesDropped(const juce::StringArray& fi
     if (currentView == Setup2View || currentView == TuningView) return;
     int idx = getTrackIndexFromMouseY(y);
     if (idx >= 0 && idx < 8) {
-        for (const auto& f : files) {
-            // ★ Abletonの .asd ファイル等を弾き、オーディオ拡張子のみを処理！
+        // ★ 警告を消すために const auto& に変更
+        for (const auto& fileRef : files) {
+            juce::String f = fileRef;
+
+            // Abletonが投げてくる "file://" などの余計なURL文字を掃除する
+            if (f.startsWithIgnoreCase("file://")) {
+                f = juce::URL::removeEscapeChars(f.substring(7));
+            }
+
             if (f.endsWithIgnoreCase(".wav") || f.endsWithIgnoreCase(".aif") ||
                 f.endsWithIgnoreCase(".aiff") || f.endsWithIgnoreCase(".mp3") ||
                 f.endsWithIgnoreCase(".flac"))
             {
-                // ★ 読み込みに「成功」した時だけUIを更新して終了する
                 if (audioProcessor.loadSample(idx, f)) {
                     trackNameLabels[idx].setText(juce::File(f).getFileNameWithoutExtension(), juce::dontSendNotification);
                     repaint();
-                    return; // 成功したのでループを完全に抜ける
+                    return; // 成功したら終了
                 }
             }
         }
 
-        // ★ もしオーディオファイルが1つも読み込めなかった場合の警告
+        // 失敗時のエラーメッセージ
         juce::NativeMessageBox::showMessageBoxAsync(
             juce::MessageBoxIconType::WarningIcon,
             "Load Error",
-            "Failed to load sample. Format might be unsupported or locked by DAW."
+            "Failed to load sample.\nNote: Ableton Factory Samples (.aif) are encrypted and cannot be loaded."
         );
     }
 }
-
 void AIDrumMachineAudioProcessorEditor::fileDragEnter(const juce::StringArray& f, int x, int y) {}
 void AIDrumMachineAudioProcessorEditor::fileDragMove(const juce::StringArray& f, int x, int y) {}
 void AIDrumMachineAudioProcessorEditor::fileDragExit(const juce::StringArray& f) {}
@@ -1270,6 +1275,16 @@ int AIDrumMachineAudioProcessorEditor::getTrackIndexFromMouseY(int y) {
 // ==============================================================================
 juce::File AIDrumMachineAudioProcessorEditor::exportMidi(int trackIndex) {
     juce::MidiMessageSequence seq;
+
+    // =========================================================================
+    // ★ 対策1: DAW上で表示される「クリップ名」をメタデータとして先頭に埋め込む！
+    // JUCEではメタイベントタイプ「3」が「Sequence/Track Name」を意味します
+    // =========================================================================
+    juce::String clipName = (trackIndex == -1) ? "Track All" : "Track " + juce::String(trackIndex);
+    seq.addEvent(juce::MidiMessage::textMetaEvent(3, clipName), 0.0);
+
+    // =========================================================================
+
     int notes[8] = { 36, 38, 42, 46, 39, 41, 45, 50 };
     int startT = (trackIndex == -1) ? 0 : trackIndex;
     int endT = (trackIndex == -1) ? 7 : trackIndex;
@@ -1316,10 +1331,20 @@ juce::File AIDrumMachineAudioProcessorEditor::exportMidi(int trackIndex) {
     juce::MidiFile mf;
     mf.setTicksPerQuarterNote((short)ppq);
     mf.addTrack(seq);
-    juce::File f = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("DrumPattern.mid");
+
+    // =========================================================================
+    // ★ 対策2: パソコン上に書き出されるファイル名をシンプルに統一する
+    // （DAWへの互換性を高めるため、スペースをアンダースコアに変換します）
+    // =========================================================================
+    juce::String fileName = clipName.replaceCharacter(' ', '_') + ".mid";
+    juce::File f = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile(fileName);
+
     f.deleteFile();
     juce::FileOutputStream os(f);
-    mf.writeTo(os);
-    os.flush();
+    if (os.openedOk()) {
+        mf.writeTo(os);
+        os.flush();
+    }
+
     return f;
 }

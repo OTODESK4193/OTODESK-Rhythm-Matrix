@@ -84,12 +84,7 @@ AIDrumMachineAudioProcessor::AIDrumMachineAudioProcessor()
 #endif
 {
     formatManager.registerBasicFormats();
-    // ★ これを追加：AbletonのAIFCやMP3を強制的に読み込むためのOS標準デコーダー
-#if JUCE_MAC
-    formatManager.registerFormat(new juce::CoreAudioFormat(), false);
-#elif JUCE_WINDOWS
-    formatManager.registerFormat(new juce::WindowsMediaAudioFormat(), false);
-#endif
+
     initializeUserTunings();
 }
 
@@ -953,11 +948,21 @@ bool AIDrumMachineAudioProcessor::loadSample(int trackIndex, const juce::String&
     if (trackIndex < 0 || trackIndex >= 8) return false;
     juce::File file(filePath);
 
-    if (auto* reader = formatManager.createReaderFor(file)) {
+    // =========================================================================
+    // ★ Ableton特有の「ファイルロック問題」を完全回避する最強の対策
+    // 直接ファイルを開かず、一度メモリに丸ごとコピーしてからJUCEに渡します。
+    // =========================================================================
+    juce::MemoryBlock memoryBlock;
+    if (!file.loadFileAsData(memoryBlock)) return false; // 読み込み失敗時は抜ける
+
+    // メモリ上のデータからInputStreamを作成
+    auto memoryInputStream = std::make_unique<juce::MemoryInputStream>(memoryBlock, true);
+
+    if (auto* reader = formatManager.createReaderFor(std::move(memoryInputStream))) {
         int length = (int)reader->lengthInSamples;
         int channels = reader->numChannels;
 
-        // ★ 万が一の空ファイルや破損ファイルをブロック
+        // 空ファイルや異常なデータをブロック
         if (length <= 0 || channels <= 0) {
             delete reader;
             return false;
@@ -967,14 +972,14 @@ bool AIDrumMachineAudioProcessor::loadSample(int trackIndex, const juce::String&
         bool success = reader->read(&tempBuffer, 0, length, 0, true, true);
         delete reader;
 
-        if (!success) return false; // ★ 読み込み失敗時
+        if (!success) return false;
 
         juce::ScopedLock sl(sampleLock);
         sampleBuffers[trackIndex] = tempBuffer;
         hasSample[trackIndex] = true;
         samplePlayPos[trackIndex] = -1;
 
-        return true; // ★ 成功！
+        return true; // 成功！
     }
     return false;
 }
@@ -991,6 +996,10 @@ void AIDrumMachineAudioProcessor::prepareToPlay(double sampleRate, int samplesPe
     for (int i = 0; i < 8; ++i) {
         synthVoices[i].setSampleRate((float)sampleRate);
         samplePlayPos[i] = -1;
+
+        // ★ 追加：MIDI状態の初期化
+        activeNote[i] = -1;
+        noteOffCountdown[i] = 0;
     }
 
     for (int i = 0; i < 8; ++i) {
@@ -1025,6 +1034,9 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     auto* leftChannel = buffer.getWritePointer(0);
     auto* rightChannel = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
 
+    // ★ DAWから入力されたMIDIをクリア（このプラグイン専用のMIDI出力を妨げないため）
+    midiMessages.clear();
+
     if (patternUpdated.exchange(false)) {
         for (int i = 0; i < 8; ++i) {
             std::memcpy(drumPatternDSP[i], drumPatternUI[i], sizeof(drumPatternUI[i]));
@@ -1053,7 +1065,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         }
     }
 
-    // ★ BPMフェイルセーフ（破損データ等によるBPM=0のゼロ除算・無限大・NaNを完全に防止）
     if (bpm < 20.0) bpm = 20.0;
     if (bpm > 999.0) bpm = 999.0;
     currentBpm.store(bpm);
@@ -1063,7 +1074,6 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     int samplesPerBar = (int)(samplesPerBeat * timeSigNumDSP);
     int samplesPerLoop = samplesPerBar * globalBarCountDSP;
 
-    // ★ バー計算のゼロ除算保護
     if (samplesPerBar > 0) {
         currentPlayingBar.store((samplesInLoop / samplesPerBar) % juce::jmax(1, globalBarCountDSP));
     }
@@ -1075,11 +1085,24 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     bool isArp = arpMode.load();
     int curScale = arpScale.load();
 
-    // ★ Thread Safety
+    // ★ Drumモード時のデフォルトMIDIノート（Kick=36, Snare=38 など）
+    int defaultNotes[8] = { 36, 38, 42, 46, 39, 41, 45, 50 };
+
     bool isSafeToProcessSamples = sampleLock.tryEnter();
 
     for (int i = 0; i < numSamples; ++i)
     {
+        // ★ DAWが停止した瞬間に、鳴りっぱなしのMIDIノートをすべて強制オフ
+        if (!isPlaying) {
+            for (int trk = 0; trk < 8; ++trk) {
+                if (activeNote[trk] != -1) {
+                    midiMessages.addEvent(juce::MidiMessage::noteOff(1, activeNote[trk]), i);
+                    activeNote[trk] = -1;
+                    noteOffCountdown[trk] = 0;
+                }
+            }
+        }
+
         if (isPlaying && samplesPerLoop > 0) {
             samplesInLoop++;
             if (samplesInLoop >= samplesPerLoop) samplesInLoop = 0;
@@ -1088,7 +1111,7 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             {
                 int div = trackDivisionsDSP[trk]; if (div < 1) div = 1;
                 int totalStepsInLoop = div * timeSigNumDSP * globalBarCountDSP;
-                if (totalStepsInLoop <= 0) continue; // ★ ステップ数0による除算エラー回避
+                if (totalStepsInLoop <= 0) continue;
 
                 double samplesPerStep = (double)samplesPerLoop / (double)totalStepsInLoop;
                 int shiftInSamples = (int)((trackShiftDSP[trk] / 100.0) * samplesPerStep);
@@ -1109,6 +1132,7 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                     int velocity = drumPatternDSP[trk][trackCurrentStep[trk]];
                     if (velocity > 0 && shouldPlay)
                     {
+                        // --- 1. オーディオの発音処理 ---
                         if (hasSample[trk]) {
                             if (isSafeToProcessSamples) {
                                 samplePlayPos[trk] = 0;
@@ -1123,6 +1147,35 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                             }
                             synthVoices[trk].trigger((float)velocity, p);
                         }
+
+                        // --- 2. ★ DAWへのMIDI出力処理 ---
+                        int noteNum = defaultNotes[trk]; // デフォルトはDrumキー
+                        if (isArp) {
+                            int offset = scalePatterns[curScale][trackDegreeDSP[trk]];
+                            if (offset != -1) {
+                                noteNum = 60 + arpKey.load() + (trackOctaveDSP[trk] * 12) + offset;
+                            }
+                        }
+                        noteNum = juce::jlimit(0, 127, noteNum); // 念のため0〜127の範囲に収める
+
+                        // もし前の音が鳴りっぱなしなら、一度消す
+                        if (activeNote[trk] != -1) {
+                            midiMessages.addEvent(juce::MidiMessage::noteOff(1, activeNote[trk]), i);
+                        }
+
+                        // 新しいノートをオン送信 (MIDIチャンネル1)
+                        midiMessages.addEvent(juce::MidiMessage::noteOn(1, noteNum, (juce::uint8)velocity), i);
+                        activeNote[trk] = noteNum;
+                        noteOffCountdown[trk] = (int)(samplesPerStep * 0.8); // 長さはステップの80%
+                    }
+                }
+
+                // --- 3. ★ MIDIノートオフのタイマー処理 ---
+                if (noteOffCountdown[trk] > 0) {
+                    noteOffCountdown[trk]--;
+                    if (noteOffCountdown[trk] == 0 && activeNote[trk] != -1) {
+                        midiMessages.addEvent(juce::MidiMessage::noteOff(1, activeNote[trk]), i);
+                        activeNote[trk] = -1;
                     }
                 }
             }
@@ -1162,7 +1215,7 @@ void AIDrumMachineAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
 const juce::String AIDrumMachineAudioProcessor::getName() const { return JucePlugin_Name; }
 bool AIDrumMachineAudioProcessor::acceptsMidi() const { return false; }
-bool AIDrumMachineAudioProcessor::producesMidi() const { return false; }
+bool AIDrumMachineAudioProcessor::producesMidi() const { return true; }
 bool AIDrumMachineAudioProcessor::isMidiEffect() const { return false; }
 double AIDrumMachineAudioProcessor::getTailLengthSeconds() const { return 0.0; }
 int AIDrumMachineAudioProcessor::getNumPrograms() { return 1; }

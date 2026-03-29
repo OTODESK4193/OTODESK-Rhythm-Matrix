@@ -195,6 +195,11 @@ private:
     int samplePlayPos[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
     float sampleVolume[8] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
     juce::CriticalSection sampleLock;
+    // =========================================================================
+        // ★ ここを追加：MIDI出力用のノート状態管理
+        // =========================================================================
+    int activeNote[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+    int noteOffCountdown[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AIDrumMachineAudioProcessor)
 };

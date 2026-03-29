@@ -7,6 +7,22 @@ OTODESK Rhythm Matrix は、C++とJUCEフレームワークで開発された、
 
 <img src="Assets/screenshot.png" width="600">
 
+## 開発の背景とスタンス (Philosophy)
+
+この「RhythmMatrix」は、もともと私自身が日々の音楽制作をより便利に、より楽しくするための「個人用ツール」として開発したものです。
+しかし、いざ作ってみると予想以上に強力でインスピレーションに溢れたジェネレーティブ・シーケンサーに仕上がったため、「せっかくなら他のクリエイターの方々にも自由に使ってもらいたい！」と思い、完全無料で公開することにしました。
+
+収益化などは一切考えていません。あなたのトラックメイクを加速させる便利ツールとして、ぜひ自由にダウンロードして遊んでみてください！
+
+---
+
+## About This Plugin / Philosophy
+
+"RhythmMatrix" was originally developed purely as a handy personal tool to enhance and speed up my own music production workflow. 
+However, it turned out to be such a powerful and inspiring generative sequencer that I thought, "Why not share this with other creators?" That's why I've decided to release it to the world completely for free.
+
+I have no intention of monetizing this. It's simply a tool I built for myself, and if you find it useful, please feel free to use it however you like in your own projects. I hope it sparks new ideas and speeds up your beat-making process. Enjoy!
+
 ## ✨ Features (主な機能)
 * **26 Genre Algorithms:** Instantly generate patterns for UK Drill, Breakcore, Amapiano, Techno, Math Rock, and more.
 * **Polyrhythm & Euclidean Matrix:** Mathematically perfect beat distribution with humanized ghost notes.
