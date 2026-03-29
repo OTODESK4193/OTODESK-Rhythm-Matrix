@@ -21,9 +21,22 @@ Download the latest `.zip` from the [Releases](../../releases) page and extract 
 最新のReleaseページからZIPファイルをダウンロードし、以下のフォルダに `.vst3` ファイルを配置してください。
 
 * **Windows:** `C:\Program Files\Common Files\VST3`
-* **macOS:** `/Library/Audio/Plug-Ins/VST3`
-
+* **AbletonLiveで動作確認済み（使用は自己責任でお願いします。）
 *(A Standalone executable is also available for jamming without a DAW. / DAWなしで遊べるスタンドアロン版も同梱しています。)*
+
+## 免責事項 (Disclaimer)
+
+本プラグインの使用により生じたいかなる損害（DAWのクラッシュ、スピーカーやヘッドホン等のオーディオ機器の破損、聴覚への影響、データの消失などを含む）について、開発者は一切の責任を負いません。
+
+オーディオプラグインの性質上、予期せぬ大音量やノイズが発生する可能性があります。初めて使用する際や設定を大きく変更する際は、**必ずスピーカーやインターフェースの音量を十分に下げてから**ご使用ください。
+すべて自己責任（Use at your own risk）でのご利用をお願いいたします。
+
+---
+
+The developer assumes no responsibility for any damage or loss caused by the use of this plugin (including but not limited to DAW crashes, damage to speakers/headphones, hearing damage, and data loss).
+
+Due to the nature of audio plugins, unexpected loud noises or feedback may occur. Always **lower the volume of your audio interface or speakers** before using the plugin or making significant parameter changes for the first time.
+**Use at your own risk.**
 
 ## 🛠 Building from Source (ソースからのビルド方法)
 If you want to build the plugin yourself, you will need **CMake (>= 3.22)** and a **C++20** compatible compiler.
