@@ -6,7 +6,7 @@
 OTODESK Rhythm Matrix は、C++とJUCEフレームワークで開発された、アルゴリズミック・ドラムマシン・プラグインです。確率論とアンカーロジックを用いて、複雑なポリリズムやユークリッドリズム、26種類のジャンルに特化した音楽的なビートを自動生成します。
 
 <img src="Assets/screenshot.png" width="600">
-<video src="Assets/your_video.mp4" width="600" controls></video>
+<video src="Assets/rhythm-matrix-demo.mp4" width="600" controls></video>
 
 ## 開発の背景とスタンス (Philosophy)
 
