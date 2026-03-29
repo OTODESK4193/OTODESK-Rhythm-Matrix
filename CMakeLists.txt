@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
+
+# ★ 内部的なプロジェクト名（C++のコードとは無関係なのでこのままでOKです）
 project(AIDrumMachine VERSION 1.0.0)
 
 # VST3の互換エラーと過去キャッシュの干渉を徹底排除
@@ -13,7 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(JUCE_DIR "C:/JUCE")
 add_subdirectory(${JUCE_DIR} build_juce)
 
-# 3. プラグインの定義（IS_SYNTH TRUE に変更）
+# 3. プラグインの定義
 juce_add_plugin(AIDrumMachine
     COMPANY_NAME "OTODESK"
     IS_SYNTH TRUE
@@ -26,7 +28,12 @@ juce_add_plugin(AIDrumMachine
     PLUGIN_MANUFACTURER_CODE "Otdk"
     PLUGIN_CODE "Aidm"
     FORMATS VST3 Standalone
-    PRODUCT_NAME "AI Drum Machine")
+    # =========================================================================
+    # ★ ここがDAWで表示される名前です！好きな名前に変更してください。
+    # 例: PRODUCT_NAME "OTODESK Rhythm Matrix" など
+    # =========================================================================
+    PRODUCT_NAME "OTODESK Rhythm Matrix"
+)
 
 # 4. SIMD最適化フラグと文字コードエラー無視の設定
 target_compile_options(AIDrumMachine PRIVATE
@@ -38,14 +45,13 @@ target_compile_options(AIDrumMachine PRIVATE
     >
 )
 
-# 5. ソースコードの追加（Networkフォルダを追加）
+# 5. ソースコードの追加
+# ★ GeminiClient.cpp / .h をビルド対象から削除しました！
 target_sources(AIDrumMachine PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginProcessor.h
     Source/PluginEditor.cpp
     Source/PluginEditor.h
-    Source/Network/GeminiClient.cpp
-    Source/Network/GeminiClient.h
 )
 
 # 6. 使用するJUCEモジュールのリンク
@@ -55,6 +61,6 @@ target_link_libraries(AIDrumMachine PRIVATE
     juce::juce_dsp
     juce::juce_gui_basics
     juce::juce_gui_extra
-    juce::juce_core        # HTTP通信・JSONパースに必要
-    juce::juce_events      # 非同期メッセージに必要
+    juce::juce_core        
+    juce::juce_events      
 )
