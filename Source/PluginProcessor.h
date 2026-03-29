@@ -192,6 +192,8 @@ private:
 
     DrumVoice synthVoices[8]; juce::AudioFormatManager formatManager;
     juce::AudioSampleBuffer sampleBuffers[8]; bool hasSample[8] = { false, false, false, false, false, false, false, false };
+    // ★ ここを追加：サンプルのファイルパスを記憶しておくための配列
+    juce::String loadedSamplePaths[8];
     int samplePlayPos[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
     float sampleVolume[8] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
     juce::CriticalSection sampleLock;

@@ -978,6 +978,8 @@ bool AIDrumMachineAudioProcessor::loadSample(int trackIndex, const juce::String&
         sampleBuffers[trackIndex] = tempBuffer;
         hasSample[trackIndex] = true;
         samplePlayPos[trackIndex] = -1;
+        // ★ これを追加！パスを記憶する
+        loadedSamplePaths[trackIndex] = filePath;
 
         return true; // 成功！
     }
@@ -989,6 +991,8 @@ void AIDrumMachineAudioProcessor::clearSample(int trackIndex) {
     juce::ScopedLock sl(sampleLock);
     hasSample[trackIndex] = false;
     samplePlayPos[trackIndex] = -1;
+    // ★ これを追加！パスを忘れさせる
+    loadedSamplePaths[trackIndex] = "";
 }
 
 void AIDrumMachineAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
@@ -1231,19 +1235,74 @@ void AIDrumMachineAudioProcessor::getStateInformation(juce::MemoryBlock& destDat
     juce::XmlElement xml("AIDrumMachineState");
     xml.setAttribute("currentGenre", currentGenre.load());
     xml.setAttribute("globalBarCount", globalBarCount.load());
-
-    juce::String dynStr, degLckStr, octLckStr;
-    for (int i = 0; i < 8; ++i) {
-        dynStr += trackDynamic[i] ? "1" : "0";
-        degLckStr += trackDegreeLocked[i] ? "1" : "0";
-        octLckStr += trackOctaveLocked[i] ? "1" : "0";
-        xml.setAttribute("dynAmt" + juce::String(i), trackDynamicAmount[i]);
-    }
-    xml.setAttribute("dyn", dynStr);
-    xml.setAttribute("degLck", degLckStr);
-    xml.setAttribute("octLck", octLckStr);
+    xml.setAttribute("timeSigNum", timeSigNumerator.load());
+    xml.setAttribute("timeSigDen", timeSigDenominator.load());
+    xml.setAttribute("fillBarTarget", fillBarTarget.load());
+    xml.setAttribute("arpMode", arpMode.load());
+    xml.setAttribute("arpMono", arpMono.load());
+    xml.setAttribute("arpKey", arpKey.load());
+    xml.setAttribute("arpScale", arpScale.load());
+    xml.setAttribute("autoFollow", autoFollowEnabled.load());
     xml.setAttribute("tsLock", timeSigLocked.load());
 
+    // 各トラックのパラメータとシーケンスを保存
+    for (int i = 0; i < 8; ++i) {
+        auto* trackXml = new juce::XmlElement("TrackData");
+        trackXml->setAttribute("id", i);
+        trackXml->setAttribute("div", trackDivisionsUI[i]);
+        trackXml->setAttribute("shift", trackShiftUI[i]);
+        trackXml->setAttribute("cmplx", trackComplexity[i]);
+        trackXml->setAttribute("entrp", trackEntropy[i]);
+        trackXml->setAttribute("oct", trackOctaveUI[i]);
+        trackXml->setAttribute("deg", trackDegreeUI[i]);
+
+        trackXml->setAttribute("lock", trackLocked[i]);
+        trackXml->setAttribute("divLck", trackDivLocked[i]);
+        trackXml->setAttribute("cmplxLck", trackCmplxLocked[i]);
+        trackXml->setAttribute("entrpLck", trackEntrpLocked[i]);
+        trackXml->setAttribute("shiftLck", trackShiftLocked[i]);
+        trackXml->setAttribute("degLck", trackDegreeLocked[i]);
+        trackXml->setAttribute("octLck", trackOctaveLocked[i]);
+
+        trackXml->setAttribute("mute", trackMuted[i]);
+        trackXml->setAttribute("solo", trackSoloed[i]);
+        trackXml->setAttribute("dyn", trackDynamic[i]);
+        trackXml->setAttribute("dynAmt", trackDynamicAmount[i]);
+
+        // サンプルパスの保存
+        trackXml->setAttribute("samplePath", loadedSamplePaths[i]);
+
+        // シーケンスパターンをカンマ区切りの文字列で保存
+        juce::String patStr;
+        for (int s = 0; s < 1024; ++s) patStr << drumPatternUI[i][s] << ",";
+        trackXml->setAttribute("pattern", patStr);
+
+        xml.addChildElement(trackXml);
+    }
+
+    // Pat1〜4（保存されたパターン）の保存
+    for (int p = 0; p < 4; ++p) {
+        auto* patXml = new juce::XmlElement("SavedPattern");
+        patXml->setAttribute("id", p);
+        patXml->setAttribute("isSaved", isPatternSaved[p]);
+        if (isPatternSaved[p]) {
+            patXml->setAttribute("num", savedPatterns[p].num);
+            patXml->setAttribute("den", savedPatterns[p].den);
+            patXml->setAttribute("bars", savedPatterns[p].bars);
+            for (int t = 0; t < 8; ++t) {
+                patXml->setAttribute("div" + juce::String(t), savedPatterns[p].trackDivisions[t]);
+                patXml->setAttribute("shift" + juce::String(t), savedPatterns[p].trackShift[t]);
+                patXml->setAttribute("cmplx" + juce::String(t), savedPatterns[p].trackComplexity[t]);
+                patXml->setAttribute("entrp" + juce::String(t), savedPatterns[p].trackEntropy[t]);
+                juce::String ptStr;
+                for (int s = 0; s < 1024; ++s) ptStr << savedPatterns[p].drumPattern[t][s] << ",";
+                patXml->setAttribute("patData" + juce::String(t), ptStr);
+            }
+        }
+        xml.addChildElement(patXml);
+    }
+
+    // UserTunings の保存 (既存コードと同様)
     auto* tuningsXml = new juce::XmlElement("UserTunings");
     for (int g = 0; g < 26; ++g) {
         auto* gXml = new juce::XmlElement("Genre");
@@ -1261,11 +1320,9 @@ void AIDrumMachineAudioProcessor::getStateInformation(juce::MemoryBlock& destDat
         for (int t = 0; t < 8; ++t) {
             auto* tXml = new juce::XmlElement("Track");
             tXml->setAttribute("id", t);
-
             juce::String dStr;
             for (int d = 0; d < 8; ++d) dStr += userTuning[g].tracks[t].allowedDivs[d] ? "1" : "0";
             tXml->setAttribute("divs", dStr);
-
             tXml->setAttribute("dLck", userTuning[g].tracks[t].divLocked);
             tXml->setAttribute("cMin", userTuning[g].tracks[t].cmplx.min);
             tXml->setAttribute("cMax", userTuning[g].tracks[t].cmplx.max);
@@ -1290,32 +1347,91 @@ void AIDrumMachineAudioProcessor::setStateInformation(const void* data, int size
     if (xmlState != nullptr && xmlState->hasTagName("AIDrumMachineState")) {
         currentGenre.store(xmlState->getIntAttribute("currentGenre", 0));
         globalBarCount.store(xmlState->getIntAttribute("globalBarCount", 4));
-
-        juce::String dynStr = xmlState->getStringAttribute("dyn", "00000000");
-        juce::String degLckStr = xmlState->getStringAttribute("degLck", "00000000");
-        juce::String octLckStr = xmlState->getStringAttribute("octLck", "00000000");
-        for (int i = 0; i < 8; ++i) {
-            trackDynamic[i] = (dynStr[i] == '1');
-            trackDegreeLocked[i] = (degLckStr[i] == '1');
-            trackOctaveLocked[i] = (octLckStr[i] == '1');
-            trackDynamicAmount[i] = xmlState->getIntAttribute("dynAmt" + juce::String(i), 30);
-        }
+        timeSigNumerator.store(xmlState->getIntAttribute("timeSigNum", 4));
+        timeSigDenominator.store(xmlState->getIntAttribute("timeSigDen", 4));
+        fillBarTarget.store(xmlState->getIntAttribute("fillBarTarget", 0));
+        arpMode.store(xmlState->getBoolAttribute("arpMode", false));
+        arpMono.store(xmlState->getBoolAttribute("arpMono", true));
+        arpKey.store(xmlState->getIntAttribute("arpKey", 0));
+        arpScale.store(xmlState->getIntAttribute("arpScale", 1));
+        autoFollowEnabled.store(xmlState->getBoolAttribute("autoFollow", true));
         timeSigLocked.store(xmlState->getBoolAttribute("tsLock", false));
 
+        // 各トラックの復元
+        for (auto* trackXml : xmlState->getChildWithTagNameIterator("TrackData")) {
+            int i = trackXml->getIntAttribute("id", -1);
+            if (i >= 0 && i < 8) {
+                trackDivisionsUI[i] = trackXml->getIntAttribute("div", 4);
+                trackShiftUI[i] = trackXml->getIntAttribute("shift", 0);
+                trackComplexity[i] = trackXml->getIntAttribute("cmplx", 50);
+                trackEntropy[i] = trackXml->getIntAttribute("entrp", 0);
+                trackOctaveUI[i] = trackXml->getIntAttribute("oct", 0);
+                trackDegreeUI[i] = trackXml->getIntAttribute("deg", 0);
+
+                trackLocked[i] = trackXml->getBoolAttribute("lock", false);
+                trackDivLocked[i] = trackXml->getBoolAttribute("divLck", false);
+                trackCmplxLocked[i] = trackXml->getBoolAttribute("cmplxLck", false);
+                trackEntrpLocked[i] = trackXml->getBoolAttribute("entrpLck", false);
+                trackShiftLocked[i] = trackXml->getBoolAttribute("shiftLck", false);
+                trackDegreeLocked[i] = trackXml->getBoolAttribute("degLck", false);
+                trackOctaveLocked[i] = trackXml->getBoolAttribute("octLck", false);
+
+                trackMuted[i] = trackXml->getBoolAttribute("mute", false);
+                trackSoloed[i] = trackXml->getBoolAttribute("solo", false);
+                trackDynamic[i] = trackXml->getBoolAttribute("dyn", false);
+                trackDynamicAmount[i] = trackXml->getIntAttribute("dynAmt", 30);
+
+                // サンプルの復元
+                juce::String sPath = trackXml->getStringAttribute("samplePath", "");
+                if (sPath.isNotEmpty()) {
+                    loadSample(i, sPath);
+                }
+                else {
+                    clearSample(i);
+                }
+
+                // シーケンスの復元
+                juce::String patStr = trackXml->getStringAttribute("pattern", "");
+                juce::StringArray tokens;
+                tokens.addTokens(patStr, ",", "");
+                for (int s = 0; s < juce::jmin(1024, tokens.size()); ++s) {
+                    drumPatternUI[i][s] = tokens[s].getIntValue();
+                }
+            }
+        }
+
+        // Pat1〜4 の復元
+        for (auto* patXml : xmlState->getChildWithTagNameIterator("SavedPattern")) {
+            int p = patXml->getIntAttribute("id", -1);
+            if (p >= 0 && p < 4) {
+                isPatternSaved[p] = patXml->getBoolAttribute("isSaved", false);
+                if (isPatternSaved[p]) {
+                    savedPatterns[p].num = patXml->getIntAttribute("num", 4);
+                    savedPatterns[p].den = patXml->getIntAttribute("den", 4);
+                    savedPatterns[p].bars = patXml->getIntAttribute("bars", 4);
+                    for (int t = 0; t < 8; ++t) {
+                        savedPatterns[p].trackDivisions[t] = patXml->getIntAttribute("div" + juce::String(t), 4);
+                        savedPatterns[p].trackShift[t] = patXml->getIntAttribute("shift" + juce::String(t), 0);
+                        savedPatterns[p].trackComplexity[t] = patXml->getIntAttribute("cmplx" + juce::String(t), 50);
+                        savedPatterns[p].trackEntropy[t] = patXml->getIntAttribute("entrp" + juce::String(t), 0);
+                        juce::String ptStr = patXml->getStringAttribute("patData" + juce::String(t), "");
+                        juce::StringArray tks;
+                        tks.addTokens(ptStr, ",", "");
+                        for (int s = 0; s < juce::jmin(1024, tks.size()); ++s) {
+                            savedPatterns[p].drumPattern[t][s] = tks[s].getIntValue();
+                        }
+                    }
+                }
+            }
+        }
+
+        // UserTunings の復元 (既存コードと同様)
         if (auto* tuningsXml = xmlState->getChildByName("UserTunings")) {
             for (auto* gXml : tuningsXml->getChildIterator()) {
                 int g = gXml->getIntAttribute("id", -1);
-                // ★ 修正済みサイズ(26)に基づいて安全に復元する
                 if (g >= 0 && g < 26) {
-                    // ★ 過去の破損データを無視して強制的に正しいテンポを適用
-                    if (g == 24) {
-                        userTuning[g].tempo.min = 80;
-                        userTuning[g].tempo.max = 140;
-                    }
-                    else if (g == 25) {
-                        userTuning[g].tempo.min = 80;
-                        userTuning[g].tempo.max = 100;
-                    }
+                    if (g == 24) { userTuning[g].tempo.min = 80; userTuning[g].tempo.max = 140; }
+                    else if (g == 25) { userTuning[g].tempo.min = 80; userTuning[g].tempo.max = 100; }
                     else {
                         userTuning[g].tempo.min = gXml->getIntAttribute("tMin", 0);
                         userTuning[g].tempo.max = gXml->getIntAttribute("tMax", 0);
@@ -1333,17 +1449,13 @@ void AIDrumMachineAudioProcessor::setStateInformation(const void* data, int size
                         if (t >= 0 && t < 8) {
                             juce::String dStr = tXml->getStringAttribute("divs", "00000000");
                             for (int d = 0; d < 8; ++d) userTuning[g].tracks[t].allowedDivs[d] = (dStr[d] == '1');
-
                             userTuning[g].tracks[t].divLocked = tXml->getBoolAttribute("dLck", false);
-
                             userTuning[g].tracks[t].cmplx.min = tXml->getIntAttribute("cMin", 0);
                             userTuning[g].tracks[t].cmplx.max = tXml->getIntAttribute("cMax", 0);
                             userTuning[g].tracks[t].cmplxLocked = tXml->getBoolAttribute("cLck", false);
-
                             userTuning[g].tracks[t].entrp.min = tXml->getIntAttribute("eMin", 0);
                             userTuning[g].tracks[t].entrp.max = tXml->getIntAttribute("eMax", 0);
                             userTuning[g].tracks[t].entrpLocked = tXml->getBoolAttribute("eLck", false);
-
                             userTuning[g].tracks[t].shift.min = tXml->getIntAttribute("sMin", 0);
                             userTuning[g].tracks[t].shift.max = tXml->getIntAttribute("sMax", 0);
                             userTuning[g].tracks[t].shiftLocked = tXml->getBoolAttribute("sLck", false);
@@ -1352,6 +1464,8 @@ void AIDrumMachineAudioProcessor::setStateInformation(const void* data, int size
                 }
             }
         }
+
+        patternUpdated.store(true);
         uiNeedsUpdate.store(true);
     }
 }

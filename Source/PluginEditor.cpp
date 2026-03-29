@@ -340,11 +340,15 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             if (!audioProcessor.tempoLocked.load() && !audioProcessor.isSyncEnabled.load()) {
                 audioProcessor.internalTempo.store((def.minTempo + def.maxTempo) / 2.0);
             }
-            timeSigDenMenu.setSelectedId(def.defaultDen, juce::dontSendNotification);
-            audioProcessor.timeSigDenominator.store(def.defaultDen);
-            updateTimeSigNumMenu();
-            timeSigNumMenu.setSelectedId(def.defaultNum, juce::dontSendNotification);
-            audioProcessor.timeSigNumerator.store(def.defaultNum);
+
+            // ★ 修正：Time Sigが「Lock」されていない時だけジャンルのデフォルト拍子に変更する
+            if (!audioProcessor.timeSigLocked.load()) {
+                timeSigDenMenu.setSelectedId(def.defaultDen, juce::dontSendNotification);
+                audioProcessor.timeSigDenominator.store(def.defaultDen);
+                updateTimeSigNumMenu();
+                timeSigNumMenu.setSelectedId(def.defaultNum, juce::dontSendNotification);
+                audioProcessor.timeSigNumerator.store(def.defaultNum);
+            }
 
             for (int i = 0; i < 8; ++i) {
                 if ((genreIndex >= 22 || genreIndex == 14 || genreIndex == 21) && (i == 0 || i == 1 || i == 4)) {
@@ -695,6 +699,7 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             btnEntrpLock[t].setToggleState(state, juce::dontSendNotification);
             };
 
+        // ▼ ▼ ▼ "i" をすべて "t" に変更しました ▼ ▼ ▼
         setupNumBox(tuningShiftMin[t], [this, t](int v) { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].shift.min = v; });
         setupNumBox(tuningShiftMax[t], [this, t](int v) { audioProcessor.userTuning[audioProcessor.currentGenre.load()].tracks[t].shift.max = v; });
         addChildComponent(tuningShiftLock[t]);
@@ -705,11 +710,12 @@ AIDrumMachineAudioProcessorEditor::AIDrumMachineAudioProcessorEditor(AIDrumMachi
             audioProcessor.trackShiftLocked[t] = state;
             btnShiftLock[t].setToggleState(state, juce::dontSendNotification);
             };
-    }
+    } // ← for (int t = 0... の終わりのカッコ
 
-    styleMenu.setSelectedId(1, juce::sendNotification);
+    // ★ 修正: 削除して、代わりに「画面表示時にUIを最新データに同期する」フラグを立てる
+    audioProcessor.uiNeedsUpdate.store(true);
 
-    juce::Component::SafePointer<AIDrumMachineAudioProcessorEditor> safeThis(this);
+       juce::Component::SafePointer<AIDrumMachineAudioProcessorEditor> safeThis(this);
     generateButton.onClick = [safeThis, this] {
         if (safeThis == nullptr) return;
         audioProcessor.generateAllTracks();
@@ -798,7 +804,9 @@ void AIDrumMachineAudioProcessorEditor::updateStyleMenu() {
         };
         for (int i = 0; i < genres.size(); ++i) styleMenu.addItem(genres[i], i + 1);
     }
-    styleMenu.setSelectedId(1, juce::sendNotification);
+
+    // ★ 修正：現在の保存されているジャンルをセットし、イベントは発火させない
+    styleMenu.setSelectedId(audioProcessor.currentGenre.load() + 1, juce::dontSendNotification);
 }
 
 void AIDrumMachineAudioProcessorEditor::updateTrackNames() {
