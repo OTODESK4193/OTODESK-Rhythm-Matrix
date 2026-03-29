@@ -41,6 +41,14 @@ Download the latest `.zip` from the [Releases](../../releases) page and extract 
 
 *(A Standalone executable is also available for jamming without a DAW. / DAWなしで遊べるスタンドアロン版も同梱しています。)*
 
+## 📖 Documentation (マニュアル)
+
+For a detailed explanation of all features, including the Generative algorithms, Arp mode, and Euclidean matrix, please check the **[Complete Manual](Assets/Rhythm_Matrix_Manual.md)**.
+
+各機能の詳細な使い方、アルペジオモードやチューニング（アルゴリズムの深層設定）の解説については、以下の完全版マニュアルをご覧ください。
+
+👉 **[OTODESK Rhythm Matrix 完全マニュアルを読む](Assets/Rhythm_Matrix_Manual.md)**
+
 ## 免責事項 (Disclaimer)
 
 本プラグインの使用により生じたいかなる損害（DAWのクラッシュ、スピーカーやヘッドホン等のオーディオ機器の破損、聴覚への影響、データの消失などを含む）について、開発者は一切の責任を負いません。
