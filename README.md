@@ -6,8 +6,7 @@
 OTODESK Rhythm Matrix は、C++とJUCEフレームワークで開発された、アルゴリズミック・ドラムマシン・プラグインです。確率論とアンカーロジックを用いて、複雑なポリリズムやユークリッドリズム、26種類のジャンルに特化した音楽的なビートを自動生成します。
 
 <img src="Assets/screenshot.png" width="600">
-<blockquote class="twitter-tweet" data-media-max-width="560"><p lang="ja" dir="ltr">実際の動作画面はこちら！🎬<br>ジャンルを選んで「Generate」を押すだけで、<br>複雑なポリリズムや変拍子、<br>ゴーストノートを含んだ実践的なビートが<br>次々と組み上がります。 <br>あとは画面右上の「DragMIDI」から<br>いつものDAWにポイッと放り込むだけ！<br>お好きな音源ですぐに鳴らせます🔥 <a href="https://t.co/iGyGGAJkjm">pic.twitter.com/iGyGGAJkjm</a></p>&mdash; おとですく(OTODESK)@ableton やっぱりabletonだよね (@kijyoumusic) <a href="https://twitter.com/kijyoumusic/status/2038240087323099221?ref_src=twsrc%5Etfw">March 29, 2026</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
-
+👉 **[Watch the Demo Video on X (動作デモ動画はこちら！)](https://x.com/kijyoumusic/status/2038240087323099221?s=20**
 ## 開発の背景とスタンス (Philosophy)
 
 この「RhythmMatrix」は、もともと私自身が日々の音楽制作をより便利に、より楽しくするための「個人用ツール」として開発したものです。
