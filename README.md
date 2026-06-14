@@ -67,13 +67,11 @@ Due to the nature of audio plugins, unexpected loud noises or feedback may occur
 
 ## ⚖️ License (ライセンスと規約)
 
-This project is open-source and released under the **[GPLv3 License](https://www.gnu.org/licenses/gpl-3.0.html)**.
-You are free to use, modify, and distribute this software, but any derivative works must also be open-source and licensed under GPLv3.
+This project is licensed under the GNU Affero General Public License v3.0 (AGPLv3) - see the [LICENSE](LICENSE) file for details.
+This software is built using the **JUCE 8** framework. In accordance with JUCE 8's open-source licensing terms, this entire project is distributed under the AGPLv3.
 
-このプロジェクトは **GPLv3 ライセンス** の下で公開されています。無料で使用・改変・再配布が可能ですが、派生物も同じくGPLv3でオープンソース化する必要があります。
-
-  * Built with [JUCE](https://juce.com/). JUCE is a framework for multi-platform audio applications.
-  * To release a closed-source commercial product based on this code, you must acquire an appropriate commercial license from JUCE.
+このプロジェクトは **GNU Affero General Public License v3.0 (AGPLv3)** のもとで公開されています。詳細は [LICENSE](LICENSE) ファイルを作成してください。
+本プラグインは **JUCE 8** フレームワークを使用して開発されています。JUCE 8のオープンソースライセンス規約に基づき、本ソフトウェアのソースコードおよびバイナリにはAGPLv3が適用されます。
 
 ## 🤝 Credits
 
